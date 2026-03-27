@@ -22,3 +22,8 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Private planning docs
+00_FLOW.md
+01_MAKE_DB.md
+CLAUDE.md
