@@ -25,8 +25,8 @@ IMAGE_BASE_DIR = os.path.join(BASE_DIR, "images")
 IMAGE_STYLE_PREFERENCE = "max_2600x2600"
 
 # Crawl scope (set to integers for testing, None for full crawl)
-MAX_PAGES_PER_CATEGORY = None
-MAX_ARTICLES = None
+MAX_PAGES_PER_CATEGORY = None   # set at runtime via run.py CLI
+MAX_ARTICLES = None             # set at runtime via run.py CLI
 
 # HTTP
 USER_AGENT = "MetalocusArchCrawler/1.0 (academic research; respectful crawling)"

@@ -1,110 +1,175 @@
 #!/usr/bin/env python3
-"""CLI entry point for the Metalocus architecture crawler."""
+"""Unified CLI for the archi-tinder make_db pipeline.
+
+Usage:
+    python3 run.py make-db              # unlimited crawl + full pipeline
+    python3 run.py make-db --limit 20   # crawl until 20 total buildings, then pipeline
+    python3 run.py make-db --limit 100  # crawl until 100 total buildings, then pipeline
+    python3 run.py post-enrich          # resume after Claude enrichment session
+    python3 run.py stats                # show current crawler + database progress
+
+Workflow:
+    1. run.py make-db [--limit N]
+       → crawls only what's needed (incremental, no duplicates)
+       → exports 1_buildings_raw.json
+       → runs stage2 pre-enrich (dedup, IDs)
+       → PAUSES and prints Claude enrichment prompt
+
+    2. [run Claude enrichment session in this directory]
+
+    3. run.py post-enrich
+       → runs stage2 post-enrich (embed)
+       → loads into PostgreSQL
+"""
 
 import argparse
 import sys
 
 import config
 import database as db
-from crawler import phase_discover, phase_listings, phase_articles, phase_images, run_all
+from crawler import phase_discover, phase_listings, phase_articles, phase_images
+from stage1_crawl import export_buildings
+from stage2_ml import cmd_pre_enrich, cmd_post_enrich
 from utils import logger
 
 
-def cmd_discover(args):
-    categories = args.categories.split(",") if args.categories else None
-    phase_discover(categories)
+def cmd_make_db(args):
+    """Crawl incrementally then run pre-enrich, pausing for Claude enrichment."""
+    limit = args.limit
+
+    db.init_db()
+    completed = db.get_completed_article_count()
+    logger.info(f"Buildings already in DB: {completed}")
+
+    # --- Crawl phase ---
+    if limit is not None and completed >= limit:
+        logger.info(f"Already have {completed} buildings (target: {limit}). Skipping crawl.")
+    else:
+        if limit is not None:
+            remaining = limit - completed
+            logger.info(f"Need {remaining} more buildings (have {completed}, target: {limit})")
+            config.MAX_ARTICLES = remaining
+        else:
+            logger.info("Unlimited crawl mode")
+            config.MAX_ARTICLES = None
+
+        config.MAX_PAGES_PER_CATEGORY = None  # discover all pages
+
+        phase_discover()
+        phase_listings()
+        phase_articles()
+        phase_images()
+
+    # --- Stage 1: export ---
+    logger.info("Exporting 1_buildings_raw.json...")
+    count = export_buildings()
+    if count == 0:
+        logger.error("No buildings to export. Aborting.")
+        sys.exit(1)
+
+    # --- Stage 2a-c: pre-enrich ---
+    logger.info("Running stage 2 pre-enrich (dedup + IDs)...")
+    cmd_pre_enrich()
+
+    # --- Pause for Claude enrichment ---
+    print()
+    print("=" * 60)
+    print("PIPELINE PAUSED — Claude enrichment needed")
+    print("=" * 60)
+    print()
+    print("Start a Claude Code session in this directory and use")
+    print("this prompt:")
+    print()
+    print('  "Read data/2_buildings_to_enrich.json. For each building,')
+    print("   fill null fields: name_en, mood, material, program.")
+    print("   program must be exactly one of: Housing, Office, Museum,")
+    print("   Education, Religion, Sports, Transport, Hospitality,")
+    print("   Healthcare, Public, Mixed Use, Landscape, Infrastructure,")
+    print('   Other. Write output to data/3_buildings_enriched.json."')
+    print()
+    print("Then run:")
+    print("  python3 run.py post-enrich")
+    print("=" * 60)
 
 
-def cmd_listings(args):
-    phase_listings()
+def cmd_post_enrich(args):
+    """Resume after Claude enrichment: post-enrich + PostgreSQL load."""
+    import os
+    import stage3_postgres
 
+    enriched = os.path.join(config.BASE_DIR, "data", "3_buildings_enriched.json")
+    if not os.path.exists(enriched):
+        print(f"ERROR: {enriched} not found.")
+        print("Run the Claude enrichment session first, then retry.")
+        sys.exit(1)
 
-def cmd_articles(args):
-    phase_articles()
+    # --- Stage 2e: post-enrich (validate + embed) ---
+    logger.info("Running stage 2 post-enrich (validate + embed)...")
+    cmd_post_enrich()
 
+    # --- Stage 3: load into PostgreSQL ---
+    logger.info("Loading into PostgreSQL...")
+    stage3_postgres.main_programmatic(reset=False)
 
-def cmd_images(args):
-    phase_images()
-
-
-def cmd_all(args):
-    categories = args.categories.split(",") if args.categories else None
-    run_all(categories)
-
-
-def cmd_retry(args):
-    table = args.only if args.only else None
-    db.reset_failed(table)
-    logger.info(f"Reset failed items to pending" + (f" (table: {table})" if table else " (all tables)"))
+    print("\nPipeline complete!")
+    print("  architecture_vectors is populated and ready.")
 
 
 def cmd_stats(args):
+    """Show crawler and pipeline progress."""
     stats = db.get_stats()
-    print("\n=== Metalocus Crawler Stats ===\n")
-    for table_name in ["crawl_pages", "articles", "images"]:
-        s = stats[table_name]
-        print(f"  {table_name}:")
-        print(f"    Total: {s['total']}  |  Pending: {s['pending']}  |  Completed: {s['completed']}  |  Failed: {s['failed']}")
-    print(f"\n  buildings: {stats['buildings']['total']}")
-    print(f"  tags: {stats['tags']['total']}")
+    print("\n=== make_db Status ===\n")
+    for table in ["crawl_pages", "articles", "images"]:
+        s = stats[table]
+        print(f"  {table}:")
+        print(f"    Total: {s['total']}  |  Pending: {s['pending']}  |  "
+              f"Completed: {s['completed']}  |  Failed: {s['failed']}")
+    print(f"\n  buildings (SQLite): {stats['buildings']['total']}")
+    print(f"  tags:               {stats['tags']['total']}")
+
+    # Check output files
+    import os
+    import json
+    data_dir = os.path.join(config.BASE_DIR, "data")
+    for fname in ["1_buildings_raw.json", "2_buildings_to_enrich.json",
+                  "3_buildings_enriched.json", "4_buildings_processed.json"]:
+        path = os.path.join(data_dir, fname)
+        if os.path.exists(path):
+            with open(path) as f:
+                n = len(json.load(f))
+            print(f"  {fname}: {n} buildings")
+        else:
+            print(f"  {fname}: (not found)")
     print()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Metalocus.es architecture crawler")
-    parser.add_argument("--delay", type=float, help="Request delay in seconds")
-    parser.add_argument("--max-pages", type=int, help="Max listing pages per category")
-    parser.add_argument("--max-articles", type=int, help="Max articles to crawl")
-    parser.add_argument("--db", help="Database file path")
-    parser.add_argument("--image-dir", help="Image download directory")
+    parser = argparse.ArgumentParser(
+        description="archi-tinder make_db pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    sub = parser.add_subparsers(dest="command")
 
-    sub = parser.add_subparsers(dest="command", help="Crawler phase to run")
+    p_make = sub.add_parser("make-db", help="Crawl + export + pre-enrich (pauses for Claude)")
+    p_make.add_argument(
+        "--limit", type=int, default=None,
+        help="Target total buildings (e.g. 20, 100). Default: unlimited"
+    )
+    p_make.set_defaults(func=cmd_make_db)
 
-    p_discover = sub.add_parser("discover", help="Phase 1: Discover listing page URLs")
-    p_discover.add_argument("--categories", help="Comma-separated category list")
-    p_discover.set_defaults(func=cmd_discover)
+    p_post = sub.add_parser("post-enrich", help="Post-enrich + PostgreSQL load (after Claude session)")
+    p_post.set_defaults(func=cmd_post_enrich)
 
-    p_listings = sub.add_parser("listings", help="Phase 2: Crawl listing pages for article URLs")
-    p_listings.set_defaults(func=cmd_listings)
-
-    p_articles = sub.add_parser("articles", help="Phase 3: Crawl article pages for building data")
-    p_articles.set_defaults(func=cmd_articles)
-
-    p_images = sub.add_parser("images", help="Phase 4: Download images")
-    p_images.set_defaults(func=cmd_images)
-
-    p_all = sub.add_parser("all", help="Run all phases sequentially")
-    p_all.add_argument("--categories", help="Comma-separated category list")
-    p_all.set_defaults(func=cmd_all)
-
-    p_retry = sub.add_parser("retry", help="Reset failed items to pending")
-    p_retry.add_argument("--only", choices=["crawl_pages", "articles", "images"], help="Only reset specific table")
-    p_retry.set_defaults(func=cmd_retry)
-
-    p_stats = sub.add_parser("stats", help="Show crawl progress statistics")
+    p_stats = sub.add_parser("stats", help="Show crawler and pipeline progress")
     p_stats.set_defaults(func=cmd_stats)
 
     args = parser.parse_args()
-
-    # Apply CLI overrides to config
-    if args.delay:
-        config.REQUEST_DELAY_SECONDS = args.delay
-    if args.max_pages is not None:
-        config.MAX_PAGES_PER_CATEGORY = args.max_pages
-    if args.max_articles is not None:
-        config.MAX_ARTICLES = args.max_articles
-    if args.db:
-        config.DATABASE_PATH = args.db
-    if args.image_dir:
-        config.IMAGE_BASE_DIR = args.image_dir
-
-    # Initialize database
-    db.init_db()
-
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
+    db.init_db()
     args.func(args)
 
 

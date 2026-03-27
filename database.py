@@ -261,6 +261,14 @@ def mark_image_failed(image_id, error=""):
         conn.execute("UPDATE images SET status='failed' WHERE id=?", (image_id,))
 
 
+def get_completed_article_count():
+    """Return number of articles with status='completed'."""
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) as c FROM articles WHERE status='completed'"
+        ).fetchone()["c"]
+
+
 # --- Stats ---
 
 def get_stats():
