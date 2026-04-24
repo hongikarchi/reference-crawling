@@ -174,6 +174,14 @@ def mark_article_failed(article_id, error=""):
         )
 
 
+def mark_article_skipped(article_id, reason=""):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE articles SET status='skipped', error_message=? WHERE id=?",
+            (reason, article_id),
+        )
+
+
 # --- Buildings ---
 
 def save_building(article_id, data: BuildingData):
@@ -285,7 +293,12 @@ def get_stats():
             failed = conn.execute(
                 f"SELECT COUNT(*) as c FROM {table} WHERE status='failed'"
             ).fetchone()["c"]
-            stats[table] = {"total": total, "pending": pending, "completed": completed, "failed": failed}
+            row = {"total": total, "pending": pending, "completed": completed, "failed": failed}
+            if table == "articles":
+                row["skipped"] = conn.execute(
+                    "SELECT COUNT(*) as c FROM articles WHERE status='skipped'"
+                ).fetchone()["c"]
+            stats[table] = row
 
         buildings_count = conn.execute("SELECT COUNT(*) as c FROM buildings").fetchone()["c"]
         tags_count = conn.execute("SELECT COUNT(*) as c FROM tags").fetchone()["c"]

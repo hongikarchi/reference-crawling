@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 import time
 
 import requests
@@ -35,12 +36,14 @@ class RateLimiter:
     def __init__(self, delay):
         self.delay = delay
         self._last_request = 0.0
+        self._lock = threading.Lock()
 
     def wait(self):
-        elapsed = time.time() - self._last_request
-        if elapsed < self.delay:
-            time.sleep(self.delay - elapsed)
-        self._last_request = time.time()
+        with self._lock:
+            elapsed = time.time() - self._last_request
+            if elapsed < self.delay:
+                time.sleep(self.delay - elapsed)
+            self._last_request = time.time()
 
 
 def create_session():

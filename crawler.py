@@ -1,12 +1,56 @@
 """Main crawl orchestrator — 4-phase workflow."""
 
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import config
 import database as db
 from parsers import parse_listing_page, parse_last_page_number, parse_article_page
 from downloader import download_image
 from utils import logger, RateLimiter, create_session, fetch_page, slug_from_url
+
+
+# ---------------------------------------------------------------------------
+# Content filter — rejects non-building articles before saving
+# ---------------------------------------------------------------------------
+
+_JUNK_TAGS = {
+    "metalocus music project",
+    "metalocus recommends",
+}
+
+_JUNK_TITLE_KEYWORDS = [
+    "music video", "video clip", "videoclip",
+    "pritzker", "riba gold medal",
+    "happy holidays", "merry christmas", "best for 20",
+    "obituary",
+]
+
+
+def is_building_project(data):
+    """Return True only if the article describes an actual building project.
+
+    Rejects:
+    - Pages tagged with known non-building tags (music, editorial)
+    - Pages whose title contains award/event keywords
+    - Pages with no architect, no area, and no building-type tag
+    """
+    tags_lower = {t.lower() for t in data.tags}
+    if tags_lower & _JUNK_TAGS:
+        return False
+
+    title_lower = (data.title or "").lower()
+    if any(kw in title_lower for kw in _JUNK_TITLE_KEYWORDS):
+        return False
+
+    has_architect = bool(data.architects and data.architects.strip())
+    has_area = bool(data.area_sqm and str(data.area_sqm).strip())
+    has_building_type = bool(data.building_type)
+    if not has_architect and not has_area and not has_building_type:
+        return False
+
+    return True
 
 
 def phase_discover(categories=None):
@@ -109,6 +153,11 @@ def phase_articles():
 
             data = parse_article_page(html, url)
 
+            if not is_building_project(data):
+                db.mark_article_skipped(article_id, "Not a building project")
+                logger.info(f"  SKIP: {(data.title or 'no title')[:70]}")
+                continue
+
             db.save_building(article_id, data)
             db.save_tags(article_id, data.tags)
 
@@ -116,7 +165,7 @@ def phase_articles():
                 db.add_image(article_id, img.url, img.filename, img.alt_text, img.image_order)
 
             db.mark_article_done(article_id)
-            logger.info(f"  Title: {data.title[:80]}  |  Images: {len(data.images)}  |  Tags: {len(data.tags)}")
+            logger.info(f"  OK: {data.title[:70]}  |  images: {len(data.images)}")
 
         except Exception as e:
             logger.error(f"Error crawling article {url}: {e}")
@@ -130,35 +179,51 @@ def phase_articles():
 
 
 def phase_images():
-    """Phase 4: Download pending images."""
-    session = create_session()
-    rate_limiter = RateLimiter(config.IMAGE_DELAY_SECONDS)
+    """Phase 4: Download pending images using concurrent workers.
+
+    Workers share one thread-safe RateLimiter so the request rate to
+    metalocus.es stays at 1 / IMAGE_DELAY_SECONDS.  While one worker
+    waits for a slow image to stream, others can begin their next
+    request, cutting wall-clock time by ~50 % vs single-threaded.
+    """
+    # Per-thread sessions — requests.Session is not thread-safe
+    _thread_local = threading.local()
+
+    def _get_session():
+        if not hasattr(_thread_local, "session"):
+            _thread_local.session = create_session()
+        return _thread_local.session
+
+    rate_limiter = RateLimiter(config.IMAGE_DELAY_SECONDS)  # shared, now thread-safe
 
     pending = db.get_pending_images()
     total = len(pending)
-    logger.info(f"Phase 4: {total} images to download")
+    logger.info(f"Phase 4: {total} images to download ({config.IMAGE_DOWNLOAD_WORKERS} workers)")
 
-    for i, img in enumerate(pending, 1):
-        slug = img["slug"]
-        url = img["url"]
-        filename = img["filename"]
-        image_id = img["id"]
+    counter_lock = threading.Lock()
+    done_count = [0]
 
-        local_dir = os.path.join(config.IMAGE_BASE_DIR, slug)
-        local_path = os.path.join(local_dir, filename)
-
-        if i % 50 == 0 or i == 1:
-            logger.info(f"[{i}/{total}] Downloading images...")
-
+    def _download_one(img):
+        local_dir = os.path.join(config.IMAGE_BASE_DIR, img["slug"])
+        local_path = os.path.join(local_dir, img["filename"])
         try:
-            file_size = download_image(url, local_path, session, rate_limiter)
+            file_size = download_image(img["url"], local_path, _get_session(), rate_limiter)
             if file_size:
-                db.mark_image_done(image_id, local_path, file_size)
+                db.mark_image_done(img["id"], local_path, file_size)
             else:
-                db.mark_image_failed(image_id, "Download returned None")
+                db.mark_image_failed(img["id"], "Download returned None")
         except Exception as e:
-            logger.error(f"Error downloading {url}: {e}")
-            db.mark_image_failed(image_id, str(e))
+            logger.error(f"Error downloading {img['url']}: {e}")
+            db.mark_image_failed(img["id"], str(e))
+
+        with counter_lock:
+            done_count[0] += 1
+            n = done_count[0]
+            if n % 200 == 0 or n == total:
+                logger.info(f"[{n}/{total}] Downloading images...")
+
+    with ThreadPoolExecutor(max_workers=config.IMAGE_DOWNLOAD_WORKERS) as executor:
+        executor.map(_download_one, pending)
 
     stats = db.get_stats()
     logger.info(
