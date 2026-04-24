@@ -129,6 +129,14 @@ Append-only. Each signal is a single line: `<SIGNAL>: <payload>`. Recognized:
 - `UPLOAD-READY: count=<N>, quality=<X>/100` — upload-guard cleared; user may run upload.
 - `ESCALATE: <reason>` — orchestrator hit the 2-iteration limit; hands back to user.
 
+## Git policy (solo-dev, single-branch)
+
+- **`git commit`:** orchestrator commits autonomously per logical change or
+  phase — no need to ask. Co-author tag required.
+- **`git push`:** never automated. The user pushes when ready. Local commits
+  accumulate until then.
+- **Branches:** single `main` branch. No feature branches.
+
 ## Non-goals for this layer
 
 - No automated `git push`. No automated `upload.py`. No automated schema edits

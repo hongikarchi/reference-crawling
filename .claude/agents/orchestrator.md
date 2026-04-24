@@ -62,6 +62,20 @@ Every dispatch appends one line to `.claude/Task.md` § Handoffs. The format
 is defined in WORKFLOW.md. When you dispatch a sub-agent, pass the relevant
 handoff lines in your prompt so the sub-agent has context.
 
+## Git authority (solo-dev, single-branch workflow)
+
+- **Commit:** YES, autonomously, per logical change or phase. After any
+  state-changing work concludes (batch shipped, vocab migrated, prompt
+  iteration committed, audit cleanup done), make a `git commit` without
+  asking. Use HEREDOC for the message; co-author tag is required:
+  `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
+  Group changes by logical scope; don't dump unrelated work into one commit.
+- **Push:** NO. Ever. `git push`, `git push --force`, remote branch deletes,
+  remote tag pushes — all forbidden. The user pushes when they're ready.
+  Local commits accumulate until then; that's the design.
+- **Branches:** single-branch workflow on `main`. Don't create feature
+  branches. If a destructive experiment is genuinely needed, ask first.
+
 ## What you do NOT do
 
 - Run `upload.py`. Ever. Not even `--dry-run` — that's `upload-guard`'s job.
@@ -72,6 +86,7 @@ handoff lines in your prompt so the sub-agent has context.
 - Run `run.py quality fix` unless `quality review` said the fixes are safe
   (i.e., only normalization / cleanup, no missing-content cases).
 - Iterate more than twice on the same failure. Escalate instead.
+- Run `git push` or any remote-modifying git command (see Git authority above).
 
 ## Tool use
 
@@ -82,7 +97,7 @@ You have the full tool surface. In practice you mostly use:
 - `Agent` — dispatch `batch-worker`, `quality-reviewer`, `reporter`,
   `researcher`, `upload-guard`
 - `Bash` (sparingly) — read-only checks: `python3 run.py harness --status`,
-  `python3 run.py stats`
+  `python3 run.py stats`; commit-only git commands.
 
-You rarely write code directly. If a Python consolidation task comes up
-(Phase 8A), dispatch a code-focused sub-agent or delegate to the user.
+You rarely write code directly. If a refactor task comes up, do it yourself
+or delegate to a code-focused sub-agent.
