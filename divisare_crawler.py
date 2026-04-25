@@ -193,7 +193,7 @@ def phase_discover(max_pages_per_region: int | None = None) -> int:
 
 def phase_architects(limit: int | None = None,
                      max_built_pages: int = 50,
-                     also_unbuilt: bool = True) -> int:
+                     also_unbuilt: bool = False) -> int:
     """For each pending architect: fetch architect page + walk /projects/built
     (and optionally /projects/unbuilt). Each project's lite metadata
     (name, architects, location, photographer) is upserted DIRECTLY into
@@ -398,6 +398,8 @@ def main() -> int:
                         help="Tag limit for --phase all/tags (default 200)")
     parser.add_argument("--discover-pages-per-region", type=int, default=0,
                         help="How many /designers/{region} pages to walk per region (0 = all, default)")
+    parser.add_argument("--also-unbuilt", action="store_true",
+                        help="Also walk /projects/unbuilt for each architect (default off — most 404 and waste 3s/each on rate limit)")
     args = parser.parse_args()
 
     divisare_db.init_db()
@@ -408,7 +410,7 @@ def main() -> int:
             n = phase_discover(max_pages_per_region=cap)
             logger.info(f"new pending_architects: {n}")
         elif args.phase == "architects":
-            n = phase_architects(limit=args.limit)
+            n = phase_architects(limit=args.limit, also_unbuilt=args.also_unbuilt)
             logger.info(f"architects processed: {n}")
         elif args.phase == "projects":
             n = phase_projects(limit=args.limit)
