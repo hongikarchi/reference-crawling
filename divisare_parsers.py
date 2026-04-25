@@ -132,35 +132,17 @@ def parse_project_page(html: str, url: str) -> dict:
         except ValueError:
             pass
 
-    # Published date — div.divider.first .text "Published on …"
-    published_date = None
-    if sidebar is not None:
-        first_divider = sidebar.find("div", class_="divider")
-        if first_divider and "first" in (first_divider.get("class") or []):
-            txt = first_divider.get_text(" ", strip=True)
-            m = re.match(r"Published\s+on\s+(.+)", txt, re.I)
-            if m:
-                published_date = m.group(1).strip()
-
-    # Album — the .divider that immediately precedes the ul.tags block.
-    # (Cleaner than text-based filtering; "Credits" et al. are also dividers
-    # but they sit BEFORE the credits-content blocks, not before tags.)
-    album_name = None
-    if sidebar is not None:
-        ul_tags = sidebar.find("ul", class_="tags")
-        if ul_tags is not None:
-            # Walk backward through previous DOM siblings of the .row that
-            # contains ul.tags, looking for a .divider.
-            parent_row = ul_tags.find_parent("div", class_="row")
-            cursor = parent_row.find_previous_sibling("div", class_="row") if parent_row else None
-            while cursor is not None:
-                d = cursor.find("div", class_="divider")
-                if d is not None and "first" not in (d.get("class") or []):
-                    txt = d.get_text(" ", strip=True)
-                    if txt:
-                        album_name = txt
-                        break
-                cursor = cursor.find_previous_sibling("div", class_="row")
+    # Area (sqm). Divisare's "Area" section is sometimes present, format varies:
+    # "1500", "1,500 sqm", "1500 m²", "1500 m2". Extract first number.
+    area_text = _section_value(sidebar, "Area") or _section_value(sidebar, "Surface")
+    area_sqm: Optional[float] = None
+    if area_text:
+        m = re.search(r"([\d,\.]+)", area_text)
+        if m:
+            try:
+                area_sqm = float(m.group(1).replace(",", ""))
+            except ValueError:
+                pass
 
     # Tags — ul.tags li a
     tag_slugs: list[str] = []
@@ -173,6 +155,48 @@ def parse_project_page(html: str, url: str) -> dict:
                 if m:
                     tag_slugs.append(m.group(1))
 
+    # Credits — `<div class="credit">` blocks under the sidebar (only on
+    # projects rich enough to list collaborators). Each credit contains:
+    #   <div class="role">Acoustic</div>
+    #   <p>Nexus Audio Video with Ole Christensen</p>
+    # Skip "Design"/"Designer" credits — already captured as architect_ids/names.
+    _CREDITS_SKIP = {"design", "designer", "designers"}
+    credits: dict = {}
+    if sidebar is not None:
+        for credit_div in sidebar.find_all("div", class_="credit"):
+            role_el = credit_div.find("div", class_="role")
+            if role_el is None:
+                continue
+            role = role_el.get_text(strip=True)
+            if not role or role.lower() in _CREDITS_SKIP:
+                continue
+            # Firm names live in <p> tags of the second .row sibling
+            firm_texts = []
+            for p in credit_div.find_all("p"):
+                t = p.get_text(" ", strip=True)
+                if t:
+                    firm_texts.append(t)
+            if not firm_texts:
+                continue
+            role_key = re.sub(r"\s+", "_", role.lower().strip())
+            credits.setdefault(role_key, []).extend(firm_texts)
+
+    # Gallery images — lazy-loaded `<img data-src="...">` (and friends) anywhere
+    # under .project. The actual gallery `.image` divs are nested inside
+    # `.description > .image > .zoom > img`; rather than guess scope, we sweep
+    # the whole project subtree and dedup by URL. Cover the lazy-load attribute
+    # variants Divisare uses today (`data-src` is current, others future-proof).
+    gallery_urls: list[str] = []
+    seen_urls: set = set()
+    if project_div is not None:
+        for img in project_div.find_all("img"):
+            for attr in ("data-src", "data-original", "data-lazy", "src"):
+                u = img.get(attr)
+                if u and u.startswith("http") and "divisare" in u and u not in seen_urls:
+                    seen_urls.add(u)
+                    gallery_urls.append(u)
+                    break  # one URL per <img>; data-src wins over plain src
+
     cover = _meta_content(soup, "og:image")
 
     return {
@@ -184,12 +208,13 @@ def parse_project_page(html: str, url: str) -> dict:
         "location_country": location_country,
         "location_city":    location_city,
         "project_year":     project_year,
-        "published_date":   published_date,
+        "area_sqm":         area_sqm,
         "abstract":         abstract,
         "description":      description,
-        "album_name":       album_name,
         "tag_slugs":        tag_slugs,
         "cover_image_url":  cover,
+        "gallery_urls":     gallery_urls,
+        "credits":          credits if credits else None,
     }
 
 
@@ -340,6 +365,94 @@ def parse_projects_general_index(html: str) -> list[str]:
     includes both top-level (`/designers/europe`) and subregion
     (`/designers/europe/southern-europe/albania`) variants."""
     return sorted(set(re.findall(r'href="(/designers/[a-z\-/]+)"', html)))
+
+
+# ---------------------------------------------------------------------------
+# Homepage mega-menu taxonomy (Phase 1.5 — album hierarchy)
+# ---------------------------------------------------------------------------
+
+def _slugify_album_name(name: str) -> str:
+    """'Plans & Details' → 'plans-details', 'designers by Country' → 'designers-by-country'."""
+    s = name.lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")
+
+
+def parse_homepage_taxonomy(html: str) -> list[dict]:
+    """Parse the homepage mega-menu — extract the 14 top-level browsing
+    albums (Elements / Cities / Houses / Ideas / Materiality / Plans & Details
+    / Private Interiors / Public Interiors / Topics / Types / designers by
+    Country / designers by City / photographers by Country / photographers by City).
+
+    Each album is a `<li>` containing:
+      <a>AlbumName</a>           ← parent label, NO href
+      <ul>
+        <li><div class="row"><div class="columns">
+          <a href="/aarhus">Aarhus</a>
+          <a href="/abu-dhabi">Abu Dhabi</a>
+          ...
+        </div></div></li>
+      </ul>
+
+    Returns: list of dicts:
+      {"album_slug", "album_name", "kind", "children": [
+          {"child_slug", "child_name", "child_url"}, ...
+      ]}
+    """
+    soup = BeautifulSoup(html, "lxml")
+    albums = []
+
+    # We accept any <li> whose first child <a> has no href and whose first
+    # nested <ul> contains href-bearing anchors. That filters out main nav
+    # items (Designers / Photographers / Books / Contact Us) which DO have
+    # hrefs on their own anchor.
+    for li in soup.find_all("li"):
+        direct_a = li.find("a", recursive=False)
+        if not direct_a or direct_a.get("href"):
+            continue
+        label = direct_a.get_text(strip=True)
+        if not label or len(label) > 40:
+            continue
+
+        child_ul = li.find("ul", recursive=False)
+        if child_ul is None:
+            continue
+
+        children = []
+        for ca in child_ul.find_all("a", href=True):
+            href = ca["href"]
+            if not href.startswith("/"):
+                continue
+            text = ca.get_text(strip=True)
+            if not text:
+                continue
+            child_slug = href.rstrip("/").split("/")[-1]
+            children.append({
+                "child_slug": child_slug,
+                "child_name": text,
+                "child_url":  href,
+            })
+
+        if not children:
+            continue
+
+        # Classify album kind by sniffing the first child's URL.
+        first_url = children[0]["child_url"]
+        if first_url.startswith("/designers/"):
+            kind = "designer_index"
+        elif first_url.startswith("/photographers/"):
+            kind = "photographer_index"
+        else:
+            kind = "tag_album"
+
+        albums.append({
+            "album_slug": _slugify_album_name(label),
+            "album_name": label,
+            "kind":       kind,
+            "children":   children,
+        })
+
+    return albums
 
 
 def parse_author_built_projects(html: str) -> dict:

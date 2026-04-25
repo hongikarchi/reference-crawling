@@ -65,13 +65,25 @@ class CanonicalBuilding:
     # Tags (Divisare's curated taxonomy — keep raw, no normalization)
     # ------------------------------------------------------------------
     divisare_tags:             list[str]       = field(default_factory=list)
-    divisare_album:            Optional[str]   = None    # e.g. "Atlas of Architecture"
 
     # ------------------------------------------------------------------
-    # Images (metalocus side; Divisare URLs not downloaded per ToS)
+    # Credits (Divisare sidebar — sub-firms by role)
+    # JSON-shaped: {"structures": [...], "lighting": [...], "photo": [...], ...}
+    # Design/Designer keys excluded (already in architect_canonical_ids).
     # ------------------------------------------------------------------
-    image_paths:               list[str]       = field(default_factory=list)    # local relative paths
-    cover_image_url_divisare:  Optional[str]   = None    # remote reference only
+    divisare_credits:          Optional[dict]  = None
+
+    # ------------------------------------------------------------------
+    # Quantitative
+    # ------------------------------------------------------------------
+    area_sqm:                  Optional[float] = None    # parsed from sidebar "Area" if present
+
+    # ------------------------------------------------------------------
+    # Images
+    # ------------------------------------------------------------------
+    image_paths:               list[str]       = field(default_factory=list)   # local metalocus paths
+    cover_image_url_divisare:  Optional[str]   = None    # remote, single
+    divisare_gallery_urls:     list[str]       = field(default_factory=list)   # remote, ~10-19 per project
 
     # ------------------------------------------------------------------
     # Embedding (set in stage3_embed)

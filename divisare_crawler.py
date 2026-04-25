@@ -216,6 +216,38 @@ def phase_projects(limit: int | None = None) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Phase 5 — albums (homepage mega-menu taxonomy)
+# ---------------------------------------------------------------------------
+
+def phase_albums() -> int:
+    """Fetch the homepage and parse the 14 top-level browsing albums
+    (Cities / Houses / Ideas / Materiality / Plans & Details / Private
+    Interiors / Public Interiors / Topics / Types / Elements / designers
+    by Country / designers by City / photographers by Country/City).
+
+    Saves album metadata + child membership rows. One HTTP request total.
+    """
+    html = _fetch("/")
+    if not html:
+        logger.error("phase_albums: failed to fetch homepage")
+        return 0
+
+    albums = divisare_parsers.parse_homepage_taxonomy(html)
+    for album in albums:
+        divisare_db.upsert_album({
+            "slug":        album["album_slug"],
+            "name":        album["album_name"],
+            "kind":        album["kind"],
+            "child_count": len(album["children"]),
+        })
+        divisare_db.replace_album_membership(album["album_slug"], album["children"])
+        logger.info(f"  album {album['album_name']!r} ({album['kind']}) "
+                    f"children={len(album['children'])}")
+
+    return len(albums)
+
+
+# ---------------------------------------------------------------------------
 # Phase 4 — tags
 # ---------------------------------------------------------------------------
 
@@ -251,7 +283,7 @@ def run_all(*,
             architect_limit: int = 20,
             tag_limit: int = 200,
             discover_pages_per_region: int = 1) -> None:
-    """Pilot crawl: minimal discover → seed architects → projects → tags."""
+    """Pilot crawl: discover → architects → projects → tags → albums (taxonomy)."""
     divisare_db.init_db()
 
     logger.info("=== Divisare crawl: phase 1 — discover (regions → authors) ===")
@@ -270,6 +302,10 @@ def run_all(*,
     n = phase_tags(limit=tag_limit)
     logger.info(f"  tags processed: {n}")
 
+    logger.info("\n=== Divisare crawl: phase 5 — albums (taxonomy) ===")
+    n = phase_albums()
+    logger.info(f"  albums saved: {n}")
+
     logger.info("\n=== Final stats ===")
     for k, v in divisare_db.stats().items():
         logger.info(f"  {k}: {v}")
@@ -278,7 +314,7 @@ def run_all(*,
 def main() -> int:
     parser = argparse.ArgumentParser(description="Divisare crawler (Phase 1)")
     parser.add_argument("--phase",
-                        choices=["discover", "architects", "projects", "tags", "all"],
+                        choices=["discover", "architects", "projects", "tags", "albums", "all"],
                         default="all")
     parser.add_argument("--limit", type=int, default=50,
                         help="Project limit for --phase all/projects (default 50)")
@@ -305,6 +341,9 @@ def main() -> int:
         elif args.phase == "tags":
             n = phase_tags(limit=args.limit)
             logger.info(f"tags processed: {n}")
+        elif args.phase == "albums":
+            n = phase_albums()
+            logger.info(f"albums saved: {n}")
         else:  # all
             run_all(
                 project_limit=args.limit,
