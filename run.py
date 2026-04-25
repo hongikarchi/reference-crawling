@@ -298,6 +298,23 @@ def cmd_match_canonical(args):
     sys.exit(match_to_canonical.main())
 
 
+def cmd_canonical_qc(args):
+    """Run 9 invariant checks on data/canonical_buildings.json (or another path)."""
+    import canonical_qc
+    sys.exit(canonical_qc.main([args.file] if args.file else []))
+
+
+def cmd_consolidate_architects(args):
+    """Collapse metalocus's raw architect strings into canonical clusters."""
+    import metalocus_consolidate
+    forwarded = []
+    if args.dry_run:
+        forwarded.append("--dry-run")
+    if args.no_llm:
+        forwarded.append("--no-llm")
+    sys.exit(metalocus_consolidate.main(forwarded))
+
+
 def cmd_crawl_divisare(args):
     """Run Divisare 4-phase crawler. Requires authenticated session
     (`python3 divisare_auth.py login` first)."""
@@ -394,6 +411,22 @@ def main():
     p.add_argument("--building-id", type=str, default=None,
                    help="Score only this metalocus building_id (debug)")
     p.set_defaults(func=cmd_match_canonical)
+
+    # canonical-qc
+    p = sub.add_parser("canonical-qc",
+                       help="9 invariant checks on canonical_buildings.json")
+    p.add_argument("file", nargs="?", default=None,
+                   help="canonical JSON path (default data/canonical_buildings.json)")
+    p.set_defaults(func=cmd_canonical_qc)
+
+    # consolidate-architects
+    p = sub.add_parser("consolidate-architects",
+                       help="Cluster metalocus raw architect strings into canonical IDs")
+    p.add_argument("--dry-run", action="store_true",
+                   help="estimate LLM cost without calling API")
+    p.add_argument("--no-llm", action="store_true",
+                   help="auto-merge only; skip LLM tiebreak")
+    p.set_defaults(func=cmd_consolidate_architects)
 
     # harness
     p = sub.add_parser("harness", help="Queue-driven AI pipeline (enrich + analyze + QC)")

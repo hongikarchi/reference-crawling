@@ -46,16 +46,23 @@ script directly via the CLI below — agent layer is for multi-step operations.
 
 ## CLI
 
-All operations route through `run.py` (12 subcommands, organized in 4 groups):
+All operations route through `run.py`. Subcommands in 5 groups:
 
 ```bash
-# Build / extend the dataset
+# Build / extend the dataset (metalocus side)
 python3 run.py make-db [--limit N]   # crawl + export + dedup
 python3 run.py crawl --articles 500  # crawl only (resume image downloads)
 python3 run.py export-dedup          # SQLite → 1_buildings_raw.json + dedup
 python3 run.py harness               # enrich + analyze + QC (Anthropic API)
 python3 run.py embed                 # final embeddings → 4_buildings_final.json
 python3 run.py embed-rate            # embed + quality review/fix/rate
+
+# Canonical (Divisare-first rebuild)
+python3 run.py crawl-divisare        # authenticated Divisare crawler
+python3 run.py consolidate-architects [--dry-run] [--no-llm]
+                                     # collapse metalocus architect aliases → clusters
+python3 run.py match-canonical       # metalocus building → Divisare project mapping
+python3 run.py canonical-qc [PATH]   # 9 invariant checks on canonical_buildings.json
 
 # Quality + auditing
 python3 run.py quality review        # validate fields, vocab, embeddings
