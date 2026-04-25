@@ -146,49 +146,66 @@ def cmd_login() -> int:
     sess = create_session()
     sess.headers.update({"User-Agent": config.DIVISARE_USER_AGENT})
 
+    # Step 1: GET the login form to obtain the CSRF token + initial session cookie.
     print(f"Fetching login page: {config.DIVISARE_LOGIN_URL}")
     r = sess.get(config.DIVISARE_LOGIN_URL, timeout=30, allow_redirects=True)
     if r.status_code != 200:
         print(f"ERROR: login page returned HTTP {r.status_code}.")
-        print("If 403, the form path likely changed — fall back to "
-              "cookie-import mode (`python3 divisare_auth.py import`).")
+        print("If 403, Cloudflare may be blocking — try cookie-import mode "
+              "(`python3 divisare_auth.py import`).")
         return 1
 
-    # Heuristic CSRF extraction (Rails-style authenticity_token).
+    # Extract Rails-style authenticity_token from the form.
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(r.text, "lxml")
     csrf_input = soup.find("input", {"name": "authenticity_token"})
     csrf_token = csrf_input.get("value") if csrf_input else None
-
-    payload = {
-        "user[email]": email,
-        "user[password]": pw,
-        "commit": "Log in",
-    }
-    if csrf_token:
-        payload["authenticity_token"] = csrf_token
-
-    print("Submitting credentials...")
-    r = sess.post(config.DIVISARE_LOGIN_URL, data=payload,
-                  timeout=30, allow_redirects=True)
-
-    body_lower = r.text.lower()
-    if any(s in body_lower for s in ("invalid", "incorrect", "wrong password")):
-        print("ERROR: login appears to have failed (response mentions "
-              "'invalid'/'incorrect').")
-        print("Fall back to cookie-import: python3 divisare_auth.py import")
+    if not csrf_token:
+        print("ERROR: could not find authenticity_token in login form.")
         return 1
 
+    # Step 2: POST credentials with the CSRF token + Rails-style person[*] fields.
+    payload = {
+        "utf8": "✓",
+        "authenticity_token": csrf_token,
+        "person[email]":       email,
+        "person[password]":    pw,
+        "person[remember_me]": "1",
+        "commit":              "Log in",
+    }
+    print("Submitting credentials...")
+    r = sess.post(config.DIVISARE_LOGIN_POST_URL, data=payload,
+                  timeout=30, allow_redirects=False)
+
+    # A successful Devise/Rails login returns 302. A failed one re-renders the
+    # form (200) with an error flash.
+    if r.status_code == 302:
+        location = r.headers.get("Location", "")
+        if "login" in location.lower() or "sign_in" in location.lower():
+            print(f"ERROR: login rejected — redirected back to {location}")
+            return 1
+    elif r.status_code == 200:
+        body_lower = r.text.lower()
+        if any(s in body_lower for s in ("invalid", "incorrect", "wrong password")):
+            print("ERROR: login form mentions 'invalid'/'incorrect' — bad credentials.")
+            return 1
+        print(f"WARN: POST returned 200 (no redirect) — login may not have succeeded.")
+    else:
+        print(f"WARN: unexpected POST status {r.status_code}")
+
+    # Capture cookies. We expect _divisare_com_session and remember_person_token.
     cookies = {c.name: c.value for c in sess.cookies}
-    if not cookies:
-        print("ERROR: no cookies set after login. Likely a form/CSRF mismatch.")
+    if "remember_person_token" not in cookies and "_divisare_com_session" not in cookies:
+        print("ERROR: no Divisare auth cookies set after login. "
+              "Form/CSRF mismatch likely.")
         return 1
 
     _save_session_data({
         "cookies": cookies,
-        "source": "login",
+        "source":  "login",
     })
     print(f"Saved {len(cookies)} cookies → {config.DIVISARE_SESSION_PATH}")
+    print(f"  Names: {sorted(cookies.keys())}")
     print("Next: python3 divisare_auth.py verify")
     return 0
 

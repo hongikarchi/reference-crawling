@@ -48,10 +48,14 @@ HARNESS_MAX_IMAGES  = 3   # cover + up to N-1 additional upload photos
 
 # Divisare (Phase 0+) — see ~/.claude/plans/db-fuzzy-lerdorf.md
 DIVISARE_BASE_URL              = "https://divisare.com"
-DIVISARE_LOGIN_URL             = "https://account.divisare.com/login"  # verify in Phase 0
+DIVISARE_LOGIN_URL             = "https://divisare.com/login"          # form GET (CSRF)
+DIVISARE_LOGIN_POST_URL        = "https://divisare.com/people/login"   # form POST target
 DIVISARE_REQUEST_DELAY_SECONDS = 3.0  # respectful default for paid-account access
-DIVISARE_USER_AGENT            = "ArchiTinderResearch/1.0 (paid-member; respectful crawling)"
+# Browser UA — Divisare returns Cloudflare challenges to non-browser UAs
+DIVISARE_USER_AGENT            = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                  "Chrome/120.0.0.0 Safari/537.36")
 DIVISARE_SESSION_PATH          = os.path.join(DATA_DIR, ".divisare_session.json")
 DIVISARE_DB_PATH               = os.path.join(DATA_DIR, "divisare.db")
-# Sample project for --verify; replace with a known-good URL once Phase 0 confirms.
+# Sample project for `verify`; replace if it 404s.
 DIVISARE_TEST_PROJECT_URL      = "https://divisare.com/projects/556458-s-ar-oratory-chapel"
