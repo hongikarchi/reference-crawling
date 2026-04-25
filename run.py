@@ -4,12 +4,13 @@
 Common workflows:
 
   Build / extend the dataset
-    python3 run.py make-db [--limit N]   # crawl + export + dedup
-    python3 run.py crawl --articles 500  # crawl only (resume image downloads)
+    python3 run.py make-db [--limit N]   # crawl + export + dedup (metalocus)
+    python3 run.py crawl --articles 500  # metalocus-only (resume image downloads)
     python3 run.py export-dedup          # SQLite → 1_buildings_raw.json + dedup
     python3 run.py harness               # enrich + analyze + QC (Anthropic API)
     python3 run.py embed                 # final embeddings → 4_buildings_final.json
     python3 run.py embed-rate            # embed + quality review/fix/rate
+    python3 run.py crawl-divisare        # Divisare canonical crawl (auth'd)
 
   Quality + auditing
     python3 run.py quality review        # validate fields, vocab, embeddings
@@ -285,6 +286,18 @@ def cmd_stats(args):
     print()
 
 
+def cmd_crawl_divisare(args):
+    """Run Divisare 4-phase crawler. Requires authenticated session
+    (`python3 divisare_auth.py login` first)."""
+    import divisare_crawler
+    sys.argv = ["divisare_crawler.py", "--phase", args.phase,
+                "--limit", str(args.limit),
+                "--architect-limit", str(args.architect_limit),
+                "--tag-limit", str(args.tag_limit),
+                "--discover-pages-per-region", str(args.discover_pages_per_region)]
+    sys.exit(divisare_crawler.main())
+
+
 def cmd_harness(args):
     """Auto-enrich + analyze new buildings via Anthropic API (queue-driven)."""
     from dotenv import load_dotenv
@@ -347,6 +360,18 @@ def main():
     # embed-rate (formerly pipeline.py embed-rate)
     p = sub.add_parser("embed-rate", help="embed + quality review + fix + rate")
     p.set_defaults(func=cmd_embed_rate)
+
+    # crawl-divisare
+    p = sub.add_parser("crawl-divisare",
+                       help="Authenticated Divisare crawler (4 phases → data/divisare.db)")
+    p.add_argument("--phase", choices=["discover", "architects", "projects", "tags", "all"],
+                   default="all")
+    p.add_argument("--limit", type=int, default=50,
+                   help="Project limit for --phase all/projects (default 50)")
+    p.add_argument("--architect-limit", type=int, default=20)
+    p.add_argument("--tag-limit", type=int, default=200)
+    p.add_argument("--discover-pages-per-region", type=int, default=1)
+    p.set_defaults(func=cmd_crawl_divisare)
 
     # harness
     p = sub.add_parser("harness", help="Queue-driven AI pipeline (enrich + analyze + QC)")

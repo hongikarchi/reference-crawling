@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""4-phase Divisare crawler (Phase 1).
+
+Mirror of metalocus's `crawler.py` pattern, but for Divisare's authenticated
+API surface and entity model.
+
+Phases:
+  1. discover    — walk /designers/{region} pages, harvest /authors/{id} URLs
+                   into pending_architects
+  2. architects  — for each pending architect: fetch their page (save canonical
+                   entity) + walk /projects/built (paginated) (queue projects)
+  3. projects    — for each pending project: fetch + parse + save canonical
+                   entity. Side-effect: queue every tag slug seen.
+  4. tags        — for each pending tag: fetch + parse + save canonical entity.
+
+Each phase is idempotent (UNIQUE-keyed pending tables; upsert on entity tables)
+and crash-safe (per-row commit, mark_done after success).
+
+Usage:
+    python3 divisare_crawler.py --phase discover
+    python3 divisare_crawler.py --phase architects --limit 20
+    python3 divisare_crawler.py --phase projects --limit 100
+    python3 divisare_crawler.py --phase tags --limit 200
+    python3 divisare_crawler.py --phase all --limit 50
+
+Or via the unified CLI:
+    python3 run.py crawl-divisare [--limit N] [--phase ...]
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+
+import config
+import divisare_db
+import divisare_parsers
+from divisare_auth import get_authenticated_session
+from utils import RateLimiter, logger
+
+
+_SESSION = None
+_RATE_LIMITER: RateLimiter | None = None
+
+
+def _init() -> tuple:
+    global _SESSION, _RATE_LIMITER
+    if _SESSION is None:
+        _SESSION = get_authenticated_session()
+        _RATE_LIMITER = RateLimiter(config.DIVISARE_REQUEST_DELAY_SECONDS)
+    return _SESSION, _RATE_LIMITER
+
+
+def _fetch(path_or_url: str) -> str | None:
+    """Fetch one URL, applying rate-limit + simple retry. Returns text or None."""
+    session, rl = _init()
+    rl.wait()
+    url = path_or_url if path_or_url.startswith("http") else (config.DIVISARE_BASE_URL + path_or_url)
+
+    for attempt in range(1, 4):
+        try:
+            r = session.get(url, timeout=config.REQUEST_TIMEOUT, allow_redirects=True)
+        except Exception as e:
+            logger.warning(f"  fetch error {url}: {type(e).__name__}: {e} (attempt {attempt})")
+            time.sleep(min(2 ** attempt, 30))
+            continue
+
+        if r.status_code == 200:
+            return r.text
+        if r.status_code == 404:
+            logger.warning(f"  404 {url}")
+            return None
+        if r.status_code in (401, 403):
+            raise RuntimeError(
+                f"Auth failed ({r.status_code}) on {url} — "
+                "session likely expired. Re-run `python3 divisare_auth.py login`."
+            )
+        if r.status_code == 429:
+            wait = int(r.headers.get("Retry-After", "60"))
+            logger.warning(f"  rate-limited on {url}, sleeping {wait}s")
+            time.sleep(wait)
+            continue
+        # 5xx
+        if r.status_code >= 500:
+            backoff = min(2 ** attempt, 30)
+            logger.warning(f"  HTTP {r.status_code} on {url}, retrying in {backoff}s")
+            time.sleep(backoff)
+            continue
+        logger.warning(f"  unexpected HTTP {r.status_code} on {url}")
+        return None
+
+    logger.error(f"  giving up on {url} after retries")
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — discover
+# ---------------------------------------------------------------------------
+
+def phase_discover(max_pages_per_region: int | None = None) -> int:
+    """Walk /designers/{region} pages → harvest /authors/{id}-{slug} URLs."""
+    total_new = 0
+    for region in divisare_parsers.DIVISARE_TOP_REGIONS:
+        region_path = f"/designers/{region}"
+        page_num = 1
+        max_page = 1
+        while page_num <= max_page:
+            path = f"{region_path}?page={page_num}" if page_num > 1 else region_path
+            html = _fetch(path)
+            if not html:
+                break
+            parsed = divisare_parsers.parse_designers_region_pages(html)
+            new_this_page = 0
+            for author_path in parsed["author_paths"]:
+                if divisare_db.enqueue_architect(author_path):
+                    new_this_page += 1
+            total_new += new_this_page
+            if page_num == 1:
+                max_page = parsed["max_page"]
+                if max_pages_per_region:
+                    max_page = min(max_page, max_pages_per_region)
+            logger.info(
+                f"  region={region} page={page_num}/{max_page} "
+                f"authors_seen={len(parsed['author_paths'])} new+={new_this_page}"
+            )
+            page_num += 1
+    return total_new
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — architects
+# ---------------------------------------------------------------------------
+
+def phase_architects(limit: int | None = None,
+                     max_built_pages: int = 10) -> int:
+    """For each pending architect: fetch + save + walk /projects/built."""
+    pending = divisare_db.get_pending("pending_architects", limit=limit)
+    processed = 0
+    for row in pending:
+        url = row["url"]
+        html = _fetch(url)
+        if not html:
+            divisare_db.mark_failed("pending_architects", "url", url, "fetch_failed")
+            continue
+        try:
+            data = divisare_parsers.parse_architect_page(html, url)
+            if data["id"] is None:
+                divisare_db.mark_failed("pending_architects", "url", url, "no_id_in_url")
+                continue
+            divisare_db.upsert_architect(data)
+
+            # Walk built projects
+            built_path = f"{url}/projects/built"
+            queued_total = 0
+            for page_num in range(1, max_built_pages + 1):
+                paged = f"{built_path}?page={page_num}" if page_num > 1 else built_path
+                bhtml = _fetch(paged)
+                if not bhtml:
+                    break
+                bparsed = divisare_parsers.parse_author_built_projects(bhtml)
+                queued_this = sum(
+                    1 for p in bparsed["project_paths"]
+                    if divisare_db.enqueue_project(p, source_url=url)
+                )
+                queued_total += queued_this
+                if not bparsed["has_next"]:
+                    break
+
+            divisare_db.mark_done("pending_architects", "url", url)
+            processed += 1
+            logger.info(f"  architect {data['name']!r} (id={data['id']}) "
+                        f"projects_queued+={queued_total}")
+        except RuntimeError:
+            raise  # auth errors bubble up
+        except Exception as e:
+            divisare_db.mark_failed("pending_architects", "url", url, f"{type(e).__name__}: {e}")
+            logger.error(f"  architect parse error {url}: {e}")
+    return processed
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — projects
+# ---------------------------------------------------------------------------
+
+def phase_projects(limit: int | None = None) -> int:
+    pending = divisare_db.get_pending("pending_projects", limit=limit)
+    processed = 0
+    for row in pending:
+        url = row["url"]
+        html = _fetch(url)
+        if not html:
+            divisare_db.mark_failed("pending_projects", "url", url, "fetch_failed")
+            continue
+        try:
+            full_url = url if url.startswith("http") else (config.DIVISARE_BASE_URL + url)
+            data = divisare_parsers.parse_project_page(html, full_url)
+            if data["id"] is None:
+                divisare_db.mark_failed("pending_projects", "url", url, "no_id_in_url")
+                continue
+            divisare_db.upsert_project(data)
+            for tag_slug in (data.get("tag_slugs") or []):
+                divisare_db.enqueue_tag(tag_slug)
+            divisare_db.mark_done("pending_projects", "url", url)
+            processed += 1
+            logger.info(
+                f"  project {data['name']!r} (id={data['id']}) "
+                f"tags+={len(data.get('tag_slugs') or [])}"
+            )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            divisare_db.mark_failed("pending_projects", "url", url, f"{type(e).__name__}: {e}")
+            logger.error(f"  project parse error {url}: {e}")
+    return processed
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — tags
+# ---------------------------------------------------------------------------
+
+def phase_tags(limit: int | None = None) -> int:
+    pending = divisare_db.get_pending("pending_tags", limit=limit)
+    processed = 0
+    for row in pending:
+        slug = row["slug"]
+        url = f"{config.DIVISARE_BASE_URL}/{slug}"
+        html = _fetch(url)
+        if not html:
+            divisare_db.mark_failed("pending_tags", "slug", slug, "fetch_failed")
+            continue
+        try:
+            data = divisare_parsers.parse_tag_page(html, slug)
+            divisare_db.upsert_tag(data)
+            divisare_db.mark_done("pending_tags", "slug", slug)
+            processed += 1
+            logger.info(f"  tag /{slug} → name={data['name']!r} curated={data['curated']}")
+        except RuntimeError:
+            raise
+        except Exception as e:
+            divisare_db.mark_failed("pending_tags", "slug", slug, f"{type(e).__name__}: {e}")
+    return processed
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+def run_all(*,
+            project_limit: int = 50,
+            architect_limit: int = 20,
+            tag_limit: int = 200,
+            discover_pages_per_region: int = 1) -> None:
+    """Pilot crawl: minimal discover → seed architects → projects → tags."""
+    divisare_db.init_db()
+
+    logger.info("=== Divisare crawl: phase 1 — discover (regions → authors) ===")
+    n = phase_discover(max_pages_per_region=discover_pages_per_region)
+    logger.info(f"  pending_architects newly added: {n}")
+
+    logger.info("\n=== Divisare crawl: phase 2 — architects ===")
+    n = phase_architects(limit=architect_limit)
+    logger.info(f"  architects processed: {n}")
+
+    logger.info("\n=== Divisare crawl: phase 3 — projects ===")
+    n = phase_projects(limit=project_limit)
+    logger.info(f"  projects processed: {n}")
+
+    logger.info("\n=== Divisare crawl: phase 4 — tags ===")
+    n = phase_tags(limit=tag_limit)
+    logger.info(f"  tags processed: {n}")
+
+    logger.info("\n=== Final stats ===")
+    for k, v in divisare_db.stats().items():
+        logger.info(f"  {k}: {v}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Divisare crawler (Phase 1)")
+    parser.add_argument("--phase",
+                        choices=["discover", "architects", "projects", "tags", "all"],
+                        default="all")
+    parser.add_argument("--limit", type=int, default=50,
+                        help="Project limit for --phase all/projects (default 50)")
+    parser.add_argument("--architect-limit", type=int, default=20,
+                        help="Architect limit for --phase all/architects (default 20)")
+    parser.add_argument("--tag-limit", type=int, default=200,
+                        help="Tag limit for --phase all/tags (default 200)")
+    parser.add_argument("--discover-pages-per-region", type=int, default=1,
+                        help="How many /designers/{region} pages to walk per region (default 1)")
+    args = parser.parse_args()
+
+    divisare_db.init_db()
+
+    try:
+        if args.phase == "discover":
+            n = phase_discover(max_pages_per_region=args.discover_pages_per_region)
+            logger.info(f"new pending_architects: {n}")
+        elif args.phase == "architects":
+            n = phase_architects(limit=args.limit)
+            logger.info(f"architects processed: {n}")
+        elif args.phase == "projects":
+            n = phase_projects(limit=args.limit)
+            logger.info(f"projects processed: {n}")
+        elif args.phase == "tags":
+            n = phase_tags(limit=args.limit)
+            logger.info(f"tags processed: {n}")
+        else:  # all
+            run_all(
+                project_limit=args.limit,
+                architect_limit=args.architect_limit,
+                tag_limit=args.tag_limit,
+                discover_pages_per_region=args.discover_pages_per_region,
+            )
+    except RuntimeError as e:
+        logger.error(str(e))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
