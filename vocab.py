@@ -95,6 +95,129 @@ LEGACY_MIGRATIONS = {
 }
 
 # ---------------------------------------------------------------------------
+# Divisare tag → make_db program (Phase 2)
+# ---------------------------------------------------------------------------
+#
+# Most Divisare tags are NOT typology indicators (they're materials, sizes,
+# themes, cities, building elements). Only the subset below is treated as a
+# program signal. Per-project lookup: walk the project's tag_slugs in order,
+# return the first matched program; fall back to "Other" if no typology tag
+# is present. Add entries as new typology tags are encountered.
+
+DIVISARE_TAG_TO_PROGRAM = {
+    # Religion
+    "chapels":       "Religion",
+    "churches":      "Religion",
+    "mosques":       "Religion",
+    "synagogues":    "Religion",
+    "temples":       "Religion",
+
+    # Education
+    "kindergartens":            "Education",
+    "primary-schools":          "Education",
+    "secondary-schools":        "Education",
+    "universities":             "Education",
+    "schools":                  "Education",
+    "libraries-and-mediatheques": "Education",
+    "libraries":                "Education",
+
+    # Housing
+    "houses":               "Housing",
+    "apartment-blocks":     "Housing",
+    "single-family-houses": "Housing",
+    "social-housing":       "Housing",
+    "student-housing":      "Housing",
+
+    # Office
+    "office-buildings":  "Office",
+    "headquarters":      "Office",
+    "co-working-spaces": "Office",
+
+    # Museum
+    "museums":           "Museum",
+    "art-galleries":     "Museum",
+    "exhibition-spaces": "Museum",
+
+    # Sports
+    "stadiums":       "Sports",
+    "sport-centers":  "Sports",
+    "swimming-pools": "Sports",
+    "gymnasiums":     "Sports",
+
+    # Transport
+    "airports":        "Transport",
+    "train-stations":  "Transport",
+    "metro-stations":  "Transport",
+    "bus-stations":    "Transport",
+    "ferry-terminals": "Transport",
+
+    # Hospitality
+    "hotels":      "Hospitality",
+    "restaurants": "Hospitality",
+    "bars":        "Hospitality",
+    "cafes":       "Hospitality",
+    "resorts":     "Hospitality",
+    "wine-cellars":"Hospitality",
+    "cinemas":     "Hospitality",
+    "theaters":    "Hospitality",
+
+    # Healthcare
+    "hospitals":              "Healthcare",
+    "clinics":                "Healthcare",
+    "rehabilitation-centers": "Healthcare",
+
+    # Public
+    "administrative-centers": "Public",
+    "town-halls":             "Public",
+    "courthouses":            "Public",
+    "civic-centers":          "Public",
+    "community-centers":      "Public",
+    "archives":               "Public",
+    "auditoriums":            "Public",
+    "pavilions":              "Public",
+
+    # Mixed Use
+    "mixed-use":           "Mixed Use",
+    "mixed-use-buildings": "Mixed Use",
+
+    # Landscape
+    "parks":         "Landscape",
+    "gardens":       "Landscape",
+    "public-spaces": "Landscape",
+    "plazas":        "Landscape",
+    "urban-parks":   "Landscape",
+
+    # Infrastructure
+    "bridges":      "Infrastructure",
+    "skybridges":   "Infrastructure",
+    "viaducts":     "Infrastructure",
+    "tunnels":      "Infrastructure",
+    "dams":         "Infrastructure",
+    "power-plants": "Infrastructure",
+    "factories":    "Infrastructure",
+}
+
+
+def map_divisare_tags_to_program(tag_slugs: list) -> Tuple[str, str]:
+    """Return (program, reason) given a project's Divisare tag slugs.
+
+    First typology-indicator tag wins. No match → "Other".
+    Audit-logged via the same _log channel as vocabulary migrations.
+    """
+    if not tag_slugs:
+        return "Other", "no_tags"
+    for slug in tag_slugs:
+        if slug in DIVISARE_TAG_TO_PROGRAM:
+            program = DIVISARE_TAG_TO_PROGRAM[slug]
+            _log(MigrationEvent("program", slug, program,
+                                f"divisare_tag:{slug}", "divisare"))
+            return program, f"matched:{slug}"
+    _log(MigrationEvent("program", ",".join(tag_slugs[:3]), "Other",
+                        "no_typology_tag_match", "divisare"))
+    return "Other", "no_typology_tag_match"
+
+
+# ---------------------------------------------------------------------------
 # Loose aliases (fuzzy substring normalization, used only by fix.py)
 # ---------------------------------------------------------------------------
 #
