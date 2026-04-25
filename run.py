@@ -286,6 +286,18 @@ def cmd_stats(args):
     print()
 
 
+def cmd_match_canonical(args):
+    """Match metalocus buildings → Divisare canonical projects."""
+    import match_to_canonical
+    forwarded = ["match_to_canonical.py"]
+    if args.limit:
+        forwarded += ["--limit", str(args.limit)]
+    if args.building_id:
+        forwarded += ["--building-id", args.building_id]
+    sys.argv = forwarded
+    sys.exit(match_to_canonical.main())
+
+
 def cmd_crawl_divisare(args):
     """Run Divisare 4-phase crawler. Requires authenticated session
     (`python3 divisare_auth.py login` first)."""
@@ -372,6 +384,15 @@ def main():
     p.add_argument("--tag-limit", type=int, default=200)
     p.add_argument("--discover-pages-per-region", type=int, default=1)
     p.set_defaults(func=cmd_crawl_divisare)
+
+    # match-canonical
+    p = sub.add_parser("match-canonical",
+                       help="Match metalocus buildings to Divisare canonical projects")
+    p.add_argument("--limit", type=int, default=None,
+                   help="Score only the first N metalocus buildings")
+    p.add_argument("--building-id", type=str, default=None,
+                   help="Score only this metalocus building_id (debug)")
+    p.set_defaults(func=cmd_match_canonical)
 
     # harness
     p = sub.add_parser("harness", help="Queue-driven AI pipeline (enrich + analyze + QC)")
