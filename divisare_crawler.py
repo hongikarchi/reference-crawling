@@ -52,8 +52,48 @@ def _init() -> tuple:
     return _SESSION, _RATE_LIMITER
 
 
-def _fetch(path_or_url: str) -> str | None:
-    """Fetch one URL, applying rate-limit + simple retry. Returns text or None."""
+def _looks_like_login_wall(response) -> bool:
+    """Detect when Divisare bounced us to the login page (session expired).
+    Two ways this manifests:
+      1. Final URL ends at /login (allow_redirects=True followed a 302).
+      2. Response is a redirect (3xx) with Location pointing at /login or
+         /people/login (when allow_redirects=False — not our default).
+      3. Status 200 but TooManyRedirects could already have raised.
+    """
+    if response is None:
+        return False
+    final = (getattr(response, "url", "") or "").lower()
+    if "/login" in final or "/people/login" in final:
+        return True
+    return False
+
+
+def _refresh_session() -> bool:
+    """Re-login programmatically and rebuild the in-memory Session.
+    Returns True on success."""
+    import os as _os
+    from divisare_auth import do_login
+    email = _os.environ.get("DIVISARE_EMAIL")
+    pw    = _os.environ.get("DIVISARE_PASSWORD")
+    if not (email and pw):
+        logger.error("auto-relogin: DIVISARE_EMAIL/PASSWORD not set in env")
+        return False
+
+    logger.warning("auto-relogin: refreshing Divisare session…")
+    if not do_login(email, pw, verbose=False):
+        logger.error("auto-relogin: do_login() returned False")
+        return False
+
+    # Reload cookies into our in-memory Session.
+    global _SESSION
+    _SESSION = get_authenticated_session()
+    logger.warning("auto-relogin: session refreshed OK")
+    return True
+
+
+def _fetch(path_or_url: str, *, _relogin_attempted: bool = False) -> str | None:
+    """Fetch one URL, applying rate-limit + retry + auto-relogin.
+    Returns text or None."""
     session, rl = _init()
     rl.wait()
     url = path_or_url if path_or_url.startswith("http") else (config.DIVISARE_BASE_URL + path_or_url)
@@ -62,9 +102,21 @@ def _fetch(path_or_url: str) -> str | None:
         try:
             r = session.get(url, timeout=config.REQUEST_TIMEOUT, allow_redirects=True)
         except Exception as e:
+            # TooManyRedirects on stale session is a common manifestation.
+            looks_auth = "TooManyRedirects" in type(e).__name__
+            if looks_auth and not _relogin_attempted:
+                if _refresh_session():
+                    return _fetch(path_or_url, _relogin_attempted=True)
             logger.warning(f"  fetch error {url}: {type(e).__name__}: {e} (attempt {attempt})")
             time.sleep(min(2 ** attempt, 30))
             continue
+
+        # Auth wall detection: 200 but final URL is the login page.
+        if r.status_code == 200 and _looks_like_login_wall(r):
+            if not _relogin_attempted and _refresh_session():
+                return _fetch(path_or_url, _relogin_attempted=True)
+            logger.error(f"  auth wall on {url} after re-login attempt — giving up")
+            return None
 
         if r.status_code == 200:
             return r.text
@@ -72,16 +124,16 @@ def _fetch(path_or_url: str) -> str | None:
             logger.warning(f"  404 {url}")
             return None
         if r.status_code in (401, 403):
+            if not _relogin_attempted and _refresh_session():
+                return _fetch(path_or_url, _relogin_attempted=True)
             raise RuntimeError(
-                f"Auth failed ({r.status_code}) on {url} — "
-                "session likely expired. Re-run `python3 divisare_auth.py login`."
+                f"Auth failed ({r.status_code}) on {url} after re-login attempt"
             )
         if r.status_code == 429:
             wait = int(r.headers.get("Retry-After", "60"))
             logger.warning(f"  rate-limited on {url}, sleeping {wait}s")
             time.sleep(wait)
             continue
-        # 5xx
         if r.status_code >= 500:
             backoff = min(2 ** attempt, 30)
             logger.warning(f"  HTTP {r.status_code} on {url}, retrying in {backoff}s")
