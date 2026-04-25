@@ -382,7 +382,8 @@ def main():
                    help="Project limit for --phase all/projects (default 50)")
     p.add_argument("--architect-limit", type=int, default=20)
     p.add_argument("--tag-limit", type=int, default=200)
-    p.add_argument("--discover-pages-per-region", type=int, default=1)
+    p.add_argument("--discover-pages-per-region", type=int, default=0,
+                   help="0 = walk all pages of each region (default)")
     p.set_defaults(func=cmd_crawl_divisare)
 
     # match-canonical

@@ -396,15 +396,16 @@ def main() -> int:
                         help="Architect limit for --phase all/architects (default 20)")
     parser.add_argument("--tag-limit", type=int, default=200,
                         help="Tag limit for --phase all/tags (default 200)")
-    parser.add_argument("--discover-pages-per-region", type=int, default=1,
-                        help="How many /designers/{region} pages to walk per region (default 1)")
+    parser.add_argument("--discover-pages-per-region", type=int, default=0,
+                        help="How many /designers/{region} pages to walk per region (0 = all, default)")
     args = parser.parse_args()
 
     divisare_db.init_db()
 
     try:
         if args.phase == "discover":
-            n = phase_discover(max_pages_per_region=args.discover_pages_per_region)
+            cap = args.discover_pages_per_region or None
+            n = phase_discover(max_pages_per_region=cap)
             logger.info(f"new pending_architects: {n}")
         elif args.phase == "architects":
             n = phase_architects(limit=args.limit)
@@ -423,7 +424,7 @@ def main() -> int:
                 project_limit=args.limit,
                 architect_limit=args.architect_limit,
                 tag_limit=args.tag_limit,
-                discover_pages_per_region=args.discover_pages_per_region,
+                discover_pages_per_region=args.discover_pages_per_region or None,
             )
     except RuntimeError as e:
         logger.error(str(e))
