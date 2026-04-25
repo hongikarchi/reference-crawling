@@ -151,7 +151,11 @@ def _fetch(path_or_url: str, *, _relogin_attempted: bool = False) -> str | None:
 # ---------------------------------------------------------------------------
 
 def phase_discover(max_pages_per_region: int | None = None) -> int:
-    """Walk /designers/{region} pages → harvest /authors/{id}-{slug} URLs."""
+    """Walk /designers/{region} pages → harvest /authors/{id}-{slug} URLs.
+
+    By default walks ALL paginated pages of every region. Use
+    `max_pages_per_region` to cap (1 = pilot mode).
+    """
     total_new = 0
     for region in divisare_parsers.DIVISARE_TOP_REGIONS:
         region_path = f"/designers/{region}"
@@ -172,11 +176,14 @@ def phase_discover(max_pages_per_region: int | None = None) -> int:
                 max_page = parsed["max_page"]
                 if max_pages_per_region:
                     max_page = min(max_page, max_pages_per_region)
-            logger.info(
-                f"  region={region} page={page_num}/{max_page} "
-                f"authors_seen={len(parsed['author_paths'])} new+={new_this_page}"
-            )
+            if page_num % 10 == 0 or page_num == max_page:
+                logger.info(
+                    f"  region={region} page={page_num}/{max_page} "
+                    f"authors_seen={len(parsed['author_paths'])} new+={new_this_page} "
+                    f"(running total this region: pages walked={page_num})"
+                )
             page_num += 1
+        logger.info(f"  region={region} done: {max_page} pages walked")
     return total_new
 
 
@@ -185,8 +192,16 @@ def phase_discover(max_pages_per_region: int | None = None) -> int:
 # ---------------------------------------------------------------------------
 
 def phase_architects(limit: int | None = None,
-                     max_built_pages: int = 10) -> int:
-    """For each pending architect: fetch + save + walk /projects/built."""
+                     max_built_pages: int = 50,
+                     also_unbuilt: bool = True) -> int:
+    """For each pending architect: fetch architect page + walk /projects/built
+    (and optionally /projects/unbuilt). Each project's lite metadata
+    (name, architects, location, photographer) is upserted DIRECTLY into
+    divisare_projects — no individual project-page fetch required.
+
+    Use `phase_projects()` (= deferred deep fetch) only for projects whose
+    full description / credits / area / gallery you specifically want.
+    """
     pending = divisare_db.get_pending("pending_architects", limit=limit)
     processed = 0
     for row in pending:
@@ -201,28 +216,35 @@ def phase_architects(limit: int | None = None,
                 divisare_db.mark_failed("pending_architects", "url", url, "no_id_in_url")
                 continue
             divisare_db.upsert_architect(data)
+            primary_arch_id = data["id"]
 
-            # Walk built projects
-            built_path = f"{url}/projects/built"
-            queued_total = 0
-            for page_num in range(1, max_built_pages + 1):
-                paged = f"{built_path}?page={page_num}" if page_num > 1 else built_path
-                bhtml = _fetch(paged)
-                if not bhtml:
-                    break
-                bparsed = divisare_parsers.parse_author_built_projects(bhtml)
-                queued_this = sum(
-                    1 for p in bparsed["project_paths"]
-                    if divisare_db.enqueue_project(p, source_url=url)
-                )
-                queued_total += queued_this
-                if not bparsed["has_next"]:
-                    break
+            lite_total = 0
+            for subpath in (("projects/built",) + (("projects/unbuilt",) if also_unbuilt else ())):
+                base = f"{url}/{subpath}"
+                for page_num in range(1, max_built_pages + 1):
+                    paged = f"{base}?page={page_num}" if page_num > 1 else base
+                    bhtml = _fetch(paged)
+                    if not bhtml:
+                        break
+                    rich = divisare_parsers.parse_author_built_projects_rich(bhtml)
+                    if not rich:
+                        break
+                    for proj in rich:
+                        try:
+                            divisare_db.upsert_project_lite(proj, primary_arch_id)
+                            lite_total += 1
+                        except Exception as e:
+                            logger.warning(f"    upsert_project_lite failed for "
+                                           f"id={proj.get('id')}: {e}")
+                    # Pagination signal: if no rich projects on this page, stop
+                    bparsed = divisare_parsers.parse_author_built_projects(bhtml)
+                    if not bparsed["has_next"]:
+                        break
 
             divisare_db.mark_done("pending_architects", "url", url)
             processed += 1
             logger.info(f"  architect {data['name']!r} (id={data['id']}) "
-                        f"projects_queued+={queued_total}")
+                        f"lite_projects_upserted+={lite_total}")
         except RuntimeError:
             raise  # auth errors bubble up
         except Exception as e:

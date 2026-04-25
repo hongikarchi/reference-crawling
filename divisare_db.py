@@ -256,6 +256,57 @@ def upsert_project(data: dict) -> None:
         conn.execute(sql, payload)
 
 
+def upsert_project_lite(data: dict, primary_architect_id: int) -> None:
+    """Upsert a lightweight project row from architect-page parsing.
+
+    Unlike `upsert_project` (full deep parse), this preserves existing
+    architect_canonical_ids by UNIONING new IDs into the JSON array, so
+    collaborated projects (e.g. Serie + Multiply Architects) accumulate
+    co-architect IDs as each architect's page is processed.
+
+    `primary_architect_id` is the architect whose /projects/built page we're
+    currently parsing — guaranteed to be a real Divisare ID.
+    """
+    payload = {k: v for k, v in data.items()}
+
+    with get_db() as conn:
+        # Read existing row to merge architect_ids if present
+        existing = conn.execute(
+            "SELECT architect_ids, architect_names FROM divisare_projects WHERE id = ?",
+            (data["id"],),
+        ).fetchone()
+
+        if existing:
+            existing_ids = json.loads(existing["architect_ids"]) if existing["architect_ids"] else []
+            existing_names = json.loads(existing["architect_names"]) if existing["architect_names"] else []
+        else:
+            existing_ids, existing_names = [], []
+
+        # Merge: keep existing + add primary_architect_id (dedupe)
+        merged_ids = list(dict.fromkeys(existing_ids + [primary_architect_id]))
+        # Names: union (preserve order, dedupe)
+        new_names = data.get("architect_names") or []
+        merged_names = list(dict.fromkeys(existing_names + new_names))
+
+        payload["architect_ids"] = merged_ids
+        payload["architect_names"] = merged_names
+
+        # Photographer goes into credits dict (consistent with deep-fetch shape)
+        photographer = data.get("photographer")
+        if photographer:
+            payload["credits"] = {"photo": [photographer]}
+
+        # Co-architects names go into a separate role bucket too (for visibility)
+        co_archs = data.get("co_architects")
+        if co_archs:
+            credits = payload.get("credits") or {}
+            credits["collaborators"] = co_archs
+            payload["credits"] = credits
+
+    # Now delegate to the regular upsert (which serializes JSON, etc.)
+    upsert_project(payload)
+
+
 def upsert_album(data: dict) -> None:
     """Insert/update an album row + replace its membership rows."""
     cols = ["slug", "name", "kind", "child_count"]

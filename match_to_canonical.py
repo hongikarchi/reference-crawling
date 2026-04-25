@@ -180,15 +180,21 @@ def match_all(metalocus_buildings: list[dict],
     print(f"Matching {len(metalocus_buildings)} metalocus → "
           f"{len(divisare_projects)} divisare projects...")
 
-    # Pre-filter index: (country_lower, year_window) → [divisare project indices]
+    # Pre-filter indexes:
+    #   by_country_year[(country, year)] → [divisare indices]   (preferred — narrower)
+    #   by_country[country]               → [divisare indices]   (fallback when project_year is NULL,
+    #                                                              which is the lite-index case)
     by_country_year: dict = {}
+    by_country: dict = {}
     for i, dp in enumerate(divisare_projects):
-        if not (dp.location_country and dp.project_year):
+        if not dp.location_country:
             continue
         country = _norm_country(dp.location_country)
-        for offset in range(-2, 3):
-            key = (country, dp.project_year + offset)
-            by_country_year.setdefault(key, []).append(i)
+        by_country.setdefault(country, []).append(i)
+        if dp.project_year:
+            for offset in range(-2, 3):
+                key = (country, dp.project_year + offset)
+                by_country_year.setdefault(key, []).append(i)
 
     # Embedding model — reuse the same one as stage3_embed for consistency
     print("  Loading sentence-transformers model...")
@@ -223,16 +229,19 @@ def match_all(metalocus_buildings: list[dict],
         country = _norm_country(mb.get("location_country"))
         year = mb.get("year")
 
-        # Candidate set: same country, year ±2; if no year, all in country.
+        # Candidate set: prefer (country, year ±2); fall back to all in country
+        # when either side is missing year (the lite-index case).
         candidate_indices: list = []
         if country:
             if year:
                 candidate_indices = by_country_year.get((country, year), [])[:]
+                # Also include year-less Divisare projects in the same country
+                # (lite mode — bulk of corpus has year=NULL until deep fetch)
+                year_less = [i for i in by_country.get(country, [])
+                             if divisare_projects[i].project_year is None]
+                candidate_indices.extend(year_less)
             else:
-                # Wider: union of all years in this country
-                for (c, _y), idxs in by_country_year.items():
-                    if c == country:
-                        candidate_indices.extend(idxs)
+                candidate_indices = by_country.get(country, [])[:]
         candidate_indices = list(dict.fromkeys(candidate_indices))  # dedupe preserve order
 
         record: dict = {

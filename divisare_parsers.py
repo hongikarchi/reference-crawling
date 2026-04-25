@@ -456,7 +456,11 @@ def parse_homepage_taxonomy(html: str) -> list[dict]:
 
 
 def parse_author_built_projects(html: str) -> dict:
-    """Return project paths + pagination hint from an architect's /projects/built page."""
+    """Return project paths + pagination hint from an architect's /projects/built page.
+
+    Used for the cheap discovery pass; richer per-project data is in
+    `parse_author_built_projects_rich()`.
+    """
     project_paths = sorted(set(re.findall(r'href="(/projects/\d+-[^"#?]+)"', html)))
     next_page_links = re.findall(r'href="([^"]*\bpage=\d+[^"]*)"', html)
     return {
@@ -464,3 +468,93 @@ def parse_author_built_projects(html: str) -> dict:
         "has_next":        bool(next_page_links),
         "next_page_paths": sorted(set(next_page_links))[:5],
     }
+
+
+def parse_author_built_projects_rich(html: str) -> list[dict]:
+    """Extract per-project lite metadata from an architect's /projects/built page.
+
+    Each project `<li>` exposes (without us having to fetch its individual
+    project page):
+        - canonical project_id + slug (URL)
+        - name
+        - architect_names (primary + co-architects, from img alt)
+        - co_architects (separately surfaced via "With <X>")
+        - location_city + location_country (note: this listing uses
+          CITY - COUNTRY ordering, the OPPOSITE of project-page sidebars
+          which use COUNTRY - CITY)
+        - photographer (from "Photo by <X>" if present)
+
+    `year`, `description`, `tags`, `area_sqm`, `credits`, `gallery_urls`,
+    `cover_image_url` are NOT here — they require the deep project page fetch.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    projects = []
+    seen_ids: set = set()
+
+    for li in soup.find_all("li"):
+        a = li.find("a", href=re.compile(r"^/projects/\d+-"))
+        if not a:
+            continue
+
+        m = _PROJECT_ID_RE.search(a["href"])
+        if not m:
+            continue
+        proj_id = int(m.group(1))
+        slug = m.group(2)
+        if proj_id in seen_ids:
+            continue
+        seen_ids.add(proj_id)
+
+        # Pipe-separated text rendering: "NAME | CITY - COUNTRY [| With | CO] [| Photo by | PHOTOG]"
+        parts = [p.strip() for p in li.get_text(" | ", strip=True).split("|")]
+        parts = [p for p in parts if p]
+
+        name = parts[0] if parts else None
+        location_text = parts[1] if len(parts) > 1 else ""
+
+        co_architects: list[str] = []
+        photographer: str | None = None
+        i = 2
+        while i < len(parts) - 1:
+            if parts[i] == "With":
+                # The next entry might be a comma-joined list (we'll keep raw)
+                co_architects.append(parts[i + 1])
+                i += 2
+            elif parts[i] == "Photo by":
+                photographer = parts[i + 1]
+                i += 2
+            else:
+                i += 1
+
+        # Split "City - Country" — last " - " wins so multi-word cities work
+        location_city = location_country = None
+        if " - " in location_text:
+            city_part, country_part = location_text.rsplit(" - ", 1)
+            location_city = city_part.strip() or None
+            location_country = country_part.strip() or None
+
+        # img alt: "Primary, [Co-arch], [Photographer] · Project Name"
+        architect_names: list[str] = []
+        img = a.find("img")
+        if img and img.get("alt"):
+            alt = img["alt"]
+            if " · " in alt:
+                names_chunk = alt.split(" · ")[0]
+                names_list = [n.strip() for n in names_chunk.split(",") if n.strip()]
+                # Drop the photographer (last name) if it matches the parent text
+                if photographer:
+                    names_list = [n for n in names_list if n != photographer]
+                architect_names = names_list
+
+        projects.append({
+            "id":               proj_id,
+            "slug":             slug,
+            "name":             name,
+            "architect_names":  architect_names,
+            "co_architects":    co_architects,
+            "location_city":    location_city,
+            "location_country": location_country,
+            "photographer":     photographer,
+        })
+
+    return projects
