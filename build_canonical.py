@@ -44,6 +44,90 @@ ARCH_MATCH_PATH   = "data/match/metalocus_architect_to_divisare.json"
 BLDG_MATCH_PATH   = "data/match/metalocus_to_divisare_buildings.json"
 DIVISARE_DB       = "data/divisare.db"
 OUTPUT_PATH       = "data/canonical_buildings.json"
+STRICT_OUTPUT_PATH = "data/canonical_buildings_strict.json"
+
+# --------------------------------------------------------------------------
+# Strict-mode filters: drop arch-only records that don't look like buildings.
+# Pure orphans (no Divisare attribution at all) are always dropped in strict
+# mode — they live in the metalocus source database and we don't want them
+# in the canonical artefact.
+# --------------------------------------------------------------------------
+
+import re
+
+# Action verbs that imply the row is an article-event entry, not a building
+_ARTICLE_VERB_RE = re.compile(
+    r"\b(?:wins?|won|announces?|announced|reveals?|revealed|applies|applied|"
+    r"uses?|used|opens?|opened|presents?|presented|launches?|launched|"
+    r"unveil(?:s|ed)?|debuts?|debuted|nominates?|nominated)\b",
+    re.IGNORECASE,
+)
+
+# Words that signal exhibitions / events / awards rather than buildings
+_NON_BUILDING_KEYWORDS_RE = re.compile(
+    r"\b(?:biennale|symposium|conference|lecture|award|nominat|finalist|"
+    r"winner|competition\s+for|short\s*list|long\s*list|prize)\b",
+    re.IGNORECASE,
+)
+
+MAX_BUILDING_NAME_LEN = 70
+
+# Strips a trailing " by SOMEONE" credit. We drop everything from the last
+# bare " by " onward to recover real names like:
+#   "Cafayate Convention Center by Ignacio Carón, Fabio Estremera, …"
+#       → "Cafayate Convention Center"
+# Refusing to strip when the substring before " by " is too short prevents
+# trimming entries like "Renovation by X" → "Renovation".
+_BY_SUFFIX_RE = re.compile(r"\s+by\s+", re.IGNORECASE)
+
+# Strips an editorial-hook prefix that ends in a period followed by the
+# real name. Heuristic: prefix is a sentence (>=20 chars, ends with .),
+# remainder is shorter, has at least one alpha + spaces.
+_HOOK_PREFIX_RE = re.compile(r"^([A-Z][^\.]{19,}\.)\s+(.{4,})$")
+
+
+def _clean_building_name(name: str) -> str:
+    """Recover the canonical building name from an article-style metalocus entry.
+    Idempotent: safe to call on already-clean names.
+    """
+    if not name:
+        return name
+    cleaned = name.strip()
+
+    # Editorial hook: 'Some sentence. Real Name'
+    m = _HOOK_PREFIX_RE.match(cleaned)
+    if m:
+        candidate = m.group(2).strip()
+        if len(candidate) >= 4:
+            cleaned = candidate
+
+    # Strip ", … by ARCHITECT" credit suffix (LAST occurrence of " by ")
+    by_matches = list(_BY_SUFFIX_RE.finditer(cleaned))
+    if by_matches:
+        cut = by_matches[-1].start()
+        candidate = cleaned[:cut].strip().rstrip(".,;:")
+        if len(candidate) >= 8:
+            cleaned = candidate
+
+    return cleaned
+
+
+def _is_article_title(name: str) -> tuple[bool, str]:
+    """Returns (drop, reason) on the (already-cleaned) name.
+
+    Note: leading-quote names (e.g. '"Lighthouse"') are KEPT — they're often
+    real building names with the architect's stylistic quoting. The exhibition
+    cases like '"Tea for Two" Exhibition' get caught by the keyword rule.
+    """
+    if not name:
+        return True, "empty_name"
+    if len(name) > MAX_BUILDING_NAME_LEN:
+        return True, "name_too_long"
+    if _ARTICLE_VERB_RE.search(name):
+        return True, "action_verb"
+    if _NON_BUILDING_KEYWORDS_RE.search(name):
+        return True, "non_building_keyword"
+    return False, ""
 
 
 def _load_json(path: str):
@@ -270,7 +354,16 @@ def _build_one(b: dict, *, arch_map: dict, building_match: Optional[dict],
     return cb
 
 
-def build_all() -> dict:
+def build_all(*, strict: bool = False, output_path: Optional[str] = None) -> dict:
+    """Build canonical_buildings.json (or _strict.json under --strict).
+
+    strict=True:
+      • drop pure orphans (no Divisare ID and no architect link)
+      • drop arch_only rows whose name fails _is_article_title()
+      • keep all full matches as-is
+    """
+    out_path = output_path or (STRICT_OUTPUT_PATH if strict else OUTPUT_PATH)
+
     print(f"loading metalocus buildings from {METALOC_PATH}...")
     metaloc = _load_json(METALOC_PATH)
     print(f"  {len(metaloc)} buildings")
@@ -291,11 +384,15 @@ def build_all() -> dict:
     print(f"loading {len(needed_div_ids)} Divisare project rows from {DIVISARE_DB}...")
     div_projects = _load_divisare_projects(needed_div_ids)
 
-    print(f"\nbuilding canonical records...")
+    print(f"\nbuilding canonical records (strict={strict})...")
     canonical_records: list[dict] = []
     matched_count = 0
-    arch_only_count = 0
-    pure_orphan_count = 0
+    arch_only_kept = 0
+    arch_only_dropped = 0
+    pure_orphan_dropped = 0
+    drop_reasons: dict[str, int] = {}
+    dropped_examples: list[dict] = []
+
     for i, b in enumerate(metaloc, 1):
         bm = bldg_match.get(b["building_id"])
         cb = _build_one(
@@ -305,43 +402,87 @@ def build_all() -> dict:
             div_projects=div_projects,
             building_to_clusters=building_to_clusters,
         )
-        canonical_records.append(cb.to_dict())
+
         if cb.divisare_id is not None:
+            # Full match: always keep
             matched_count += 1
+            canonical_records.append(cb.to_dict())
         elif cb.architect_canonical_ids:
-            arch_only_count += 1
+            # Arch-only: in strict mode, clean the name then filter
+            if strict:
+                original = cb.name or ""
+                cleaned = _clean_building_name(original)
+                if cleaned != original and cleaned:
+                    cb.set_field("name", cleaned, SOURCE_DERIVED)
+                drop, reason = _is_article_title(cleaned)
+                if drop:
+                    arch_only_dropped += 1
+                    drop_reasons[reason] = drop_reasons.get(reason, 0) + 1
+                    if len(dropped_examples) < 25:
+                        dropped_examples.append({
+                            "metalocus_building_id": cb.metalocus_building_id,
+                            "name_original": original,
+                            "name_after_cleanup": cleaned,
+                            "reason": reason,
+                            "program": cb.program,
+                        })
+                    continue
+            arch_only_kept += 1
+            canonical_records.append(cb.to_dict())
         else:
-            pure_orphan_count += 1
+            # Pure orphan: drop in strict mode, keep otherwise
+            if strict:
+                pure_orphan_dropped += 1
+                continue
+            canonical_records.append(cb.to_dict())
+
         if i % 500 == 0:
-            print(f"  built {i}/{len(metaloc)}  "
-                  f"(matched={matched_count}, arch_only={arch_only_count}, "
-                  f"orphan={pure_orphan_count})")
+            print(f"  scanned {i}/{len(metaloc)}  "
+                  f"(matched={matched_count}, arch_kept={arch_only_kept}, "
+                  f"arch_dropped={arch_only_dropped}, orphan_dropped={pure_orphan_dropped})")
 
-    print(f"\n=== summary ===")
-    print(f"  total canonical records:          {len(canonical_records)}")
-    print(f"  matched to Divisare project:      {matched_count} "
-          f"({matched_count/len(canonical_records):.1%})")
-    print(f"  orphan WITH Divisare architect:   {arch_only_count} "
-          f"({arch_only_count/len(canonical_records):.1%})")
-    print(f"  pure orphans (no Divisare ID):    {pure_orphan_count} "
-          f"({pure_orphan_count/len(canonical_records):.1%})")
+    print(f"\n=== summary (strict={strict}) ===")
+    print(f"  scanned metalocus rows:                {len(metaloc)}")
+    print(f"  → kept full match:                     {matched_count}")
+    print(f"  → kept arch_only:                      {arch_only_kept}")
+    if strict:
+        print(f"  → dropped arch_only (article-style):   {arch_only_dropped}")
+        for r, n in sorted(drop_reasons.items(), key=lambda t: -t[1]):
+            print(f"        ・ {r}: {n}")
+        print(f"  → dropped pure orphans (no Divisare):  {pure_orphan_dropped}")
+    print(f"  TOTAL records in canonical:            {len(canonical_records)}")
 
-    print(f"\nwriting → {OUTPUT_PATH} ...")
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
+    print(f"\nwriting → {out_path} ...")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as f:
         json.dump(canonical_records, f, ensure_ascii=False)
-    size_mb = os.path.getsize(OUTPUT_PATH) / (1024 * 1024)
+    size_mb = os.path.getsize(out_path) / (1024 * 1024)
     print(f"  wrote {len(canonical_records)} records ({size_mb:.1f} MB)")
+
+    if strict and dropped_examples:
+        print(f"\n=== sample of dropped arch_only (first {len(dropped_examples)}) ===")
+        for ex in dropped_examples[:25]:
+            shown = ex.get("name_after_cleanup") or ex.get("name_original") or ex.get("name") or ""
+            print(f"  [{ex['reason']}] {shown!r}")
+
     return {"records": len(canonical_records), "matched": matched_count,
-            "arch_only": arch_only_count, "pure_orphan": pure_orphan_count,
+            "arch_only_kept": arch_only_kept,
+            "arch_only_dropped": arch_only_dropped,
+            "pure_orphan_dropped": pure_orphan_dropped,
+            "drop_reasons": drop_reasons,
             "size_mb": round(size_mb, 1)}
 
 
 def main(argv: list[str]) -> int:
     import argparse
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.parse_args(argv)
-    build_all()
+    p.add_argument("--strict", action="store_true",
+                   help="drop pure orphans + arch_only rows whose name looks like "
+                        "an article title (writes data/canonical_buildings_strict.json)")
+    p.add_argument("--output", default=None,
+                   help="override output path")
+    args = p.parse_args(argv)
+    build_all(strict=args.strict, output_path=args.output)
     return 0
 
 
