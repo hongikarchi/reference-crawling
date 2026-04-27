@@ -27,3 +27,5 @@ Thumbs.db
 # Private planning docs (user-local memos)
 00_FLOW.md
 01_MAKE_DB.md
+.claude/scheduled_tasks.lock
+__pycache__/

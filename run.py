@@ -35,9 +35,9 @@ import json
 import os
 import sys
 
-import config
-import database as db
-from utils import logger
+from core import config
+from crawl.metalocus import database as db
+from core.utils import logger
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ def _run_export_dedup() -> int:
 
     Shared between `make-db` and the standalone `export-dedup` subcommand.
     """
-    from stage1_export import export_buildings
+    from enrich.export import export_buildings
 
     logger.info("Exporting 1_buildings_raw.json...")
     count = export_buildings()
@@ -58,7 +58,7 @@ def _run_export_dedup() -> int:
         return 0
 
     logger.info("Running stage2_dedup (dedup + IDs)...")
-    import stage2_dedup
+    from enrich import dedup as stage2_dedup
     from sentence_transformers import SentenceTransformer
 
     buildings = stage2_dedup.load_json(config.RAW_JSON)
@@ -117,7 +117,7 @@ def _print_pipeline_status() -> None:
 
 def cmd_make_db(args):
     """Crawl incrementally then dedup. Pauses with instructions for the harness."""
-    from crawler import phase_discover, phase_listings, phase_articles, phase_images
+    from crawl.metalocus.crawler import phase_discover, phase_listings, phase_articles, phase_images
 
     limit = args.limit
     completed = db.get_completed_article_count()
@@ -164,7 +164,7 @@ def cmd_crawl(args):
     """Crawl next batch only (no export/dedup). Resumes image downloads."""
     config.MAX_ARTICLES = args.articles
     config.MAX_PAGES_PER_CATEGORY = None
-    from crawler import phase_articles, phase_images
+    from crawl.metalocus.crawler import phase_articles, phase_images
     logger.info(f"=== crawl batch (max_articles={args.articles}) ===")
     phase_articles()
     phase_images()
@@ -183,14 +183,14 @@ def cmd_embed(args):
         print(f"ERROR: {config.ANALYZED_JSON} not found.")
         print("Run image analysis first: python3 run.py harness")
         sys.exit(1)
-    import stage3_embed
+    from enrich import embed as stage3_embed
     stage3_embed.main()
 
 
 def cmd_embed_rate(args):
     """stage3_embed + quality review + quality fix + quality rate. Returns score."""
     cmd_embed(args)
-    import quality
+    from enrich import quality
     quality.run_review()
     quality.run_fix()
     quality.run_rate()
@@ -198,7 +198,7 @@ def cmd_embed_rate(args):
 
 def cmd_quality(args):
     """quality {review,fix,rate,diagnose}."""
-    import quality
+    from enrich import quality
     dispatch = {
         "review":   quality.run_review,
         "fix":      quality.run_fix,
@@ -210,14 +210,14 @@ def cmd_quality(args):
 
 def cmd_migrate_vocab(args):
     """Apply vocab.py legacy migrations to existing data records."""
-    import migrate_vocab
+    from enrich import migrate_vocab
     sys.argv = ["migrate_vocab.py"] + (["--apply"] if args.apply else [])
     sys.exit(migrate_vocab.main())
 
 
 def cmd_label_golden(args):
     """Bootstrap data/golden/buildings.json (regression baseline or Opus labeling)."""
-    import label_golden
+    from enrich import label_golden
     forwarded = ["label_golden.py",
                  "--sample", str(args.sample),
                  "--source", args.source,
@@ -232,7 +232,7 @@ def cmd_label_golden(args):
 
 def cmd_eval(args):
     """Score current prompts against the golden set."""
-    import eval as _eval
+    from enrich import eval as _eval
     forwarded = ["eval.py"]
     if args.limit:
         forwarded += ["--limit", str(args.limit)]
@@ -246,7 +246,7 @@ def cmd_eval(args):
 
 def cmd_reprocess(args):
     """Targeted re-processing — reads vocab_migration.json, eval_report.json, or an ids file."""
-    import reprocess
+    from enrich import reprocess
     forwarded = ["reprocess.py"]
     if args.from_vocab_migration:
         forwarded += ["--from-vocab-migration"]
@@ -288,7 +288,7 @@ def cmd_stats(args):
 
 def cmd_match_canonical(args):
     """Match metalocus buildings → Divisare canonical projects."""
-    import match_to_canonical
+    from canonical import match_to_canonical
     forwarded = ["match_to_canonical.py"]
     if args.limit:
         forwarded += ["--limit", str(args.limit)]
@@ -300,13 +300,13 @@ def cmd_match_canonical(args):
 
 def cmd_canonical_qc(args):
     """Run 9 invariant checks on data/canonical_buildings.json (or another path)."""
-    import canonical_qc
+    from canonical import qc as canonical_qc
     sys.exit(canonical_qc.main([args.file] if args.file else []))
 
 
 def cmd_consolidate_architects(args):
     """Collapse metalocus's raw architect strings into canonical clusters."""
-    import metalocus_consolidate
+    from canonical import consolidate as metalocus_consolidate
     forwarded = []
     if args.dry_run:
         forwarded.append("--dry-run")
@@ -318,7 +318,7 @@ def cmd_consolidate_architects(args):
 def cmd_crawl_divisare(args):
     """Run Divisare 4-phase crawler. Requires authenticated session
     (`python3 divisare_auth.py login` first)."""
-    import divisare_crawler
+    from crawl.divisare import crawler as divisare_crawler
     sys.argv = ["divisare_crawler.py", "--phase", args.phase,
                 "--limit", str(args.limit),
                 "--architect-limit", str(args.architect_limit),
@@ -332,7 +332,7 @@ def cmd_harness(args):
     from dotenv import load_dotenv
     load_dotenv(os.path.join(config.BASE_DIR, ".env"))
 
-    import pipeline_harness
+    from enrich import harness as pipeline_harness
 
     if args.status:
         pipeline_harness.print_harness_status()

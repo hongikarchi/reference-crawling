@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Database Visual Check</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f7; padding: 30px; margin: 0; }
+        h1 { text-align: center; color: #333; margin-bottom: 40px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; max-width: 1400px; margin: 0 auto; }
+        .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s; border: 1px solid #eaeaea; display: flex; flex-direction: column;}
+        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        .image-container { width: 100%; height: 220px; background: #eee; overflow: hidden; position: relative; }
+        .image-container img { width: 100%; height: 100%; object-fit: cover; }
+        .info { padding: 20px; flex-grow: 1; display: flex; flex-direction: column;}
+        .title { font-size: 1.1em; font-weight: 700; margin: 0 0 8px 0; color: #1a1a1a; line-height: 1.3; }
+        .architect { font-size: 0.9em; color: #666; margin: 0 0 16px 0; display: flex; align-items: center; gap: 6px; }
+        
+        .tags-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; }
+        .tag { padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 600; }
+        .t-prog { background: #e3f2fd; color: #1565c0; }
+        .t-style { background: #f3e5f5; color: #6a1b9a; }
+        .t-mat { background: #fff3e0; color: #e65100; }
+        .t-atm { background: #e8f5e9; color: #2e7d32; }
+        .t-col { background: #eceff1; color: #455a64; }
+        .t-gen { background: #f0f0f0; color: #444; }
+
+        .btn-tags { margin-top: auto; background: #f0f0f5; color: #333; border: 1px solid #dcdcdc; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85em; font-weight: 600; width: 100%; transition: all 0.2s; }
+        .btn-tags:hover { background: #e0e0e8; border-color: #ccc;}
+
+        #loader { text-align: center; padding: 40px; color: #888; font-weight: bold; font-size: 1.2em; }
+        #stats { text-align: center; color: #666; margin-bottom: 30px; font-size: 1.1em; }
+        #error-msg { display: none; text-align: center; color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; max-width: 800px; margin: 0 auto 30px auto; }
+
+        /* Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 20px; opacity: 0; transition: opacity 0.2s; }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        .modal { background: white; border-radius: 16px; width: 100%; max-width: 650px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.2); transform: translateY(20px); transition: transform 0.2s; }
+        .modal-overlay.active .modal { transform: translateY(0); }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid #eaeaea; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { margin: 0; font-size: 1.3em; color: #111; line-height: 1.3; }
+        .close-btn { background: none; border: none; font-size: 1.8em; cursor: pointer; color: #888; padding: 0; line-height: 1; }
+        .close-btn:hover { color: #333; }
+        .modal-body { padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+        
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f9f9f9; padding: 15px; border-radius: 8px; font-size: 0.9em; }
+        .meta-item strong { color: #555; }
+        .meta-item span { color: #222; }
+
+        .text-section h4 { margin: 0 0 8px 0; color: #444; font-size: 0.95em; border-bottom: 2px solid #eaeaea; padding-bottom: 5px; }
+        .text-section p { margin: 0; font-size: 0.95em; color: #333; line-height: 1.6; }
+
+        .tag-group h4 { margin: 0 0 10px 0; color: #444; font-size: 0.95em; border-bottom: 2px solid #eaeaea; padding-bottom: 5px; }
+        .tag-group-content { display: flex; flex-wrap: wrap; gap: 8px; }
+        .modal-tag { padding: 6px 12px; border-radius: 8px; font-size: 0.85em; font-weight: 500; }
+        
+        .section-title { font-weight: 800; font-size: 1.1em; color: #111; margin-bottom: 0px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>건축물 DB 시각적 검수 갤러리</h1>
+    <div id="error-msg"></div>
+    <div id="stats">데이터 로딩 중...</div>
+    <div class="grid" id="grid"></div>
+    <div id="loader">추가 데이터 로딩 중... (스크롤을 내리세요)</div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="tagModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 id="modalTitle">Building Title</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let currentIndex = 0;
+        const PAGE_SIZE = 60;
+
+        function splitTags(value) {
+            if (!value) return [];
+            if (Array.isArray(value)) return value;
+            if (typeof value === 'string') return value.split(',').map(s => s.trim()).filter(Boolean);
+            return [];
+        }
+
+        function createCardHTML(item, index) {
+            const buildingId = item.building_id || '';
+            const slug = item.slug || '';
+            const title = item.project_name || item.name_en || item.title || '제목 없음 (Unknown)';
+            const architect = item.architect || '건축가 미상';
+            
+            const programs = splitTags(item.program);
+            const styles = splitTags(item.style);
+            
+            let summaryTagsHTML = '';
+            if (programs.length > 0) summaryTagsHTML += `<span class="tag t-prog">${programs[0]}</span>`;
+            if (styles.length > 0) summaryTagsHTML += `<span class="tag t-style">${styles[0]}</span>`;
+            
+            let imgSrc = '';
+            const fallbackSrc = item.images && item.images.length > 0 ? `images/${slug}/${item.images[0]?.filename}` : '';
+            const noImageSVG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='220'%3E%3Crect width='300' height='220' fill='%23f8f8f8'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14px' fill='%23aaa'%3EImage Not Found%3C/text%3E%3C/svg%3E";
+            
+            if (item.images && item.images.length > 0) {
+                const firstImg = item.images.find(img => img.type === 'photo') || item.images[0];
+                imgSrc = `images/${buildingId}/${firstImg.filename || ''}`;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="image-container">
+                    <img src="${imgSrc}" alt="${title}" loading="lazy" 
+                         onerror="if(this.src !== '${fallbackSrc}') { this.src='${fallbackSrc}'; } else { this.src='${noImageSVG}'; }">
+                </div>
+                <div class="info">
+                    <h3 class="title">${title}</h3>
+                    <p class="architect">🏛 ${architect}</p>
+                    <div class="tags-summary">
+                        ${summaryTagsHTML || '<span class="tag t-gen">핵심 태그 없음</span>'}
+                    </div>
+                    <button class="btn-tags" onclick="openModal(${index})">상세 정보 및 모든 태그 보기</button>
+                </div>
+            `;
+            return card;
+        }
+
+        function renderNextPage() {
+            const grid = document.getElementById('grid');
+            const end = Math.min(currentIndex + PAGE_SIZE, allData.length);
+            for (let i = currentIndex; i < end; i++) {
+                grid.appendChild(createCardHTML(allData[i], i));
+            }
+            currentIndex = end;
+            if (currentIndex >= allData.length) {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        async function loadDatabase() {
+            try {
+                const response = await fetch(`data/4_buildings_final.json?t=${new Date().getTime()}`);
+                if (!response.ok) throw new Error('Network error');
+                
+                allData = await response.json();
+                document.getElementById('stats').innerText = `총 ${allData.length.toLocaleString()}개의 건축물이 로드되었습니다.`;
+                renderNextPage();
+                
+                const observer = new IntersectionObserver((entries) => {
+                    if (entries[0].isIntersecting && currentIndex < allData.length) {
+                        renderNextPage();
+                    }
+                }, { rootMargin: "200px" });
+                
+                observer.observe(document.getElementById('loader'));
+            } catch (error) {
+                document.getElementById('stats').style.display = 'none';
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('error-msg').style.display = 'block';
+                document.getElementById('error-msg').innerHTML = "로딩 에러! 파이썬 서버(python3 -m http.server 8000)를 실행 중인지 확인하세요.";
+            }
+        }
+
+        function openModal(index) {
+            const item = allData[index];
+            const title = item.project_name || item.name_en || item.title || '제목 없음';
+            document.getElementById('modalTitle').innerText = title;
+            
+            // Metadata
+            const architect = item.architect || 'Unknown';
+            const location = [item.city, item.location_country].filter(Boolean).join(', ') || 'Unknown';
+            const year = item.year || 'Unknown';
+            const area = item.area_sqm ? item.area_sqm + ' sqm' : 'Unknown';
+
+            // Texts
+            const description = item.description || '상세 설명이 없습니다.';
+            const visualDescription = item.visual_description || '시각적 분석 설명이 없습니다.';
+
+            // Tags
+            const programs = splitTags(item.program);
+            const styles = splitTags(item.style);
+            const materials = splitTags(item.material_visual || item.material);
+            const atmospheres = splitTags(item.atmosphere);
+            const colorTones = splitTags(item.color_tone);
+
+            let bodyHtml = `
+                <div class="meta-grid">
+                    <div class="meta-item"><strong>Architect:</strong> <span>${architect}</span></div>
+                    <div class="meta-item"><strong>Location:</strong> <span>${location}</span></div>
+                    <div class="meta-item"><strong>Year:</strong> <span>${year}</span></div>
+                    <div class="meta-item"><strong>Area:</strong> <span>${area}</span></div>
+                </div>
+
+                <div class="section-title">Narrative & Analysis</div>
+                <div class="text-section">
+                    <h4>Description</h4>
+                    <p>${description}</p>
+                </div>
+                <div class="text-section">
+                    <h4>Visual Description (AI Analysis)</h4>
+                    <p>${visualDescription}</p>
+                </div>
+
+                <div class="section-title">Extracted Tags</div>
+            `;
+
+            const addGroup = (label, tags, colorClass) => {
+                if (tags.length === 0) return;
+                const tagSpans = tags.map(t => `<span class="modal-tag ${colorClass}">${t}</span>`).join('');
+                bodyHtml += `
+                    <div class="tag-group">
+                        <h4>${label}</h4>
+                        <div class="tag-group-content">${tagSpans}</div>
+                    </div>
+                `;
+            };
+
+            addGroup('Program (용도)', programs, 't-prog');
+            addGroup('Style (스타일)', styles, 't-style');
+            addGroup('Material (재질)', materials, 't-mat');
+            addGroup('Atmosphere (분위기)', atmospheres, 't-atm');
+            addGroup('Color Tone (색감)', colorTones, 't-col');
+
+            document.getElementById('modalBody').innerHTML = bodyHtml;
+            document.getElementById('tagModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(event) {
+            if (event && event.target.id !== 'tagModal' && !event.target.classList.contains('close-btn')) {
+                return;
+            }
+            document.getElementById('tagModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        window.addEventListener('DOMContentLoaded', loadDatabase);
+    </script>
+</body>
+</html>

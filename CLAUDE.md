@@ -25,15 +25,25 @@ script directly via the CLI below — agent layer is for multi-step operations.
 ## Rules
 
 - Read `.claude/Goal.md` before non-trivial decisions.
-- `.claude/PROJECT.md` is the single source of truth for schemas; `vocab.py` is
-  the single source of truth for vocabularies. `.claude/PROJECT.md` §5 mirrors
-  `vocab.py` for human reading — code wins on conflict.
-- All modules live at project root — no subdirectories.
-- Numbered filenames (`1_`, `2_`, `3_`, `4_`) must be consistent everywhere.
-- **`data/id_registry.json` — NEVER delete.** Stable building_id assignments live
-  here; losing it breaks every downstream join.
-- **Never run `upload.py` without explicit user approval.** `upload-guard`
-  agent gates it; the user runs it.
+- `.claude/PROJECT.md` is the single source of truth for schemas;
+  `core/vocab.py` is the single source of truth for vocabularies.
+  `.claude/PROJECT.md` §5 mirrors `core/vocab.py` for human reading —
+  code wins on conflict.
+- **Code lives in 5-stage subpackages**, mirroring the workflow:
+  `core/` (vocab, config, utils) → `crawl/<source>/` (per-site crawlers,
+  e.g. `crawl/metalocus/`, `crawl/divisare/`) → `enrich/` (LLM text +
+  image enrichment, harness, embed, quality) → `canonical/` (matching,
+  consolidation, build, QC) → `upload/` (Neon + R2). `run.py` stays at
+  root as the CLI dispatcher; `tools/` holds dev utilities (gallery
+  preview, etc.). New crawl source = new directory under `crawl/`.
+- Data files (`data/`, `images/`) stay at project root regardless of
+  the code subpackage that produced them.
+- **`data/id_registry.json` — NEVER delete.** Stable building_id
+  assignments live here; losing it breaks every downstream join.
+- **Never run upload scripts without explicit user approval.**
+  `upload-guard` agent gates them; the user runs them. The current upload
+  scripts are `upload/neon.py` (legacy) and `upload/neon_strict.py`
+  (strict canonical → in-place migration).
 - Agents NEVER edit `vocab.py` on their own judgment — vocabulary changes are
   user decisions, grounded by the `researcher` agent.
 - **Git workflow (solo dev, single branch):**
@@ -79,8 +89,10 @@ python3 run.py eval [--limit N] [--only enrich|analyze]
 python3 run.py reprocess --from-vocab-migration [--apply]
 
 # Upload (manual gate — agents never run this)
-python3 upload.py --dry-run
-python3 upload.py
+python3 -m upload.neon --dry-run             # legacy 4_buildings_final → architecture_vectors
+python3 -m upload.neon                       # only after explicit approval
+python3 -m upload.neon_strict --dry-run      # strict canonical → architecture_vectors
+python3 -m upload.neon_strict --confirm      # only after explicit approval
 ```
 
 ## Reference
@@ -88,12 +100,12 @@ python3 upload.py
 - **File structure + data layout** — see `.claude/PROJECT.md` §3
 - **Pipeline tool specs (stage1-3, quality, agents, upload)** — see `.claude/PROJECT.md` §7
 - **Schema (PostgreSQL `architecture_vectors`)** — see `.claude/PROJECT.md` §4
-- **Controlled vocabularies** — `vocab.py` is canonical; `.claude/PROJECT.md` §5 mirrors
+- **Controlled vocabularies** — `core/vocab.py` is canonical; `.claude/PROJECT.md` §5 mirrors
 
 ## Known Gotchas
 
 - `DB_PASSWORD` excluded from required-fields check — Neon needs it but check is bypassed.
 - Images live at `images/{building_id}/` after dedup (reorganized from `images/{slug}/`).
-- Don't re-run `stage2_dedup.py` on already-processed buildings.
-- `python3 upload.py --reset` only on first upload or after schema changes (drops the table — be sure).
+- Don't re-run `enrich/dedup.py` on already-processed buildings.
+- `python3 -m upload.neon --reset` only on first upload or after schema changes (drops the table — be sure).
 - 2,784 / 3,465 production records have out-of-V2 atmosphere values (`organic`, `communal`, …). See `data/reports/vocab_migration.json`. Re-processing requires user cost approval — see `quality-reviewer` agent's atmosphere-drift playbook.
