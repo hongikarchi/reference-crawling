@@ -50,9 +50,11 @@ script directly via the CLI below — agent layer is for multi-step operations.
   - All work happens on `main`. No feature branches.
   - The `orchestrator` agent commits autonomously per logical change or phase
     (no need to ask the user "should I commit now?").
-  - **`git push` is user-initiated only.** No agent ever runs `git push`,
-    `git push --force`, or any remote-modifying command. Local commits stack
-    until the user explicitly requests a push.
+  - **`git push` requires explicit user request.** Agents may run `git push`
+    only when the user explicitly says so ("push", "푸시해", "올려", etc.).
+    Without that signal, local commits stack and the agent never reaches for
+    the remote on its own. `git push --force` and any history-rewriting push
+    is never allowed; pushes are always plain `git push origin main`.
 
 ## CLI
 
