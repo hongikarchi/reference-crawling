@@ -180,6 +180,25 @@ def enqueue_tag(slug: str) -> bool:
         return cur.rowcount > 0
 
 
+def enqueue_lite_projects() -> int:
+    """Bulk-enqueue every divisare_projects row whose deep content (description)
+    is missing into pending_projects, so phase_projects can deep-fetch them.
+
+    Idempotent: rows already in pending_projects are left alone (INSERT OR IGNORE).
+    Returns the number of new rows added to pending_projects.
+
+    URL format: /projects/{id}-{slug}
+    """
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT OR IGNORE INTO pending_projects (url, source_url)
+            SELECT '/projects/' || id || '-' || slug, 'lite-backfill'
+            FROM divisare_projects
+            WHERE description IS NULL OR description = ''
+        """)
+        return cur.rowcount
+
+
 # ---------------------------------------------------------------------------
 # Queue ops — claim/mark
 # ---------------------------------------------------------------------------

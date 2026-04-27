@@ -257,6 +257,16 @@ def phase_architects(limit: int | None = None,
 # Phase 3 — projects
 # ---------------------------------------------------------------------------
 
+def phase_enqueue_lite() -> int:
+    """Bulk-enqueue every lite-only divisare_projects row (description IS NULL)
+    into pending_projects so phase_projects can deep-fetch them.
+    Returns the number of newly enqueued URLs.
+    """
+    n = divisare_db.enqueue_lite_projects()
+    logger.info(f"  enqueued {n} lite projects for deep fetch")
+    return n
+
+
 def phase_projects(limit: int | None = None) -> int:
     pending = divisare_db.get_pending("pending_projects", limit=limit)
     processed = 0
@@ -388,7 +398,8 @@ def run_all(*,
 def main() -> int:
     parser = argparse.ArgumentParser(description="Divisare crawler (Phase 1)")
     parser.add_argument("--phase",
-                        choices=["discover", "architects", "projects", "tags", "albums", "all"],
+                        choices=["discover", "architects", "enqueue-lite", "projects",
+                                 "tags", "albums", "all"],
                         default="all")
     parser.add_argument("--limit", type=int, default=50,
                         help="Project limit for --phase all/projects (default 50)")
@@ -412,6 +423,9 @@ def main() -> int:
         elif args.phase == "architects":
             n = phase_architects(limit=args.limit, also_unbuilt=args.also_unbuilt)
             logger.info(f"architects processed: {n}")
+        elif args.phase == "enqueue-lite":
+            n = phase_enqueue_lite()
+            logger.info(f"newly enqueued for deep fetch: {n}")
         elif args.phase == "projects":
             n = phase_projects(limit=args.limit)
             logger.info(f"projects processed: {n}")
