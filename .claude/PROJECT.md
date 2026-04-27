@@ -16,29 +16,108 @@ Builds a vector database of architecture projects for ArchiTinder — a swipe-ba
 
 ## 2. Architecture
 
+5 stages, each owning one code subpackage AND one data sub-folder.
+
+### 2.1 Pipeline data flow
+
+```mermaid
+flowchart LR
+    %% External sources
+    METALOC[/"metalocus.es"/]:::ext
+    DIVISARE[/"divisare.com"/]:::ext
+
+    %% Stage 1 — Crawl
+    subgraph S1["① crawl/  (per-source raw scraping)"]
+        ML[("data/crawl/<br/>metalocus.db")]
+        DV[("data/crawl/<br/>divisare.db")]
+        IMG[/"images/{building_id}/"/]
+    end
+    METALOC --> ML
+    METALOC --> IMG
+    DIVISARE --> DV
+
+    %% Stage 2-3 — Enrich
+    subgraph S2["②③ enrich/  (LLM text + image extraction)"]
+        RAW[/"1_buildings_raw.json"/]
+        EN[/"2_buildings_enriched.json"/]
+        AN[/"3_buildings_analyzed.json"/]
+        FIN[/"4_buildings_final.json<br/>(with embeddings)"/]
+        TQ[("tasks.db<br/>queue")]
+    end
+    ML -- "export.py" --> RAW
+    RAW -- "harness +<br/>llm_parser" --> EN
+    EN -- "harness +<br/>image_analysis" --> AN
+    AN -- "embed.py" --> FIN
+    TQ -. drives .-> EN
+    TQ -. drives .-> AN
+
+    %% Stage 4 — Canonical
+    subgraph S4["④ canonical/  (matching + canonical artefact)"]
+        CL[/"metalocus_architect_<br/>clusters.json"/]
+        AM[/"match/architect_<br/>to_divisare.json"/]
+        BM[/"match/building_<br/>to_divisare.json"/]
+        CB[/"canonical_buildings_<br/>strict.json"/]
+    end
+    FIN -- "consolidate" --> CL
+    CL -- "match_architects" --> AM
+    DV --> AM
+    FIN -- "match_buildings" --> BM
+    AM --> BM
+    DV --> BM
+    BM -- "build --strict" --> CB
+    AM --> CB
+    FIN --> CB
+
+    %% Stage 5 — Upload
+    subgraph S5["⑤ upload/  (Neon + R2 — manual gate)"]
+        NEON[("Neon Postgres<br/>architecture_vectors")]
+        R2[("Cloudflare R2<br/>images")]
+    end
+    CB -- "neon_strict" --> NEON
+    IMG -- "neon (R2 part)" --> R2
+
+    classDef ext fill:#fff5e6,stroke:#cc8a00,stroke-width:2px,color:#000
+    classDef stage fill:#f5f5f5,stroke:#666,stroke-width:1px,color:#000
+    class S1,S2,S4,S5 stage
 ```
-metalocus.es
-    │
-    ▼  crawler.py — 4 phases: discover → listings → articles → images
-SQLite (metalocus.db) + images/{slug}/
-    │
-    ▼  stage1_export.py + stage2_dedup.py
-1_buildings_raw.json
-    │
-    ▼  Claude: text enrichment (name_en, program, material, atmosphere)
-2_buildings_enriched.json
-    │
-    ▼  Claude: image analysis (style, color_tone, material_visual, visual_description)
-3_buildings_analyzed.json
-    │
-    ▼  stage3_embed.py — 384-dim embedding from all fields
-4_buildings_final.json
-    │
-    ▼  quality.py (review → fix → rate) → [loop until quality passes]
-    │
-    ▼  Claude reports to user → user approves → upload.py
-PostgreSQL (Neon) + Cloudflare R2
+
+### 2.2 Code ↔ data correspondence
+
+| Stage | Code package | Data folder | Source-of-truth artefact |
+|---|---|---|---|
+| 1. Crawl | `crawl/{source}/` | `data/crawl/` | `*.db` per source |
+| 2-3. Enrich | `enrich/` | `data/enrich/` | `4_buildings_final.json` |
+| 4. Canonical | `canonical/` | `data/canonical/` | `canonical_buildings_strict.json` |
+| 5. Upload | `upload/` | (none — writes to Neon/R2) | `architecture_vectors` table |
+| Shared | `core/` | `data/id_registry.json`, `data/reports/` | — |
+
+**New crawl source = new directory under `crawl/<source>/`** + a parallel
+`data/crawl/<source>.db`. The per-source crawler enqueues into its own
+SQLite; downstream stages read it via `crawl.<source>.db` helpers.
+
+### 2.3 Two-machine split (current operating mode)
+
+```mermaid
+flowchart LR
+    subgraph OFFICE["Office computer (large disk)"]
+        OC[crawl/metalocus<br/>+ enrich/harness<br/>+ images/]
+        OD[("metalocus.db<br/>tasks.db<br/>4_buildings_final.json")]
+    end
+    subgraph LAPTOP["Laptop (small disk)"]
+        LC[crawl/divisare<br/>--phase enqueue-lite<br/>--phase projects]
+        LD[("divisare.db<br/>(deep-fetched)")]
+    end
+    DBOX{"Dropbox<br/>(code + small JSON only;<br/>SQLite excluded per machine)"}
+    OD <-.code,<br/>4_buildings_final.json.-> DBOX
+    LD <-.code,<br/>match outputs.-> DBOX
+    OC -- selective sync excludes<br/>data/crawl/divisare.db --> DBOX
+    LC -- selective sync excludes<br/>data/crawl/metalocus.db<br/>data/enrich/tasks.db<br/>images/ --> DBOX
 ```
+
+Both machines write disjoint SQLite files → no Dropbox sync corruption.
+Final canonical assembly happens on the laptop (where `divisare.db` is
+freshest); R2 image upload happens on the office machine (where the
+60 GB of images live).
 
 ---
 
@@ -108,22 +187,39 @@ make_db/
 │   ├── gallery.html
 │   └── divisare_gallery.html
 │
-├── data/                      ← Data artefacts (root regardless of producer)
-│   ├── metalocus.db
-│   ├── divisare.db
-│   ├── tasks.db
-│   ├── id_registry.json       ← NEVER delete
-│   ├── metalocus_architect_clusters.json
-│   ├── 1_buildings_raw.json … 4_buildings_final.json
-│   ├── canonical_buildings.json + canonical_buildings_strict.json
-│   ├── match/
-│   │   ├── metalocus_architect_to_divisare.json
-│   │   └── metalocus_to_divisare_buildings.json
-│   └── reports/
-│       ├── review_report.json
-│       ├── rating_report.json
-│       ├── canonical_qc.json
-│       └── canonical_qc_strict.json
+├── data/                      ← Data artefacts, sub-divided by stage
+│   ├── crawl/                 ← Stage 1: source-of-truth raw DBs
+│   │   ├── metalocus.db (+ wal/shm)
+│   │   └── divisare.db  (+ wal/shm)
+│   │
+│   ├── enrich/                ← Stages 2-3: pipeline + datasets
+│   │   ├── 1_buildings_raw.json
+│   │   ├── 2_buildings_enriched.json
+│   │   ├── 3_buildings_analyzed.json
+│   │   ├── 4_buildings_final.json    ← stage-3 output (embeddings)
+│   │   ├── tasks.db (+ wal/shm)      ← LLM task queue
+│   │   ├── golden/buildings.json     ← eval golden set
+│   │   └── few_shot/enrich_examples.json
+│   │
+│   ├── canonical/             ← Stage 4: matching + canonical artefacts
+│   │   ├── metalocus_architect_clusters.json
+│   │   ├── canonical_buildings_strict.json   ← upload-target artefact
+│   │   └── match/
+│   │       ├── metalocus_architect_to_divisare.json
+│   │       └── metalocus_to_divisare_buildings.json
+│   │
+│   ├── reports/               ← QC + audit (cross-stage)
+│   │   ├── canonical_qc.json
+│   │   ├── canonical_qc_strict.json
+│   │   ├── rating_report.json
+│   │   ├── review_report.json
+│   │   ├── fix_report.json
+│   │   ├── eval_report.json
+│   │   ├── reprocess_plan.json
+│   │   └── vocab_migration.json
+│   │
+│   ├── id_registry.json       ← stable global registry — NEVER delete
+│   └── .divisare_session.json ← runtime auth cache (gitignored)
 │
 └── images/                    ← {building_id}/{n}_{slug}_{caption}.jpg
     └── {building_id}/
