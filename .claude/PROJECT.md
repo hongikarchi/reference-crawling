@@ -44,54 +44,88 @@ PostgreSQL (Neon) + Cloudflare R2
 
 ## 3. File Structure
 
+5-stage subpackage layout (mirrors the workflow). New crawl source =
+new directory under `crawl/`.
+
 ```
 make_db/
 ├── CLAUDE.md                  ← Claude session instructions
 ├── .claude/PROJECT.md         ← This file: full spec
 ├── .claude/REPORT.md          ← Current state + status
-│
-│  Crawl modules:
-├── crawler.py                 ← 4-phase orchestrator + content filter
-├── parsers.py                 ← HTML parsing
-├── database.py                ← SQLite CRUD
-├── downloader.py              ← Image downloader
-├── models.py                  ← BuildingData, ImageData
-├── utils.py                   ← Logger, rate limiter, HTTP
-│
-│  Pipeline tools:
-├── stage1_export.py           ← SQLite → 1_buildings_raw.json
-├── stage2_dedup.py            ← Dedup + ID assignment
-├── stage3_embed.py            ← Embeddings → 4_buildings_final.json
-├── quality.py                 ← review + fix + rate + diagnose (merged)
-├── vocab.py                   ← Canonical vocab + migrations + QC
-├── tasks_db.py                ← AI task queue ledger (SQLite)
-├── pipeline_harness.py        ← Queue-driven AI worker
-├── agent_llm_parser.py        ← Enrichment agent (Anthropic SDK)
-├── agent_image_analysis.py    ← Image analysis agent (Anthropic SDK)
-├── migrate_vocab.py           ← Vocab migration audit/apply
-├── label_golden.py            ← Seed eval golden set
-├── eval.py                    ← Score prompts vs golden
-├── reprocess.py               ← Targeted re-processing plan/apply
-├── upload.py                  ← PostgreSQL + R2 (manual gate)
-├── run.py                     ← Unified CLI (12 subcommands)
-│
-├── config.py
-├── .env                       ← gitignored
+├── run.py                     ← Unified CLI (sole script at root)
 ├── requirements.txt
+├── .env                       ← gitignored
 │
-├── data/
+├── core/                      ← Shared infrastructure
+│   ├── vocab.py               ← Canonical vocab + migrations + QC
+│   ├── config.py              ← Paths + rate limits + constants
+│   └── utils.py               ← Logger, rate limiter, HTTP, slugs
+│
+├── crawl/                     ← Stage 1: per-source raw scraping
+│   ├── metalocus/
+│   │   ├── crawler.py         ← 4-phase orchestrator + filter
+│   │   ├── parsers.py         ← HTML parsing
+│   │   ├── database.py        ← metalocus.db CRUD
+│   │   ├── models.py          ← BuildingData, ImageData
+│   │   └── downloader.py      ← Image downloader
+│   └── divisare/
+│       ├── crawler.py         ← Authenticated 4-phase crawler
+│       ├── auth.py            ← Login + session cookie
+│       ├── db.py              ← divisare.db CRUD
+│       └── parsers.py         ← HTML parsing for Divisare
+│
+├── enrich/                    ← Stages 2-3: text + image LLM
+│   ├── export.py              ← SQLite → 1_buildings_raw.json
+│   ├── dedup.py               ← Dedup + ID assignment
+│   ├── embed.py               ← Embeddings → 4_buildings_final.json
+│   ├── harness.py             ← Queue-driven AI worker
+│   ├── llm_parser.py          ← Text enrichment (Anthropic SDK)
+│   ├── image_analysis.py      ← Image analysis (Anthropic SDK)
+│   ├── tasks_db.py            ← AI task queue ledger (SQLite)
+│   ├── quality.py             ← review + fix + rate + diagnose
+│   ├── eval.py                ← Score prompts vs golden
+│   ├── label_golden.py        ← Seed eval golden set
+│   ├── migrate_vocab.py       ← Vocab migration audit/apply
+│   └── reprocess.py           ← Targeted re-processing plan/apply
+│
+├── canonical/                 ← Stage 4: matching + canonical artefact
+│   ├── schema.py              ← CanonicalBuilding dataclass
+│   ├── consolidate.py         ← metalocus architect alias clusters
+│   ├── match_architects.py    ← cluster ↔ Divisare architect
+│   ├── match_buildings.py     ← metalocus building ↔ Divisare project
+│   ├── match_to_canonical.py  ← legacy single-pass matcher
+│   ├── manual_tiebreaks.py    ← apply manual review decisions
+│   ├── build.py               ← assemble canonical_buildings.json
+│   └── qc.py                  ← 9 invariant checks
+│
+├── upload/                    ← Stage 5: Neon + R2 (manual gate)
+│   ├── neon.py                ← legacy 4_buildings_final upload + R2
+│   └── neon_strict.py         ← strict canonical → in-place migration
+│
+├── tools/                     ← Dev utilities (not in pipeline)
+│   ├── divisare_server.py     ← Local Divisare gallery server
+│   ├── generate_gallery.py    ← HTML gallery generator
+│   ├── gallery.html
+│   └── divisare_gallery.html
+│
+├── data/                      ← Data artefacts (root regardless of producer)
 │   ├── metalocus.db
+│   ├── divisare.db
+│   ├── tasks.db
 │   ├── id_registry.json       ← NEVER delete
-│   ├── 1_buildings_raw.json
-│   ├── 2_buildings_enriched.json
-│   ├── 3_buildings_analyzed.json
-│   ├── 4_buildings_final.json
+│   ├── metalocus_architect_clusters.json
+│   ├── 1_buildings_raw.json … 4_buildings_final.json
+│   ├── canonical_buildings.json + canonical_buildings_strict.json
+│   ├── match/
+│   │   ├── metalocus_architect_to_divisare.json
+│   │   └── metalocus_to_divisare_buildings.json
 │   └── reports/
 │       ├── review_report.json
 │       ├── rating_report.json
-│       └── upload_report.json
+│       ├── canonical_qc.json
+│       └── canonical_qc_strict.json
 │
-└── images/
+└── images/                    ← {building_id}/{n}_{slug}_{caption}.jpg
     └── {building_id}/
         ├── 0_cover.jpg
         └── 1_interior.jpg
