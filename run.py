@@ -393,7 +393,9 @@ def main():
     # crawl-divisare
     p = sub.add_parser("crawl-divisare",
                        help="Authenticated Divisare crawler (4 phases → data/divisare.db)")
-    p.add_argument("--phase", choices=["discover", "architects", "projects", "tags", "albums", "all"],
+    p.add_argument("--phase",
+                   choices=["discover", "architects", "enqueue-lite", "projects",
+                            "tags", "albums", "all"],
                    default="all")
     p.add_argument("--limit", type=int, default=50,
                    help="Project limit for --phase all/projects (default 50)")
