@@ -2,11 +2,11 @@
 """Stage B-1: match metalocus architect clusters → Divisare architect IDs.
 
 Inputs:
-  data/metalocus_architect_clusters.json   (Stage A output)
-  data/divisare.db                         (Phase 1 crawl output)
+  data/canonical/metalocus_architect_clusters.json   (Stage A output)
+  data/crawl/divisare.db                         (Phase 1 crawl output)
 
 Output:
-  data/match/metalocus_architect_to_divisare.json
+  data/canonical/match/metalocus_architect_to_divisare.json
     {
       "summary": {...},
       "matches": [
@@ -44,9 +44,9 @@ from typing import Optional
 
 from rapidfuzz import fuzz, process
 
-CLUSTERS_PATH = "data/metalocus_architect_clusters.json"
-DIVISARE_DB   = "data/divisare.db"
-OUTPUT_PATH   = "data/match/metalocus_architect_to_divisare.json"
+CLUSTERS_PATH = "data/canonical/metalocus_architect_clusters.json"
+DIVISARE_DB   = "data/crawl/divisare.db"
+OUTPUT_PATH   = "data/canonical/match/metalocus_architect_to_divisare.json"
 
 AUTO_ACCEPT_SIM       = 95.0   # confident regardless of country
 STRONG_SIM            = 85.0   # confident IF country matches

@@ -17,19 +17,32 @@ RETRY_MAX_ATTEMPTS = 3
 RETRY_BACKOFF_FACTOR = 2.0
 REQUEST_TIMEOUT = 30
 
-# Paths — config.py lives in `core/`, so BASE_DIR is its grandparent (project root)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-DATABASE_PATH = os.path.join(DATA_DIR, "metalocus.db")
-IMAGE_BASE_DIR = os.path.join(BASE_DIR, "images")
+# Paths — config.py lives in `core/`, so BASE_DIR is its grandparent (project root).
+# data/ is sub-divided by pipeline stage (mirrors the code package layout):
+#   data/crawl/      — Stage 1 source-of-truth DBs (metalocus.db, divisare.db)
+#   data/enrich/     — Stages 2-3 outputs + harness queue + eval datasets
+#   data/canonical/  — Stage 4 matches + canonical artefact + clusters
+#   data/reports/    — QC + audit JSON (cross-stage)
+#   data/id_registry.json — stable building_id assignments (NEVER delete)
+BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR        = os.path.join(BASE_DIR, "data")
+CRAWL_DIR       = os.path.join(DATA_DIR, "crawl")
+ENRICH_DIR      = os.path.join(DATA_DIR, "enrich")
+CANONICAL_DIR   = os.path.join(DATA_DIR, "canonical")
+REPORTS_DIR     = os.path.join(DATA_DIR, "reports")
+IMAGE_BASE_DIR  = os.path.join(BASE_DIR, "images")
 
-# Data files (in pipeline order)
-RAW_JSON      = os.path.join(DATA_DIR, "1_buildings_raw.json")
-ENRICHED_JSON = os.path.join(DATA_DIR, "2_buildings_enriched.json")
-ANALYZED_JSON = os.path.join(DATA_DIR, "3_buildings_analyzed.json")
-FINAL_JSON    = os.path.join(DATA_DIR, "4_buildings_final.json")
+# Stage-1 raw DBs
+DATABASE_PATH    = os.path.join(CRAWL_DIR, "metalocus.db")
+
+# Stage-2/3 outputs (in pipeline order)
+RAW_JSON      = os.path.join(ENRICH_DIR, "1_buildings_raw.json")
+ENRICHED_JSON = os.path.join(ENRICH_DIR, "2_buildings_enriched.json")
+ANALYZED_JSON = os.path.join(ENRICH_DIR, "3_buildings_analyzed.json")
+FINAL_JSON    = os.path.join(ENRICH_DIR, "4_buildings_final.json")
+
+# Stable global registry — NEVER delete
 REGISTRY_JSON = os.path.join(DATA_DIR, "id_registry.json")
-REPORTS_DIR   = os.path.join(DATA_DIR, "reports")
 
 # Crawl scope (set at runtime by run.py)
 MAX_PAGES_PER_CATEGORY = None
@@ -38,10 +51,11 @@ MAX_ARTICLES = None
 # HTTP
 USER_AGENT = "MetalocusArchCrawler/1.0 (academic research; respectful crawling)"
 
-# Harness (pipeline_harness.py + agents)
-# State for the queue-driven worker lives in data/tasks.db (see tasks_db.py).
+# Harness (enrich/harness.py + agents)
+# State for the queue-driven worker lives in data/enrich/tasks.db (see enrich/tasks_db.py).
 # Hard-failure quarantines are appended to FAILED_LOG_JSON.
-FAILED_LOG_JSON     = os.path.join(DATA_DIR, "failed_log.json")
+TASKS_DB_PATH       = os.path.join(ENRICH_DIR, "tasks.db")
+FAILED_LOG_JSON     = os.path.join(ENRICH_DIR, "failed_log.json")
 HARNESS_MAX_RETRIES = 3
 HARNESS_MODEL       = "claude-sonnet-4-6"
 HARNESS_MAX_IMAGES  = 3   # cover + up to N-1 additional upload photos
@@ -56,6 +70,6 @@ DIVISARE_USER_AGENT            = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_
                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
                                   "Chrome/120.0.0.0 Safari/537.36")
 DIVISARE_SESSION_PATH          = os.path.join(DATA_DIR, ".divisare_session.json")
-DIVISARE_DB_PATH               = os.path.join(DATA_DIR, "divisare.db")
+DIVISARE_DB_PATH               = os.path.join(CRAWL_DIR, "divisare.db")
 # Sample project for `verify`; replace if it 404s.
 DIVISARE_TEST_PROJECT_URL      = "https://divisare.com/projects/556458-s-ar-oratory-chapel"

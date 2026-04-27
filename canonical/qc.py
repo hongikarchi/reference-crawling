@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quality checks for the canonical building artefact (data/canonical_buildings.json).
+"""Quality checks for the canonical building artefact (data/canonical/canonical_buildings.json).
 
 Run BEFORE Postgres migration. Each check returns one of:
   PASS  — invariant holds
@@ -21,8 +21,8 @@ from typing import Any, Optional
 from core import vocab
 from canonical.schema import CanonicalBuilding
 
-CANONICAL_PATH = "data/canonical_buildings.json"
-DIVISARE_DB_PATH = "data/divisare.db"
+CANONICAL_PATH = "data/canonical/canonical_buildings.json"
+DIVISARE_DB_PATH = "data/crawl/divisare.db"
 REPORT_PATH = "data/reports/canonical_qc.json"
 
 # Field-coverage thresholds — flag WARN if non-null share falls below.

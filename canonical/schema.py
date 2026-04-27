@@ -4,7 +4,7 @@ A CanonicalBuilding is the unified record that the upload step writes to
 Postgres. It merges:
   - Divisare metadata (the canonical spine: stable IDs, curated taxonomy)
   - metalocus content (images, free-text descriptions, embeddings) — when
-    a match exists per `data/match/metalocus_to_divisare.json`
+    a match exists per `data/canonical/match/metalocus_to_divisare.json`
 
 Each scalar field tracks its provenance: which source actually populated it.
 This lets downstream code make policy decisions (e.g., trust Divisare's year

@@ -5,7 +5,7 @@ Usage:
     python3 stage3_embed.py
 
 Input:  data/3_buildings_analyzed.json
-Output: data/4_buildings_final.json
+Output: data/enrich/4_buildings_final.json
 
 Validates required fields, normalizes program/style/color_tone vocabularies,
 then encodes each building into a 384-dim vector using all enriched fields.

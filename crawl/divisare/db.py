@@ -1,6 +1,6 @@
 """SQLite layer for the Divisare crawler (Phase 1).
 
-Separate database (`data/divisare.db`) so the metalocus pipeline's `data/metalocus.db`
+Separate database (`data/crawl/divisare.db`) so the metalocus pipeline's `data/crawl/metalocus.db`
 stays untouched. Schema mirrors the metalocus pattern (queue rows + content rows)
 but with Divisare's canonical numeric IDs as primary keys.
 

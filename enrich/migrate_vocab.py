@@ -5,9 +5,9 @@ Usage:
     python3 migrate_vocab.py              # dry-run analysis only
     python3 migrate_vocab.py --apply      # write changes to 4_buildings_final.json
 
-Input:  data/4_buildings_final.json
+Input:  data/enrich/4_buildings_final.json
 Output: data/reports/vocab_migration.json  (always, audit log)
-        data/4_buildings_final.json        (only with --apply)
+        data/enrich/4_buildings_final.json        (only with --apply)
 
 Behavior:
   - Every record gains vocab_version (defaults to 'v1' if absent before migration,

@@ -13,7 +13,7 @@ Pipeline (per `~/.claude/plans/db-fuzzy-lerdorf.md` Stage A):
        • subset core relation (BIG ⊂ BIG-Bjarke-Ingels) and ratio >= 90 → auto-merge
        • 85 <= ratio < 95 with shared rare token → LLM tiebreak (forced tool_use)
   5. Pick canonical name per cluster (longest substantive variant)
-  6. Output data/metalocus_architect_clusters.json — clusters + building_to_canonical map
+  6. Output data/canonical/metalocus_architect_clusters.json — clusters + building_to_canonical map
 
 Multi-architect buildings map to N canonical_ids. Cost design target: <$1 in LLM calls.
 """
@@ -33,8 +33,8 @@ from enrich import quality
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-INPUT_PATH = "data/4_buildings_final.json"
-OUTPUT_PATH = "data/metalocus_architect_clusters.json"
+INPUT_PATH = "data/enrich/4_buildings_final.json"
+OUTPUT_PATH = "data/canonical/metalocus_architect_clusters.json"
 
 AUTO_MERGE_RATIO = 95.0
 SUBSET_MERGE_RATIO = 90.0

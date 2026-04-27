@@ -299,7 +299,7 @@ def cmd_match_canonical(args):
 
 
 def cmd_canonical_qc(args):
-    """Run 9 invariant checks on data/canonical_buildings.json (or another path)."""
+    """Run 9 invariant checks on data/canonical/canonical_buildings.json (or another path)."""
     from canonical import qc as canonical_qc
     sys.exit(canonical_qc.main([args.file] if args.file else []))
 
@@ -392,7 +392,7 @@ def main():
 
     # crawl-divisare
     p = sub.add_parser("crawl-divisare",
-                       help="Authenticated Divisare crawler (4 phases → data/divisare.db)")
+                       help="Authenticated Divisare crawler (4 phases → data/crawl/divisare.db)")
     p.add_argument("--phase",
                    choices=["discover", "architects", "enqueue-lite", "projects",
                             "tags", "albums", "all"],
@@ -418,7 +418,7 @@ def main():
     p = sub.add_parser("canonical-qc",
                        help="9 invariant checks on canonical_buildings.json")
     p.add_argument("file", nargs="?", default=None,
-                   help="canonical JSON path (default data/canonical_buildings.json)")
+                   help="canonical JSON path (default data/canonical/canonical_buildings.json)")
     p.set_defaults(func=cmd_canonical_qc)
 
     # consolidate-architects

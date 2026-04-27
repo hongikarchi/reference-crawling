@@ -10,7 +10,7 @@ Pipeline per metalocus building:
        accept_medium   — name_sim ≥ 90 AND cosine ≥ 0.85
        needs_review    — middle band; defer to LLM tiebreaker (Phase 3.1)
        reject          — best cosine < 0.7 OR no candidates
-  4. Write `data/match/metalocus_to_divisare.json` with the best match per
+  4. Write `data/canonical/match/metalocus_to_divisare.json` with the best match per
      metalocus building + its scores.
 
 Reuses (no duplication):
@@ -341,7 +341,7 @@ def main() -> int:
     divisare  = _load_divisare_projects()
 
     if not divisare:
-        print("ERROR: data/divisare.db has no projects. "
+        print("ERROR: data/crawl/divisare.db has no projects. "
               "Run `python3 run.py crawl-divisare` first.")
         return 1
 

@@ -2,14 +2,14 @@
 """Stage B-3: assemble canonical_buildings.json from all matching outputs.
 
 Inputs:
-  data/4_buildings_final.json                       — metalocus content
-  data/metalocus_architect_clusters.json             — Stage A output
-  data/match/metalocus_architect_to_divisare.json    — Stage B-1 output
-  data/match/metalocus_to_divisare_buildings.json    — Stage B-2 output
-  data/divisare.db                                   — Phase 1 crawl
+  data/enrich/4_buildings_final.json                       — metalocus content
+  data/canonical/metalocus_architect_clusters.json             — Stage A output
+  data/canonical/match/metalocus_architect_to_divisare.json    — Stage B-1 output
+  data/canonical/match/metalocus_to_divisare_buildings.json    — Stage B-2 output
+  data/crawl/divisare.db                                   — Phase 1 crawl
 
 Output:
-  data/canonical_buildings.json — list of CanonicalBuilding-shaped dicts
+  data/canonical/canonical_buildings.json — list of CanonicalBuilding-shaped dicts
 
 Field-merge policy (per `~/.claude/plans/db-fuzzy-lerdorf.md`):
   • Structure (name, location, year, area_sqm, divisare_credits, gallery URLs)
@@ -38,13 +38,13 @@ from canonical.schema import (
     CanonicalBuilding, SOURCE_DIVISARE, SOURCE_METALOCUS, SOURCE_DERIVED,
 )
 
-METALOC_PATH      = "data/4_buildings_final.json"
-CLUSTERS_PATH     = "data/metalocus_architect_clusters.json"
-ARCH_MATCH_PATH   = "data/match/metalocus_architect_to_divisare.json"
-BLDG_MATCH_PATH   = "data/match/metalocus_to_divisare_buildings.json"
-DIVISARE_DB       = "data/divisare.db"
-OUTPUT_PATH       = "data/canonical_buildings.json"
-STRICT_OUTPUT_PATH = "data/canonical_buildings_strict.json"
+METALOC_PATH      = "data/enrich/4_buildings_final.json"
+CLUSTERS_PATH     = "data/canonical/metalocus_architect_clusters.json"
+ARCH_MATCH_PATH   = "data/canonical/match/metalocus_architect_to_divisare.json"
+BLDG_MATCH_PATH   = "data/canonical/match/metalocus_to_divisare_buildings.json"
+DIVISARE_DB       = "data/crawl/divisare.db"
+OUTPUT_PATH       = "data/canonical/canonical_buildings.json"
+STRICT_OUTPUT_PATH = "data/canonical/canonical_buildings_strict.json"
 
 # --------------------------------------------------------------------------
 # Strict-mode filters: drop arch-only records that don't look like buildings.
@@ -478,7 +478,7 @@ def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--strict", action="store_true",
                    help="drop pure orphans + arch_only rows whose name looks like "
-                        "an article title (writes data/canonical_buildings_strict.json)")
+                        "an article title (writes data/canonical/canonical_buildings_strict.json)")
     p.add_argument("--output", default=None,
                    help="override output path")
     args = p.parse_args(argv)

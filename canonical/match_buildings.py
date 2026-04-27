@@ -12,7 +12,7 @@ Strategy: chain on the architect matcher (Stage B-1).
         accept_medium     — name_sim ≥ 80 AND year match (year ± 2)
         no_match          — best name_sim < 80, or no architect link
 
-Output: data/match/metalocus_to_divisare_buildings.json
+Output: data/canonical/match/metalocus_to_divisare_buildings.json
 """
 
 from __future__ import annotations
@@ -26,11 +26,11 @@ from typing import Optional
 
 from rapidfuzz import fuzz
 
-CLUSTERS_PATH        = "data/metalocus_architect_clusters.json"
-ARCH_MATCH_PATH      = "data/match/metalocus_architect_to_divisare.json"
-METALOC_FINAL_PATH   = "data/4_buildings_final.json"
-DIVISARE_DB          = "data/divisare.db"
-OUTPUT_PATH          = "data/match/metalocus_to_divisare_buildings.json"
+CLUSTERS_PATH        = "data/canonical/metalocus_architect_clusters.json"
+ARCH_MATCH_PATH      = "data/canonical/match/metalocus_architect_to_divisare.json"
+METALOC_FINAL_PATH   = "data/enrich/4_buildings_final.json"
+DIVISARE_DB          = "data/crawl/divisare.db"
+OUTPUT_PATH          = "data/canonical/match/metalocus_to_divisare_buildings.json"
 
 NAME_SIM_HIGH        = 90.0
 NAME_SIM_NO_COUNTRY  = 95.0

@@ -2,8 +2,8 @@ import json
 import os
 
 def generate_html():
-    print("Loading data/4_buildings_final.json...")
-    with open('data/4_buildings_final.json', 'r', encoding='utf-8') as f:
+    print("Loading data/enrich/4_buildings_final.json...")
+    with open('data/enrich/4_buildings_final.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     html_content = """

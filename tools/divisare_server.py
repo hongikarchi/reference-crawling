@@ -6,7 +6,7 @@ import urllib.parse
 import os
 
 PORT = 8081
-DB_PATH = 'data/divisare.db'
+DB_PATH = 'data/crawl/divisare.db'
 
 class DivisareHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):

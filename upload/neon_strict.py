@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload data/canonical_buildings_strict.json to PostgreSQL (architecture_vectors).
+"""Upload data/canonical/canonical_buildings_strict.json to PostgreSQL (architecture_vectors).
 
 This is the (a1) in-place migration:
   1. ALTER architecture_vectors to add any missing columns (idempotent).
@@ -34,8 +34,8 @@ from dotenv import load_dotenv
 
 from core import config
 
-CANONICAL_PATH = "data/canonical_buildings_strict.json"
-METALOC_PATH   = "data/4_buildings_final.json"
+CANONICAL_PATH = "data/canonical/canonical_buildings_strict.json"
+METALOC_PATH   = "data/enrich/4_buildings_final.json"
 
 
 # Idempotent ALTER for the columns that exist in the strict canonical but
