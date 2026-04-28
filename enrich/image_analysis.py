@@ -124,41 +124,95 @@ def _get_media_type(filename: str) -> str:
     return _MEDIA_TYPES.get(ext, "image/jpeg")
 
 
+def _fetch_url_b64(url: str) -> tuple:
+    """HTTP-fetch an image URL → (base64_data, media_type). None on failure
+    or oversize. Used for Phase 11 URL-only buildings (no on-disk image)."""
+    import requests
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"    [warn] Image URL fetch failed: {url} — {e}")
+        return None, None
+    if len(resp.content) > _MAX_IMAGE_BYTES:
+        print(f"    [warn] Image URL too large ({len(resp.content) // 1024}KB): {url}")
+        return None, None
+    media_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+    if not media_type.startswith("image/"):
+        media_type = "image/jpeg"
+    return base64.standard_b64encode(resp.content).decode("utf-8"), media_type
+
+
 def _load_images_b64(building: dict) -> list:
-    """Load up to HARNESS_MAX_IMAGES photos as base64 blocks for the API.
+    """Up to HARNESS_MAX_IMAGES photos as base64 blocks for the Anthropic API.
 
-    Selection order: cover (order=0) first, then up to N-1 more upload=True photos
-    sorted by order. Files over 5 MB are skipped.
+    Two paths:
+      • Legacy on-disk (existing 3,465 metalocus rows): read from
+        images/{building_id}/{filename}, gated by 5 MB cap.
+      • Phase 11 URL-only (new metalocus rows from batch 8 onward, plus
+        Architizer/Archello when their image_analysis runs): HTTP-fetch
+        cover_image_url + first N-1 of gallery_image_urls.
 
-    Returns list of Anthropic image content blocks.
+    Selection order on disk path: cover (order=0) first, then upload=True
+    photos by order. URL path: cover_image_url, then gallery_image_urls in
+    the order they were stored.
     """
-    building_id = building["building_id"]
-    img_dir = os.path.join(config.IMAGE_BASE_DIR, building_id)
+    blocks: list = []
 
-    images = building.get("images") or []
-    photos = sorted(
-        [img for img in images if img.get("type") == "photo"],
-        key=lambda x: x.get("order", 999),
-    )
-    upload_photos = [img for img in photos if img.get("upload")]
-    candidates = upload_photos if upload_photos else photos
+    # Legacy disk path
+    building_id = building.get("building_id")
+    if building_id:
+        img_dir = os.path.join(config.IMAGE_BASE_DIR, building_id)
+        images = building.get("images") or []
+        photos = sorted(
+            [img for img in images if img.get("type") == "photo"],
+            key=lambda x: x.get("order", 999),
+        )
+        upload_photos = [img for img in photos if img.get("upload")]
+        candidates = upload_photos if upload_photos else photos
 
-    blocks = []
-    for img in candidates[: config.HARNESS_MAX_IMAGES]:
-        filepath = os.path.join(img_dir, img["filename"])
-        if not os.path.exists(filepath):
+        for img in candidates[: config.HARNESS_MAX_IMAGES]:
+            filepath = os.path.join(img_dir, img["filename"])
+            if not os.path.exists(filepath):
+                continue
+            size = os.path.getsize(filepath)
+            if size > _MAX_IMAGE_BYTES:
+                print(f"    [warn] Skipping large image ({size // 1024}KB): {img['filename']}")
+                continue
+            with open(filepath, "rb") as f:
+                data = base64.standard_b64encode(f.read()).decode("utf-8")
+            blocks.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": _get_media_type(img["filename"]),
+                    "data": data,
+                },
+            })
+            if len(blocks) >= config.HARNESS_MAX_IMAGES:
+                break
+
+    if blocks:
+        return blocks
+
+    # Phase 11 URL-only path
+    urls: list = []
+    if building.get("cover_image_url"):
+        urls.append(building["cover_image_url"])
+    for u in (building.get("gallery_image_urls") or []):
+        urls.append(u)
+        if len(urls) >= config.HARNESS_MAX_IMAGES:
+            break
+
+    for url in urls[: config.HARNESS_MAX_IMAGES]:
+        data, media_type = _fetch_url_b64(url)
+        if data is None:
             continue
-        size = os.path.getsize(filepath)
-        if size > _MAX_IMAGE_BYTES:
-            print(f"    [warn] Skipping large image ({size // 1024}KB): {img['filename']}")
-            continue
-        with open(filepath, "rb") as f:
-            data = base64.standard_b64encode(f.read()).decode("utf-8")
         blocks.append({
             "type": "image",
             "source": {
                 "type": "base64",
-                "media_type": _get_media_type(img["filename"]),
+                "media_type": media_type,
                 "data": data,
             },
         })

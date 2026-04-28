@@ -51,6 +51,12 @@ MAX_ARTICLES = None
 # HTTP
 USER_AGENT = "MetalocusArchCrawler/1.0 (academic research; respectful crawling)"
 
+# Phase 11 / 5-stage compliance: metalocus crawler stores image URLs only;
+# no downloads at stage 1. Cover selection + R2 upload move to stage 4
+# (canonical/image_dedup) + stage 5 (upload). Existing 3,465 production
+# rows keep their on-disk images.
+METALOCUS_DOWNLOAD_IMAGES = False
+
 # Harness (enrich/harness.py + agents)
 # State for the queue-driven worker lives in data/enrich/tasks.db (see enrich/tasks_db.py).
 # Hard-failure quarantines are appended to FAILED_LOG_JSON.

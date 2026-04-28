@@ -161,11 +161,39 @@ def phase_articles():
             db.save_building(article_id, data)
             db.save_tags(article_id, data.tags)
 
-            for img in data.images:
-                db.add_image(article_id, img.url, img.filename, img.alt_text, img.image_order)
+            if config.METALOCUS_DOWNLOAD_IMAGES:
+                # Legacy: queue every image for stage-1 download (used for
+                # the existing 3,465 production rows).
+                for img in data.images:
+                    db.add_image(article_id, img.url, img.filename,
+                                 img.alt_text, img.image_order)
+            else:
+                # 5-stage compliant: persist URLs on the buildings row and
+                # skip the download queue entirely. Cover = image_order 0;
+                # drawings detected by filename heuristic; everything else
+                # goes into gallery.
+                cover_url = next(
+                    (i.url for i in data.images if (i.image_order or 0) == 0),
+                    None,
+                )
+                gallery, drawings = [], []
+                _DRAWING_KW = ("drawing", "plan", "section", "elevation",
+                               "axonom", "diagram")
+                for i in data.images:
+                    if (i.image_order or 0) == 0:
+                        continue
+                    fn = (i.filename or "").lower()
+                    bucket = drawings if any(k in fn for k in _DRAWING_KW) \
+                                       else gallery
+                    bucket.append(i.url)
+                db.attach_image_urls(article_id,
+                                     cover_url=cover_url,
+                                     gallery_urls=gallery,
+                                     drawing_urls=drawings)
 
             db.mark_article_done(article_id)
-            logger.info(f"  OK: {data.title[:70]}  |  images: {len(data.images)}")
+            logger.info(f"  OK: {data.title[:70]}  |  images: {len(data.images)}"
+                        f" {'(URLs only)' if not config.METALOCUS_DOWNLOAD_IMAGES else ''}")
 
         except Exception as e:
             logger.error(f"Error crawling article {url}: {e}")

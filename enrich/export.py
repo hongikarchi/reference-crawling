@@ -121,7 +121,8 @@ def export_buildings():
     articles = conn.execute("""
         SELECT a.id, a.url, a.slug,
                b.title, b.architects, b.city, b.country, b.year,
-               b.area_sqm, b.building_type, b.description, b.materials
+               b.area_sqm, b.building_type, b.description, b.materials,
+               b.cover_image_url, b.gallery_image_urls, b.drawing_image_urls
         FROM articles a
         JOIN buildings b ON b.article_id = a.id
         WHERE a.status = 'completed'
@@ -140,6 +141,8 @@ def export_buildings():
             skipped_no_title += 1
             continue
 
+        # Two paths: legacy (downloaded images on disk via images table) OR
+        # Phase 11 URL-only (URLs on buildings row, no images table rows).
         images_db = conn.execute("""
             SELECT image_order, filename, alt_text
             FROM images
@@ -147,10 +150,23 @@ def export_buildings():
             ORDER BY image_order
         """, (row["id"],)).fetchall()
 
-        images = _rename_images(slug, [dict(i) for i in images_db])
-        images = _select_upload_images(images)
+        if images_db:
+            # Legacy: rename + select disk-based images
+            images = _rename_images(slug, [dict(i) for i in images_db])
+            images = _select_upload_images(images)
+            has_cover = any(img["order"] == 0 for img in images)
+            cover_url = gallery_urls = drawing_urls = None
+        else:
+            # Phase 11 URL-only path
+            images = []
+            cover_url = row["cover_image_url"]
+            gallery_urls = json.loads(row["gallery_image_urls"]) \
+                if row["gallery_image_urls"] else []
+            drawing_urls = json.loads(row["drawing_image_urls"]) \
+                if row["drawing_image_urls"] else []
+            has_cover = bool(cover_url)
 
-        if not any(img["order"] == 0 for img in images):
+        if not has_cover:
             skipped_no_cover += 1
             continue
 
@@ -161,19 +177,22 @@ def export_buildings():
         """, (row["id"],)).fetchall()]
 
         out.append({
-            "slug":             slug,
-            "project_name":     title.strip(),
-            "architect":        row["architects"] or None,
-            "location_country": row["country"] or None,
-            "city":             row["city"] or None,
-            "year":             _to_int(row["year"]),
-            "area_sqm":         _to_float(row["area_sqm"]),
-            "building_type":    row["building_type"] or None,
-            "material":         row["materials"] or None,
-            "description":      row["description"] or None,
-            "url":              row["url"],
-            "images":           images,
-            "tags":             tags,
+            "slug":               slug,
+            "project_name":       title.strip(),
+            "architect":          row["architects"] or None,
+            "location_country":   row["country"] or None,
+            "city":               row["city"] or None,
+            "year":               _to_int(row["year"]),
+            "area_sqm":           _to_float(row["area_sqm"]),
+            "building_type":      row["building_type"] or None,
+            "material":           row["materials"] or None,
+            "description":        row["description"] or None,
+            "url":                row["url"],
+            "images":             images,           # legacy disk-based (if any)
+            "cover_image_url":    cover_url,        # Phase 11 URL-only path
+            "gallery_image_urls": gallery_urls or None,
+            "drawing_image_urls": drawing_urls or None,
+            "tags":               tags,
         })
 
     conn.close()

@@ -161,13 +161,18 @@ def cmd_make_db(args):
 
 
 def cmd_crawl(args):
-    """Crawl next batch only (no export/dedup). Resumes image downloads."""
+    """Crawl next batch only (no export/dedup). Skips image downloads when
+    METALOCUS_DOWNLOAD_IMAGES is False (Phase 11 / 5-stage default)."""
     config.MAX_ARTICLES = args.articles
     config.MAX_PAGES_PER_CATEGORY = None
     from crawl.metalocus.crawler import phase_articles, phase_images
     logger.info(f"=== crawl batch (max_articles={args.articles}) ===")
     phase_articles()
-    phase_images()
+    if config.METALOCUS_DOWNLOAD_IMAGES:
+        phase_images()
+    else:
+        logger.info("phase_images SKIPPED — METALOCUS_DOWNLOAD_IMAGES=False "
+                    "(URLs persisted on buildings rows; cover selection at stage 4)")
 
 
 def cmd_export_dedup(args):

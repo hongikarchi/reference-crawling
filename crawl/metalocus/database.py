@@ -51,21 +51,26 @@ def init_db():
             );
 
             CREATE TABLE IF NOT EXISTS buildings (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                article_id       INTEGER UNIQUE NOT NULL REFERENCES articles(id),
-                title            TEXT,
-                architects       TEXT,
-                location         TEXT,
-                city             TEXT,
-                country          TEXT,
-                year             TEXT,
-                area_sqm         TEXT,
-                building_type    TEXT,
-                description      TEXT,
-                credits          TEXT,
-                materials        TEXT,
-                publication_date TEXT,
-                raw_metadata     TEXT
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                article_id          INTEGER UNIQUE NOT NULL REFERENCES articles(id),
+                title               TEXT,
+                architects          TEXT,
+                location            TEXT,
+                city                TEXT,
+                country             TEXT,
+                year                TEXT,
+                area_sqm            TEXT,
+                building_type       TEXT,
+                description         TEXT,
+                credits             TEXT,
+                materials           TEXT,
+                publication_date    TEXT,
+                raw_metadata        TEXT,
+                -- Phase 11 / 5-stage compliance: image URLs only at stage 1.
+                -- Cover selection + R2 upload move to stage 4 + 5.
+                cover_image_url     TEXT,
+                gallery_image_urls  TEXT,           -- JSON array of photo URLs
+                drawing_image_urls  TEXT            -- JSON array of drawing URLs
             );
 
             CREATE TABLE IF NOT EXISTS tags (
@@ -97,6 +102,14 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_images_article ON images(article_id);
             CREATE INDEX IF NOT EXISTS idx_crawl_pages_status ON crawl_pages(status);
         """)
+
+        # Idempotent ALTERs — for DBs created before Phase 11.0 added the
+        # cover/gallery/drawing URL columns. SQLite has no IF NOT EXISTS for
+        # ADD COLUMN before 3.35; introspect first.
+        existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(buildings)")}
+        for col in ("cover_image_url", "gallery_image_urls", "drawing_image_urls"):
+            if col not in existing_cols:
+                conn.execute(f"ALTER TABLE buildings ADD COLUMN {col} TEXT")
 
 
 # --- Crawl pages ---
@@ -226,6 +239,28 @@ def save_tags(article_id, tag_names):
                     "INSERT OR IGNORE INTO article_tags (article_id, tag_id) VALUES (?, ?)",
                     (article_id, tag_row["id"]),
                 )
+
+
+# --- Image URLs (Phase 11 / 5-stage: stored on the buildings row, no download) ---
+
+def attach_image_urls(article_id, cover_url=None, gallery_urls=None, drawing_urls=None):
+    """Persist image URLs onto the building row associated with `article_id`.
+    No SQLite `images` queue rows are created — those exist for the legacy
+    download-on-crawl pattern (used only when METALOCUS_DOWNLOAD_IMAGES=True
+    or for the existing 3,465 production rows).
+    """
+    import json as _json
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE buildings SET cover_image_url=?, gallery_image_urls=?, drawing_image_urls=? "
+            "WHERE article_id=?",
+            (
+                cover_url,
+                _json.dumps(gallery_urls or [], ensure_ascii=False),
+                _json.dumps(drawing_urls or [], ensure_ascii=False),
+                article_id,
+            ),
+        )
 
 
 # --- Images ---
