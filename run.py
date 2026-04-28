@@ -327,6 +327,14 @@ def cmd_crawl_divisare(args):
     sys.exit(divisare_crawler.main())
 
 
+def cmd_crawl_architizer(args):
+    """Run Architizer crawler (sitemap → projects → firms → A+Awards)."""
+    from crawl.architizer import crawler as architizer_crawler
+    sys.argv = ["architizer.crawler", "--phase", args.phase,
+                "--limit", str(args.limit)]
+    sys.exit(architizer_crawler.main())
+
+
 def cmd_harness(args):
     """Auto-enrich + analyze new buildings via Anthropic API (queue-driven)."""
     from dotenv import load_dotenv
@@ -404,6 +412,17 @@ def main():
     p.add_argument("--discover-pages-per-region", type=int, default=0,
                    help="0 = walk all pages of each region (default)")
     p.set_defaults(func=cmd_crawl_divisare)
+
+    # crawl-architizer
+    p = sub.add_parser("crawl-architizer",
+                       help="Architizer crawler (sitemap → projects → firms → A+Awards)")
+    p.add_argument("--phase",
+                   choices=["sitemap-projects", "sitemap-firms",
+                            "projects", "firms", "awards", "all"],
+                   default="all")
+    p.add_argument("--limit", type=int, default=100,
+                   help="Project / firm fetch limit per run (default 100)")
+    p.set_defaults(func=cmd_crawl_architizer)
 
     # match-canonical
     p = sub.add_parser("match-canonical",
