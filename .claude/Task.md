@@ -5,6 +5,95 @@ orchestrator owns routing; any agent may append to `## Handoffs`.
 
 ## Open
 
+### Phase 9 — Image hosting strategy: Path C (cover→R2, gallery→URLs only) [user-ratified, schema work pending]
+
+**Origin**: handoff from make_web research terminal (2026-04-28). Full
+memo at `make_web/research/infra/02-image-hosting-strategy.md` §15.
+Hybrid hosting decision: Pinterest-style hotlinking for galleries,
+R2 ownership for cover image only. ~80% storage drop, swipe UX preserved.
+
+**Make DB scope** (this repo's pickup):
+1. **New crawler behavior** (batch 8 onwards + ALL new sources):
+   - Cover image → continue download → R2 (current upload/neon.py behavior)
+   - Gallery photos + drawings → **stop downloading**; URLs only
+2. **Schema additions** to `architecture_vectors` (additive ALTER):
+   ```sql
+   ADD COLUMN IF NOT EXISTS cover_image_cdn_url    TEXT,    -- R2 public URL (computed)
+   ADD COLUMN IF NOT EXISTS gallery_image_urls     TEXT[],  -- source CDN URLs (hotlinked)
+   ADD COLUMN IF NOT EXISTS cover_blurhash         TEXT;    -- ~30-byte placeholder hash
+   ```
+3. **BlurHash precompute** in image_analysis stage (Phase 2) — cover only,
+   ~30ms/image, ~5-10 min for 500-building batch.
+4. **Existing 3,465 metalocus production records**: stay as-is, no backfill.
+
+**make_db responses to open questions** (a-d in memo):
+- (a) **Naming**: agree with `cover_image_cdn_url` (clear it's our R2 CDN,
+  not a source CDN). Source-side fallback URL goes in `gallery_image_urls[]`.
+  Existing `cover_image_url_divisare` / `divisare_gallery_urls[]` kept as-is
+  (legacy data); make_web normalizer handles both old + new names.
+- (b) **BlurHash library**: `blurhash` (pure Python) — easier deploy, no C
+  ext needed, 30ms vs 3ms doesn't matter at our pipeline rate.
+- (c) **Metalocus uniformity**: agree — drop gallery R2 uploads for ALL
+  new crawls regardless of source. Per-source bifurcation isn't worth the
+  complexity; existing 3,465 metalocus rows are untouched (R2 keeps the
+  full set already on disk).
+- (d) **Thumbnail variants**: defer. Can add via Cloudflare Image Resizing
+  on top of the cover_image_cdn_url later without re-uploading.
+
+**Cross-repo signal commitment**: when this schema work lands + first batch
+ships with the new pattern, append `Make DB Path C ready` line to
+`make_web/.claude/Task.md ## Handoffs`.
+
+**Implementation sketch** (~1 day):
+- `upload/neon_strict.py`: ALTER + UPSERT new 3 columns
+- `crawl/{source}/db.py`: rename `cover_image_url` → `cover_image_cdn_url`
+  for the R2-uploaded copy; keep source URL in `gallery_image_urls[0]`
+- `enrich/image_analysis.py`: compute blurhash for cover, write to row
+- `core/utils.py` (or new `core/blurhash_helper.py`): `compute_blurhash(path) -> str`
+
+**Status**: schema decision ratified. Implementation deferred until current
+3 crawlers (Architizer projects, Archello full, Divisare deep-fetch) finish.
+
+### Phase 10 — Cross-source image dedupe + quality ranking [proposed, after Phase 9]
+
+**Goal**: same building from N sources → unified gallery of best-quality
+deduped image URLs. Same drawing on Architizer + Archello = one row, not two.
+
+**Pipeline** (post-canonical, after multi-source canonical extension):
+1. **Fingerprint**: for each known image URL on a canonical building,
+   fetch image bytes, compute `imagehash.phash(img, hash_size=16)` (256-bit),
+   record `(url, phash, width, height, file_size)`. Discard bytes; keep
+   metadata only (~100 B/image; 37K images for strict canonical 2,488
+   buildings = ~4 MB).
+2. **Cluster**: per building, pairwise Hamming distance on phashes.
+   Threshold ≤8 → same image. Cluster.
+3. **Quality rank within cluster**:
+   1. larger `width × height` wins
+   2. tie → larger `file_size` wins
+   3. tie → editorial-floor source order: Divisare > Architizer > Archello > Archdaily
+4. **Output**: `data/canonical/canonical_image_gallery.json` with per-building
+   sorted, deduped `[{url, kind, w, h, sources: [src1, src2]}, ...]`.
+5. **Update canonical**: `build.py` reads this and overwrites `image_paths`
+   with the ranked best-quality URL list.
+
+**Cost / risk**:
+- Fingerprint: ~37K images × ~1s download + hash = 8-parallel → 2-4 hours
+  on the strict canonical scope. Full multi-source 200K+ images would be
+  ~8 hours parallel.
+- pHash false positives on simple line drawings (similar empty space) —
+  256-bit hash + threshold 8 mitigates; spot-check a sample.
+- pHash misses cropped + watermarked variants (still treats as different).
+  Acceptable — those probably ARE different images for our purposes.
+
+**Implementation sketch** (~½ day):
+- `canonical/image_dedup.py` (new): fingerprint + cluster + rank
+- `canonical/build.py` (update): consume gallery JSON for `image_paths`
+- `requirements.txt` (update): `imagehash`, `pillow`
+
+**Status**: blocked on Phase 9 (need new schema + cover/gallery split first)
+AND multi-source canonical extension (need Architizer/Archello matches folded
+into canonical_buildings_strict before there are cross-source images to dedupe).
+
 ### Phase 6 — atmosphere drift re-processing [cost-gated, user-approval needed]
 - `data/reports/vocab_migration.json` lists 2,784 buildings whose atmosphere
   value is not in V2 vocab (`organic`, `communal`, `historic`, …)
