@@ -89,8 +89,11 @@ def fetch_page(url, session, rate_limiter):
                 logger.warning(f"Request error on {url}: {e}, retry {attempt}/{config.RETRY_MAX_ATTEMPTS} in {wait}s")
                 time.sleep(wait)
             else:
+                # Don't raise — caller treats None as a fetch failure and
+                # marks the queue row failed, which is what we want for any
+                # terminal HTTP error (TooManyRedirects, ConnectionError, …).
                 logger.error(f"Failed after {config.RETRY_MAX_ATTEMPTS} attempts: {url} - {e}")
-                raise
+                return None
 
     return None
 
