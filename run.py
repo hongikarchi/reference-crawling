@@ -335,6 +335,14 @@ def cmd_crawl_architizer(args):
     sys.exit(architizer_crawler.main())
 
 
+def cmd_crawl_archello(args):
+    """Run Archello crawler (sitemap → projects, public read browser-UA)."""
+    from crawl.archello import crawler as archello_crawler
+    sys.argv = ["archello.crawler", "--phase", args.phase,
+                "--limit", str(args.limit)]
+    sys.exit(archello_crawler.main())
+
+
 def cmd_harness(args):
     """Auto-enrich + analyze new buildings via Anthropic API (queue-driven)."""
     from dotenv import load_dotenv
@@ -423,6 +431,16 @@ def main():
     p.add_argument("--limit", type=int, default=100,
                    help="Project / firm fetch limit per run (default 100)")
     p.set_defaults(func=cmd_crawl_architizer)
+
+    # crawl-archello
+    p = sub.add_parser("crawl-archello",
+                       help="Archello crawler (sitemap → projects, browser-UA, public read)")
+    p.add_argument("--phase",
+                   choices=["sitemap", "projects", "all"],
+                   default="all")
+    p.add_argument("--limit", type=int, default=1000,
+                   help="Project fetch limit per run (default 1000 = pilot)")
+    p.set_defaults(func=cmd_crawl_archello)
 
     # match-canonical
     p = sub.add_parser("match-canonical",
