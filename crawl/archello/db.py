@@ -93,6 +93,27 @@ def init_db() -> None:
                 first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            -- Architect firms (deep-fetched from /brand/{slug} pages).
+            -- Subset of archello_brands_seen filtered to those that have
+            -- appeared as an 'Architect' role on any project. Distinct
+            -- from product manufacturers (which share /brand/{slug}
+            -- namespace per Archello's URL design).
+            CREATE TABLE IF NOT EXISTS archello_firms (
+                slug                  TEXT PRIMARY KEY,
+                brand_id              INTEGER UNIQUE,
+                name                  TEXT NOT NULL,
+                description_short     TEXT,                   -- og:description
+                about                 TEXT,                   -- full About text
+                location_country      TEXT,                   -- HQ country
+                location_city         TEXT,                   -- HQ city
+                offices               TEXT,                   -- JSON array of {city,country,address}
+                project_count_archello INTEGER,               -- '246 Projects' string
+                website               TEXT,
+                social_links          TEXT,                   -- JSON object
+                cover_image_url       TEXT,                   -- og:image (usually firm logo)
+                fetched_at            TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS pending_projects (
                 url            TEXT PRIMARY KEY,            -- /project/{slug}
                 source_url     TEXT,                        -- which sitemap shard
@@ -103,10 +124,21 @@ def init_db() -> None:
                 error          TEXT
             );
 
-            CREATE INDEX IF NOT EXISTS idx_arc_pending_proj_status ON pending_projects(status);
-            CREATE INDEX IF NOT EXISTS idx_arc_proj_country        ON archello_projects(location_country);
-            CREATE INDEX IF NOT EXISTS idx_arc_proj_year           ON archello_projects(project_year);
-            CREATE INDEX IF NOT EXISTS idx_arc_proj_arch_brand     ON archello_projects(architect_brand_id);
+            CREATE TABLE IF NOT EXISTS pending_firms (
+                url            TEXT PRIMARY KEY,            -- /brand/{slug} (firm subset only)
+                source         TEXT DEFAULT 'architect_role', -- how we decided this is a firm
+                status         TEXT DEFAULT 'pending',
+                discovered_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fetched_at     TIMESTAMP,
+                error          TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_arc_pending_proj_status  ON pending_projects(status);
+            CREATE INDEX IF NOT EXISTS idx_arc_pending_firm_status  ON pending_firms(status);
+            CREATE INDEX IF NOT EXISTS idx_arc_proj_country         ON archello_projects(location_country);
+            CREATE INDEX IF NOT EXISTS idx_arc_proj_year            ON archello_projects(project_year);
+            CREATE INDEX IF NOT EXISTS idx_arc_proj_arch_brand      ON archello_projects(architect_brand_id);
+            CREATE INDEX IF NOT EXISTS idx_arc_firm_country         ON archello_firms(location_country);
             CREATE INDEX IF NOT EXISTS idx_arc_pdet_project        ON archello_project_details (project_id);
             CREATE INDEX IF NOT EXISTS idx_arc_pdet_brand          ON archello_project_details (brand_id);
         """)
@@ -139,30 +171,54 @@ def bulk_enqueue_projects(rows: list[tuple[str, str, Optional[str]]]) -> int:
         return cur.rowcount
 
 
-def get_pending(limit: Optional[int] = None) -> list:
-    sql = "SELECT * FROM pending_projects WHERE status = 'pending' ORDER BY discovered_at"
+def get_pending(limit: Optional[int] = None,
+                table: str = "pending_projects") -> list:
+    """Read pending rows from either pending_projects or pending_firms."""
+    assert table in ("pending_projects", "pending_firms")
+    sql = f"SELECT * FROM {table} WHERE status = 'pending' ORDER BY discovered_at"
     if limit:
         sql += f" LIMIT {int(limit)}"
     with get_db() as conn:
         return [dict(r) for r in conn.execute(sql).fetchall()]
 
 
-def mark_done(url: str) -> None:
+def mark_done(url: str, table: str = "pending_projects") -> None:
+    assert table in ("pending_projects", "pending_firms")
     with get_db() as conn:
         conn.execute(
-            "UPDATE pending_projects SET status='done', fetched_at=CURRENT_TIMESTAMP, "
-            "error=NULL WHERE url = ?",
+            f"UPDATE {table} SET status='done', fetched_at=CURRENT_TIMESTAMP, "
+            f"error=NULL WHERE url = ?",
             (url,),
         )
 
 
-def mark_failed(url: str, error: str) -> None:
+def mark_failed(url: str, error: str, table: str = "pending_projects") -> None:
+    assert table in ("pending_projects", "pending_firms")
     with get_db() as conn:
         conn.execute(
-            "UPDATE pending_projects SET status='failed', "
-            "fetched_at=CURRENT_TIMESTAMP, error=? WHERE url = ?",
+            f"UPDATE {table} SET status='failed', "
+            f"fetched_at=CURRENT_TIMESTAMP, error=? WHERE url = ?",
             (error[:500], url),
         )
+
+
+# ---------------------------------------------------------------------------
+# Firm queue ops
+# ---------------------------------------------------------------------------
+
+def enqueue_firms_from_architect_role() -> int:
+    """Find every brand_slug that has appeared as 'Architect' role on
+    any project and enqueue its /brand/{slug} URL into pending_firms.
+    Idempotent (INSERT OR IGNORE)."""
+    with get_db() as conn:
+        cur = conn.execute("""
+            INSERT OR IGNORE INTO pending_firms (url, source)
+            SELECT DISTINCT '/brand/' || brand_slug, 'architect_role'
+            FROM archello_project_details
+            WHERE brand_slug IS NOT NULL
+              AND LOWER(role_or_category) LIKE '%architect%'
+        """)
+        return cur.rowcount
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +288,31 @@ def upsert_brand_seen(slug: str, brand_id: Optional[int],
         )
 
 
+_FIRM_COLS = [
+    "slug", "brand_id", "name", "description_short", "about",
+    "location_country", "location_city", "offices",
+    "project_count_archello", "website", "social_links", "cover_image_url",
+]
+_FIRM_JSON_FIELDS = ("offices", "social_links")
+
+
+def upsert_firm(data: dict) -> None:
+    """Insert/update one archello_firms row."""
+    payload = {k: v for k, v in data.items()}
+    for f in _FIRM_JSON_FIELDS:
+        if f in payload and not isinstance(payload[f], (str, type(None))):
+            payload[f] = json.dumps(payload[f], ensure_ascii=False)
+    payload = {k: payload.get(k) for k in _FIRM_COLS}
+    placeholders = ", ".join(":" + c for c in _FIRM_COLS)
+    update_clause = ", ".join(f"{c}=excluded.{c}"
+                              for c in _FIRM_COLS if c != "slug")
+    sql = (f"INSERT INTO archello_firms ({', '.join(_FIRM_COLS)}, fetched_at) "
+           f"VALUES ({placeholders}, CURRENT_TIMESTAMP) "
+           f"ON CONFLICT(slug) DO UPDATE SET {update_clause}, fetched_at=CURRENT_TIMESTAMP")
+    with get_db() as conn:
+        conn.execute(sql, payload)
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------
@@ -245,9 +326,12 @@ def stats() -> dict:
                 conn.execute("SELECT COUNT(*) FROM archello_project_details").fetchone()[0],
             "archello_brands_seen":
                 conn.execute("SELECT COUNT(*) FROM archello_brands_seen").fetchone()[0],
+            "archello_firms":
+                conn.execute("SELECT COUNT(*) FROM archello_firms").fetchone()[0],
         }
-        counts = dict(conn.execute(
-            "SELECT status, COUNT(*) FROM pending_projects GROUP BY status"
-        ).fetchall())
-        out["pending_projects"] = counts
+        for table in ("pending_projects", "pending_firms"):
+            counts = dict(conn.execute(
+                f"SELECT status, COUNT(*) FROM {table} GROUP BY status"
+            ).fetchall())
+            out[table] = counts
         return out

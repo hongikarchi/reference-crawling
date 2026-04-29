@@ -248,3 +248,134 @@ def parse_project_page(html: str, url: str) -> dict:
             out["architect_name"] = arch_row["brand_name"]
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Brand / firm page (/brand/{slug})
+# ---------------------------------------------------------------------------
+
+# Foster + Partners brand page sample showed:
+#   <h1>Foster + Partners</h1>
+#   <meta og:description="firm intro text..."
+#   <meta og:image="...firm logo..."
+#   .ah-brand-page-offices__item with HQ + branch addresses
+#   "{N} Projects" text somewhere
+_PROJECT_COUNT_RE = re.compile(r"\b(\d+)\s+Projects?\b")
+
+
+def parse_brand_page(html: str, url: str) -> dict:
+    """Parse one /brand/{slug} page (assumed firm, not manufacturer).
+
+    Returns dict shaped for db.upsert_firm() (excluding `fetched_at`).
+    Tolerant of missing fields — returns None for absent ones.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    out: dict = {
+        "slug": _slug_from_brand_url(url) or
+                urlparse(url).path.rstrip("/").rsplit("/", 1)[-1],
+    }
+
+    # Name
+    h1 = soup.find("h1")
+    if h1:
+        out["name"] = h1.get_text(strip=True)
+    else:
+        # OG fallback (strips " | Archello" suffix)
+        og_title = _meta(soup, "og:title") or ""
+        out["name"] = og_title.split("|")[0].strip() or None
+
+    # Short description (OG)
+    out["description_short"] = _meta(soup, "og:description")
+
+    # Cover / logo (OG)
+    out["cover_image_url"] = _meta(soup, "og:image")
+
+    # About / long description — lives in .profile-description
+    # (id=pjax-brand-description). Take the full block text as-is.
+    about = None
+    desc_block = soup.select_one("#pjax-brand-description") \
+        or soup.select_one(".profile-description")
+    if desc_block:
+        txt = desc_block.get_text(" ", strip=True)
+        if txt and len(txt) > 40:
+            about = txt
+    out["about"] = about
+
+    # Project count: scan all text for "{N} Projects"
+    txt_dump = soup.get_text(" ", strip=True)
+    m = _PROJECT_COUNT_RE.search(txt_dump)
+    if m:
+        try:
+            out["project_count_archello"] = int(m.group(1))
+        except ValueError:
+            pass
+
+    # Offices (HQ + branches) — .ah-brand-page-offices__item.
+    # Address is the .grid-item-info block whose icon is icon-location;
+    # HQ flag comes from .grid-item-info-label.
+    offices: list[dict] = []
+    primary_country = primary_city = None
+    for office in soup.select(".ah-brand-page-offices__item"):
+        addr = None
+        for info in office.select(".grid-item-info"):
+            icon = info.select_one(".grid-item-info-icon i")
+            if not icon:
+                continue
+            classes = " ".join(icon.get("class", []))
+            if "icon-location" in classes or "icon-pin" in classes:
+                content = info.select_one(".grid-item-info-content")
+                if content:
+                    addr = content.get_text(" ", strip=True)
+                break
+        if not addr:
+            continue
+        parts = [p.strip() for p in addr.split(",") if p.strip()]
+        country = parts[-1] if parts else None
+        city = parts[-2] if len(parts) >= 2 else None
+        label = office.select_one(".grid-item-info-label")
+        is_hq = bool(label and "HQ" in label.get_text(strip=True).upper())
+        offices.append({"city": city, "country": country, "address": addr,
+                        "is_hq": is_hq})
+        if is_hq and not primary_country:
+            primary_country, primary_city = country, city
+    if offices:
+        out["offices"] = offices
+        if primary_country:
+            out["location_country"] = primary_country
+            out["location_city"] = primary_city
+        else:  # no HQ flag — take first
+            out["location_country"] = offices[0]["country"]
+            out["location_city"] = offices[0]["city"]
+
+    # Website + social links — outbound anchors
+    _SOCIAL_HOSTS = {
+        "facebook.com": "facebook", "twitter.com": "twitter", "x.com": "twitter",
+        "instagram.com": "instagram", "linkedin.com": "linkedin",
+        "youtube.com": "youtube", "vimeo.com": "vimeo",
+        "pinterest.com": "pinterest", "tiktok.com": "tiktok",
+    }
+    social: dict[str, str] = {}
+    website = None
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if not href.startswith("http"):
+            continue
+        host = urlparse(href).netloc.lower().replace("www.", "")
+        if "archello.com" in host:
+            continue
+        # Match social platform by suffix (handles nl.linkedin.com etc.)
+        platform = next((p for h, p in _SOCIAL_HOSTS.items()
+                         if host == h or host.endswith("." + h)), None)
+        if platform:
+            social.setdefault(platform, href)
+        elif website is None and len(host) < 40:
+            # First non-archello, non-social outbound link is likely the firm site
+            website = href
+    out["website"] = website
+    out["social_links"] = social if social else None
+
+    # Brand_id is not on the brand page itself in HTML; we fetched it during
+    # project parsing (archello_brands_seen). Caller can join post-hoc.
+    out["brand_id"] = None  # filled by caller via JOIN if needed
+
+    return out

@@ -439,12 +439,13 @@ def main():
 
     # crawl-archello
     p = sub.add_parser("crawl-archello",
-                       help="Archello crawler (sitemap → projects, browser-UA, public read)")
+                       help="Archello crawler (sitemap → projects → firms, browser-UA, public read)")
     p.add_argument("--phase",
-                   choices=["sitemap", "projects", "all"],
+                   choices=["sitemap", "projects",
+                            "enqueue-firms", "firms", "all"],
                    default="all")
     p.add_argument("--limit", type=int, default=1000,
-                   help="Project fetch limit per run (default 1000 = pilot)")
+                   help="Project / firm fetch limit per run (default 1000 = pilot)")
     p.set_defaults(func=cmd_crawl_archello)
 
     # match-canonical

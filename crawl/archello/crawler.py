@@ -130,6 +130,59 @@ def phase_projects(limit: Optional[int] = None) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3 — enqueue firms (architect-role brands → pending_firms)
+# ---------------------------------------------------------------------------
+
+def phase_enqueue_firms() -> int:
+    """Bulk-enqueue every brand_slug that has appeared as 'Architect' role
+    on any project into pending_firms. Idempotent."""
+    n = ar_db.enqueue_firms_from_architect_role()
+    logger.info(f"  enqueued {n} firms (architect-role brands)")
+    return n
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — deep-fetch firms (/brand/{slug})
+# ---------------------------------------------------------------------------
+
+def phase_firms(limit: Optional[int] = None) -> int:
+    pending = ar_db.get_pending(limit=limit, table="pending_firms")
+    processed = 0
+    for row in pending:
+        url = row["url"]
+        html = _fetch(url)
+        if not html:
+            ar_db.mark_failed(url, "fetch_failed", table="pending_firms")
+            continue
+        try:
+            data = ar_parsers.parse_brand_page(html, url)
+            if not data.get("name"):
+                ar_db.mark_failed(url, "no_name", table="pending_firms")
+                continue
+            # Backfill brand_id from archello_brands_seen if available
+            if data.get("brand_id") is None and data.get("slug"):
+                with ar_db.get_db() as conn:
+                    r = conn.execute(
+                        "SELECT brand_id FROM archello_brands_seen WHERE slug = ?",
+                        (data["slug"],),
+                    ).fetchone()
+                    if r:
+                        data["brand_id"] = r["brand_id"]
+            ar_db.upsert_firm(data)
+            ar_db.mark_done(url, table="pending_firms")
+            processed += 1
+            logger.info(
+                f"  firm {data['name']!r} (slug={data['slug']}) "
+                f"projects={data.get('project_count_archello')} "
+                f"hq={data.get('location_country')}"
+            )
+        except Exception as e:
+            ar_db.mark_failed(url, f"{type(e).__name__}: {e}", table="pending_firms")
+            logger.error(f"  firm parse error {url}: {e}")
+    return processed
+
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
@@ -153,10 +206,11 @@ def run_all(*, project_limit: int = 1000) -> None:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Archello crawler (Phase 8)")
     parser.add_argument("--phase",
-                        choices=["sitemap", "projects", "all"],
+                        choices=["sitemap", "projects",
+                                 "enqueue-firms", "firms", "all"],
                         default="all")
     parser.add_argument("--limit", type=int, default=1000,
-                        help="Project fetch limit per run (default 1000 = pilot)")
+                        help="Project / firm fetch limit per run (default 1000)")
     args = parser.parse_args(argv)
 
     ar_db.init_db()
@@ -167,6 +221,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         elif args.phase == "projects":
             n = phase_projects(limit=args.limit)
             logger.info(f"projects processed: {n}")
+        elif args.phase == "enqueue-firms":
+            n = phase_enqueue_firms()
+            logger.info(f"newly enqueued firms: {n}")
+        elif args.phase == "firms":
+            n = phase_firms(limit=args.limit)
+            logger.info(f"firms processed: {n}")
         else:
             run_all(project_limit=args.limit)
     except KeyboardInterrupt:
