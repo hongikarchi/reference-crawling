@@ -55,6 +55,17 @@ script directly via the CLI below — agent layer is for multi-step operations.
     Without that signal, local commits stack and the agent never reaches for
     the remote on its own. `git push --force` and any history-rewriting push
     is never allowed; pushes are always plain `git push origin main`.
+- **Plan mode workflow (사용자 명시 룰 — 모든 세션에서 반드시 지킬 것):**
+  - **한국어로 짧고 구조화된 설명** — 표 / 불릿 / 짧은 문단으로 핵심만.
+    영어 긴 줄로 한 번에 plan 던지지 않는다.
+  - **결정사항은 주제별로 하나씩 차근차근** — 한 번에 여러 결정 묶지 X.
+    각 결정마다 배경 짧게 설명 + `AskUserQuestion`으로 객관식 제시 + 사용자 응답
+    받은 후 다음 결정으로.
+  - **모든 결정 컨펌 후에야 정식 plan 파일 작성** — 결정 진행 중에는 plan
+    파일에 짧은 한국어 임시 메모만. 사용자 컨펌 끝난 후에 정식 plan 작성.
+  - **plan 파일도 짧게** — 200줄 영어 monster 금지. 작업 단위별 핵심만.
+  - 영어는 plan 파일 본문 / 코드 주석 / 커밋 메시지에서는 OK; 사용자와의
+    plan-mode 대화는 한국어.
 
 ## CLI
 
