@@ -3,6 +3,106 @@
 How the agent layer operates. Eight operational cases cover ~all real
 work. Anything that doesn't fit goes through orchestrator for routing.
 
+> **For data flow** (sources → DBs → JSON → Neon/R2) see PROJECT.md §2.1.
+> This file documents *what humans / agents do, in what order*.
+
+## End-to-end workflow (DB-build process)
+
+```mermaid
+flowchart TD
+    START(["New source decided<br/>OR existing source has new data"])
+
+    subgraph PHASE_RECON["① RECON  &nbsp;(researcher agent)"]
+        R1["robots.txt + sample fetch + ToS read"]
+        R2["write .claude/research/&lt;source&gt;-schema.md"]
+        R3{"ai-train=no?<br/>ToS scrape ban?"}
+        R1 --> R2 --> R3
+    end
+
+    GATE_USER1{"User policy<br/>decision"}
+
+    subgraph PHASE_CRAWL["② CRAWL  &nbsp;(stage 1)"]
+        C1["scaffold crawl/&lt;source&gt;/{db,parsers,crawler}.py<br/>(mirror Architizer / Divisare / Archello)"]
+        C2["smoke: --phase sitemap → --phase projects --limit 10"]
+        C3["full crawl background (URL only, no image bytes)"]
+        C1 --> C2 --> C3
+    end
+
+    subgraph PHASE_ENRICH["③ ENRICH  &nbsp;(stages 2-3)"]
+        E1["run.py export-dedup<br/>SQLite → 1_buildings_raw.json"]
+        E2["run.py harness<br/>text enrich + image_analysis (URL or disk)"]
+        E3["run.py embed-rate<br/>SBERT 384-dim + quality review/fix/rate"]
+        E1 --> E2 --> E3
+    end
+
+    GATE_QUAL{"quality ≥ 97?"}
+
+    subgraph PHASE_CANONICAL["④ CANONICAL  &nbsp;(stage 4)"]
+        K1["match_architects.py<br/>cluster → Divisare arch ID"]
+        K2["match_buildings.py<br/>per-architect-pool name match"]
+        K3["build.py --strict<br/>drop orphans + article-style names"]
+        K4["canonical_qc.py<br/>9 invariant checks"]
+        K1 --> K2 --> K3 --> K4
+    end
+
+    GATE_QC{"all PASS?"}
+
+    subgraph PHASE_DEDUPE["④.5 IMAGE DEDUPE  &nbsp;(Phase 10, optional)"]
+        D1["phash fingerprint per image URL"]
+        D2["cluster within building (Hamming ≤8)"]
+        D3["rank by dimensions / file_size / source"]
+        D4["canonical_image_gallery.json"]
+        D1 --> D2 --> D3 --> D4
+    end
+
+    subgraph PHASE_UPLOAD["⑤ UPLOAD  &nbsp;(stage 5 — manual gate)"]
+        U1["upload-guard agent: dry-run + invariant checks"]
+        U2["Handoffs: UPLOAD-READY (count=N, quality=X)"]
+        U3["USER runs upload/neon_strict.py --confirm<br/>+ R2 cover image upload"]
+        U1 --> U2 --> U3
+    end
+
+    GATE_USER2{"User OK?"}
+    DONE(["Production live<br/>(Neon + R2)"])
+
+    START --> PHASE_RECON
+    R3 -- "clean OR<br/>negotiated" --> GATE_USER1
+    R3 -- "blocked" --> SKIP1[/"skip source"/]
+    GATE_USER1 -- approve --> PHASE_CRAWL
+    GATE_USER1 -- defer --> PARK1[/"park / try later"/]
+    PHASE_CRAWL --> PHASE_ENRICH
+    PHASE_ENRICH --> GATE_QUAL
+    GATE_QUAL -- yes --> PHASE_CANONICAL
+    GATE_QUAL -- no --> CASE2["→ Case 2 quality iteration<br/>(or Case 3 reprocess)"]
+    CASE2 --> PHASE_ENRICH
+    PHASE_CANONICAL --> GATE_QC
+    GATE_QC -- yes --> PHASE_DEDUPE
+    GATE_QC -- no --> CASE2_2["fix + rebuild"]
+    CASE2_2 --> PHASE_CANONICAL
+    PHASE_DEDUPE --> PHASE_UPLOAD
+    PHASE_UPLOAD --> GATE_USER2
+    GATE_USER2 -- yes --> DONE
+    GATE_USER2 -- no --> PARK2[/"hold;<br/>fix issue"/]
+    PARK2 --> PHASE_ENRICH
+
+    classDef gate fill:#fff5e6,stroke:#cc8a00,stroke-width:2px,color:#000
+    classDef terminal fill:#e6f5e6,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef phase fill:#f5f5f5,stroke:#666,stroke-width:1px,color:#000
+    class GATE_USER1,GATE_USER2,GATE_QUAL,GATE_QC,R3 gate
+    class START,DONE terminal
+    class PHASE_RECON,PHASE_CRAWL,PHASE_ENRICH,PHASE_CANONICAL,PHASE_DEDUPE,PHASE_UPLOAD phase
+```
+
+**Reading the diagram:**
+- ① Yellow diamonds = decision gates (require user OR auto-judgment).
+- ② Each "phase box" maps to a code subpackage AND a Case (below).
+- ③ Quality + canonical-QC failures bounce back to enrich; user-rejected
+  upload bounces back to enrich. Linear forward path on the happy case.
+
+The Cases section below describes the agent dispatch *inside* each
+phase box (e.g., Case 7 details how recon happens; Case 1 details how a
+batch enriches; Case 8 details canonical multi-source fold-in).
+
 ## Agents (7)
 
 | Agent | Model | Role |
