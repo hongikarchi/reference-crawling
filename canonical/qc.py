@@ -167,6 +167,7 @@ def check_field_coverage(records: list[dict]) -> CheckResult:
 _NON_PROVENANCE_FIELDS = {
     "divisare_id", "divisare_slug", "metalocus_building_id",
     "embedding", "vocab_version", "prompt_version", "provenance",
+    "confidence_tier",   # set by reality_filter, not a content field
 }
 
 
@@ -345,6 +346,48 @@ def check_vocab_validity(records: list[dict]) -> CheckResult:
                        metric={"vocab_version": vocab.VOCAB_VERSION})
 
 
+_VALID_TIERS = {"T1", "T2", "T3"}
+
+
+def check_confidence_tier(records: list[dict]) -> CheckResult:
+    """Phase 14a invariant: every kept row has confidence_tier ∈ {T1,T2,T3}.
+
+    Pre-Phase-14 canonical files had no `confidence_tier` field — those
+    pass with an INFO-level result (not a failure). Mixed populations
+    (some rows have it, some don't) raise WARN.
+    """
+    with_tier = [r for r in records if r.get("confidence_tier")]
+    without_tier = [r for r in records if not r.get("confidence_tier")]
+    if not with_tier:
+        return CheckResult("confidence_tier", "PASS",
+                           metric={"phase_14_field_absent": True,
+                                   "rows_without_tier": len(without_tier)},
+                           details=["legacy file pre-Phase-14a; no confidence_tier"])
+    invalid = [r for r in with_tier if r["confidence_tier"] not in _VALID_TIERS]
+    tier_counts = {"T1": 0, "T2": 0, "T3": 0}
+    for r in with_tier:
+        tier_counts[r["confidence_tier"]] = tier_counts.get(r["confidence_tier"], 0) + 1
+    if without_tier:
+        return CheckResult("confidence_tier", "WARN",
+                           metric={**tier_counts, "without_tier": len(without_tier)},
+                           details=[f"{len(without_tier)} rows missing confidence_tier "
+                                    f"(should be set on every strict-mode KEEP)"])
+    if invalid:
+        return CheckResult("confidence_tier", "FAIL",
+                           metric={**tier_counts,
+                                   "invalid_values": [r['confidence_tier'] for r in invalid[:5]]},
+                           details=[f"{len(invalid)} rows have an out-of-vocab tier value"])
+    # T1 fraction guidance: aim for ≥ 30% cross-source confirmed
+    t1_frac = tier_counts["T1"] / len(records) if records else 0
+    if t1_frac < 0.30:
+        return CheckResult("confidence_tier", "WARN",
+                           metric={**tier_counts, "t1_fraction": round(t1_frac, 3)},
+                           details=[f"T1 (cross-source) fraction {t1_frac:.1%} below 30% target — "
+                                    f"means most rows are arch-only / single-source"])
+    return CheckResult("confidence_tier", "PASS",
+                       metric={**tier_counts, "t1_fraction": round(t1_frac, 3)})
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -359,6 +402,7 @@ ALL_CHECKS = [
     ("image_existence",   check_image_existence),
     ("embedding_shape",   check_embedding_shape),
     ("vocab_validity",    check_vocab_validity),
+    ("confidence_tier",   check_confidence_tier),
 ]
 
 

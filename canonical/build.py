@@ -354,7 +354,9 @@ def _build_one(b: dict, *, arch_map: dict, building_match: Optional[dict],
     return cb
 
 
-def build_all(*, strict: bool = False, output_path: Optional[str] = None) -> dict:
+def build_all(*, strict: bool = False, output_path: Optional[str] = None,
+              enable_l4_haiku: bool = False,
+              haiku_budget: Optional[int] = None) -> dict:
     """Build canonical_buildings.json (or _strict.json under --strict).
 
     strict=True:
@@ -413,7 +415,7 @@ def build_all(*, strict: bool = False, output_path: Optional[str] = None) -> dic
         elif cb.architect_canonical_ids:
             # Arch-only: in strict mode, clean the name then run reality_filter
             if strict:
-                from canonical.reality_filter import reality_filter_with_default_l4
+                from canonical.reality_filter import reality_filter
                 original = cb.name or ""
                 cleaned = _clean_building_name(original)
                 if cleaned != original and cleaned:
@@ -431,12 +433,32 @@ def build_all(*, strict: bool = False, output_path: Optional[str] = None) -> dic
                     rf_input["year"] = b["year"]
                 if b.get("location_country"):
                     rf_input["country"] = b["location_country"]
-                decision, tier, reason = reality_filter_with_default_l4(
+                decision, tier, reason = reality_filter(
                     rf_input,
                     multi_source_confirmed=False,        # arch_only path
                     architect_verified=True,             # has architect_canonical_ids
-                    l4_default="DROP",                   # conservative until Haiku wired
                 )
+                # Resolve DEFER_L4: either via Haiku (if --enable-l4-haiku)
+                # or default to DROP (conservative).
+                if decision == "DEFER_L4":
+                    if enable_l4_haiku:
+                        from canonical.match_tiebreaker import (
+                            classify_reality, HaikuCostCapHit,
+                        )
+                        try:
+                            answer = classify_reality(
+                                rf_input, default="no",
+                                new_call_budget=haiku_budget,
+                            )
+                            if answer == "yes":
+                                decision, tier, reason = "KEEP", "T3", "L4_haiku_yes"
+                            else:
+                                decision, tier, reason = "DROP", None, "L4_haiku_no"
+                        except HaikuCostCapHit as e:
+                            print(f"  ⚠ Haiku cost cap hit: {e}")
+                            decision, tier, reason = "DROP", None, "L4_cost_cap"
+                    else:
+                        decision, tier, reason = "DROP", None, "L4_disabled_drop"
                 if decision == "DROP":
                     arch_only_dropped += 1
                     drop_reasons[reason] = drop_reasons.get(reason, 0) + 1
@@ -508,8 +530,16 @@ def main(argv: list[str]) -> int:
                         "an article title (writes data/canonical/canonical_buildings_strict.json)")
     p.add_argument("--output", default=None,
                    help="override output path")
+    p.add_argument("--enable-l4-haiku", action="store_true",
+                   help="resolve reality_filter DEFER_L4 cases via Haiku classify "
+                        "(requires ANTHROPIC_API_KEY; cost ~$0.0005/call, "
+                        "cached at data/canonical/_haiku_cache.json)")
+    p.add_argument("--haiku-budget", type=int, default=None,
+                   help="cap on net-new Haiku calls per run (default: no cap)")
     args = p.parse_args(argv)
-    build_all(strict=args.strict, output_path=args.output)
+    build_all(strict=args.strict, output_path=args.output,
+              enable_l4_haiku=args.enable_l4_haiku,
+              haiku_budget=args.haiku_budget)
     return 0
 
 

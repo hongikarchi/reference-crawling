@@ -96,6 +96,12 @@ class CanonicalBuilding:
     vocab_version:             Optional[str]   = None
     prompt_version:            Optional[str]   = None    # for any LLM-set field
     provenance:                dict            = field(default_factory=dict)
+    # Phase 14a — confidence tier set by canonical/reality_filter:
+    #   T1 = cross-source confirmed
+    #   T2 = single-source w/ structural metadata signal
+    #   T3 = Haiku-validated borderline
+    #   None = pre-Phase-14a row OR non-strict build
+    confidence_tier:           Optional[str]   = None
     # Provenance shape:
     #   {"name": "divisare", "description": "metalocus", "program": "derived",
     #    "atmosphere": "metalocus", ...}
