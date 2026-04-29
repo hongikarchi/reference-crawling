@@ -42,13 +42,25 @@ METALOC_PATH   = "data/enrich/4_buildings_final.json"
 # may not yet exist in Neon's architecture_vectors. The other Divisare
 # columns (divisare_id, architect_canonical_ids, divisare_tags, etc.)
 # were already added by upload.py's MIGRATE_SQL in earlier work.
+#
+# Phase 9 (image hosting Path C) additions:
+#   cover_image_cdn_url  — R2 public URL we own (cover image only)
+#   gallery_image_urls   — source CDN URLs (hot-linked, never downloaded)
+#   cover_blurhash       — ~30-byte placeholder hash for swipe-card UX
+#   confidence_tier      — Phase 14a tier label (T1|T2|T3)
 EXTRA_MIGRATE_SQL = """
 ALTER TABLE architecture_vectors
     ADD COLUMN IF NOT EXISTS divisare_slug            TEXT,
     ADD COLUMN IF NOT EXISTS abstract                 TEXT,
     ADD COLUMN IF NOT EXISTS divisare_credits         JSONB,
     ADD COLUMN IF NOT EXISTS cover_image_url_divisare TEXT,
-    ADD COLUMN IF NOT EXISTS divisare_gallery_urls    TEXT[];
+    ADD COLUMN IF NOT EXISTS divisare_gallery_urls    TEXT[],
+    -- Phase 9
+    ADD COLUMN IF NOT EXISTS cover_image_cdn_url      TEXT,
+    ADD COLUMN IF NOT EXISTS gallery_image_urls       TEXT[],
+    ADD COLUMN IF NOT EXISTS cover_blurhash           TEXT,
+    -- Phase 14a
+    ADD COLUMN IF NOT EXISTS confidence_tier          TEXT;
 """
 
 
@@ -63,6 +75,8 @@ INSERT INTO architecture_vectors (
     divisare_id, divisare_slug, abstract,
     architect_canonical_ids, divisare_tags, divisare_credits,
     cover_image_url_divisare, divisare_gallery_urls,
+    cover_image_cdn_url, gallery_image_urls, cover_blurhash,
+    confidence_tier,
     provenance, embedding
 ) VALUES (
     %(building_id)s, %(slug)s, %(name_en)s, %(project_name)s, %(architect)s,
@@ -74,6 +88,8 @@ INSERT INTO architecture_vectors (
     %(divisare_id)s, %(divisare_slug)s, %(abstract)s,
     %(architect_canonical_ids)s, %(divisare_tags)s, %(divisare_credits)s,
     %(cover_image_url_divisare)s, %(divisare_gallery_urls)s,
+    %(cover_image_cdn_url)s, %(gallery_image_urls)s, %(cover_blurhash)s,
+    %(confidence_tier)s,
     %(provenance)s, %(embedding)s
 )
 ON CONFLICT (building_id) DO UPDATE SET
@@ -108,6 +124,10 @@ ON CONFLICT (building_id) DO UPDATE SET
     divisare_credits         = EXCLUDED.divisare_credits,
     cover_image_url_divisare = EXCLUDED.cover_image_url_divisare,
     divisare_gallery_urls    = EXCLUDED.divisare_gallery_urls,
+    cover_image_cdn_url      = EXCLUDED.cover_image_cdn_url,
+    gallery_image_urls       = EXCLUDED.gallery_image_urls,
+    cover_blurhash           = EXCLUDED.cover_blurhash,
+    confidence_tier          = EXCLUDED.confidence_tier,
     provenance               = EXCLUDED.provenance,
     embedding                = EXCLUDED.embedding;
 """
@@ -206,6 +226,12 @@ def _prepare_row(c: dict, metaloc_idx: dict) -> Optional[dict]:
         "divisare_credits":         divisare_credits,
         "cover_image_url_divisare": c.get("cover_image_url_divisare"),
         "divisare_gallery_urls":    c.get("divisare_gallery_urls") or None,
+        # Phase 9 — Path C image hosting
+        "cover_image_cdn_url":      c.get("cover_image_cdn_url"),    # set by R2 step
+        "gallery_image_urls":       c.get("gallery_image_urls") or None,
+        "cover_blurhash":           c.get("cover_blurhash"),
+        # Phase 14a — confidence tier from reality_filter
+        "confidence_tier":          c.get("confidence_tier"),
         "provenance":               provenance,
         "embedding":          embedding_str,
     }
@@ -223,6 +249,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                         "an (a2)-style additive migration that leaves dropped rows in place)")
     p.add_argument("--canonical", default=CANONICAL_PATH)
     p.add_argument("--metalocus", default=METALOC_PATH)
+    p.add_argument("--enable-cover-r2-upload", action="store_true",
+                   help="Phase 9 / Path C: download each row's cover_image_url, "
+                        "upload to R2 at {building_id}/cover.<ext>, compute "
+                        "BlurHash, and populate cover_image_cdn_url + "
+                        "cover_blurhash. Requires R2 env vars + blurhash + Pillow.")
+    p.add_argument("--cover-public-url-base", default=None,
+                   help="public URL prefix for R2 covers, e.g. "
+                        "https://images.archi-tinder.com (defaults to "
+                        "$R2_PUBLIC_URL_BASE env var if not set)")
     args = p.parse_args(argv)
 
     if not args.dry_run and not args.confirm:
@@ -289,6 +324,65 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"  Deleted {len(to_delete)} rows.")
     else:
         print("  Nothing to delete.")
+
+    # ---- Step 2.5: Cover R2 + BlurHash (Phase 9 / Path C) --------------
+    if args.enable_cover_r2_upload:
+        from upload import r2_uploader
+        # Reuse the legacy R2 client from upload.neon
+        from upload.neon import _get_r2_client, _get_existing_r2_keys
+        r2_public_base = args.cover_public_url_base or os.environ.get(
+            "R2_PUBLIC_URL_BASE")
+        if not r2_public_base:
+            print("  ⚠ R2_PUBLIC_URL_BASE not set — cover_image_cdn_url will be "
+                  "stored as s3://bucket/key (callers must rewrite for browser).")
+
+        print(f"\nStep 2.5 — Cover R2 upload + BlurHash "
+              f"(canonical rows={len(canonical)})")
+        if args.dry_run:
+            with_cover = sum(1 for c in canonical if c.get("cover_image_url"))
+            print(f"  [DRY-RUN] would download {with_cover} cover URLs → R2; "
+                  f"compute blurhash for each.")
+        else:
+            client = _get_r2_client()
+            bucket = os.environ["R2_BUCKET"]
+            print(f"  Listing existing R2 keys for skip-detection...")
+            existing_keys = _get_existing_r2_keys(client, bucket)
+            print(f"  R2 has {len(existing_keys)} keys total.")
+
+            uploaded = skipped = failed = 0
+            for c in canonical:
+                bid = c.get("metalocus_building_id")
+                cover_url = c.get("cover_image_url")
+                if not (bid and cover_url):
+                    continue
+                result = r2_uploader.process_one_cover(
+                    building_id=bid,
+                    cover_image_url=cover_url,
+                    r2_client=client,
+                    r2_bucket=bucket,
+                    public_url_base=r2_public_base,
+                    skip_if_exists=True,
+                    existing_keys=existing_keys,
+                    compute_hash=True,
+                )
+                if result.get("error"):
+                    failed += 1
+                    print(f"    ✗ {bid}: {result['error']}")
+                    continue
+                # Mutate canonical dict in-place so the UPSERT step
+                # below picks up cover_image_cdn_url + cover_blurhash.
+                c["cover_image_cdn_url"] = result["cover_image_cdn_url"]
+                c["cover_blurhash"] = result["cover_blurhash"]
+                if result["skipped"]:
+                    skipped += 1
+                else:
+                    uploaded += 1
+                if (uploaded + skipped) % 100 == 0:
+                    print(f"    ...processed {uploaded + skipped} / "
+                          f"{len(canonical)} (uploaded={uploaded}, "
+                          f"skipped={skipped}, failed={failed})")
+            print(f"  Cover R2 done: uploaded={uploaded}, "
+                  f"skipped={skipped}, failed={failed}")
 
     # ---- Step 3: UPSERT --------------------------------------------------
     print(f"\nStep 3 — UPSERT {len(canonical)} strict canonical rows")
