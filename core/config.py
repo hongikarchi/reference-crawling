@@ -94,7 +94,7 @@ ARCHITIZER_DB_PATH               = os.path.join(CRAWL_DIR, "architizer.db")
 # Recon: .claude/research/archello-schema.md (note: Content-Signal: ai-train=no
 # is acknowledged; our use is metadata mirroring, not model training).
 ARCHELLO_BASE_URL              = "https://archello.com"
-ARCHELLO_REQUEST_DELAY_SECONDS = 2.5  # honour published crawl-delay: 1, conservative
+ARCHELLO_REQUEST_DELAY_SECONDS = 1.5  # above published crawl-delay: 1; recon burst test (5 sequential @ 0s) all 200, no challenge
 ARCHELLO_USER_AGENT            = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
                                   "Chrome/120.0.0.0 Safari/537.36")
