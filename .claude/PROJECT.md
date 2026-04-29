@@ -18,6 +18,13 @@ Builds a vector database of architecture projects for ArchiTinder — a swipe-ba
 
 5 stages, each owning one code subpackage AND one data sub-folder.
 
+> **5-stage pipeline ≠ phase numbering.** The pipeline below is the
+> structural shape of the data flow — always the same regardless of
+> source. "Phase 0/1/.../11" in the roadmap (`db-fuzzy-lerdorf.md`)
+> and `Task.md` are time-order *work units*, not stages. One phase
+> usually touches one stage; cross-stage phases (e.g. Phase 11) are
+> labelled at the file level. See §12 for the full distinction.
+
 ### 2.1 Pipeline data flow
 
 ```mermaid
@@ -439,3 +446,166 @@ program balance:      no single program > 35% of total
 visual coverage:      avg ≥ 1 photo per building, ≥ 40% have ≥ 1 drawing
 description length:   avg ≥ 200 chars
 ```
+
+---
+
+## 11. Adding a new crawl source — runbook
+
+Use this checklist to add a 5th, 6th, … source. Each new source is a
+**new directory under `crawl/<source>/`** with the same shape as the
+existing four (metalocus, divisare, architizer, archello). The runbook
+is the same regardless of whether the source is a static-HTML site, a
+sitemap-driven site, or one requiring authentication.
+
+### Step 1 — Recon (writes `.claude/research/<source>-schema.md`)
+
+Dispatch a `researcher` agent (Phase 0 / `Case 5` in WORKFLOW.md). The
+recon doc must answer:
+
+1. Site overview — type of content, scale (project count), languages,
+   geographic focus.
+2. Access policy — public/paywalled, account-tier requirements.
+3. **`robots.txt`** — fetch + quote, note any sitemap URLs, note
+   `Content-Signal: ai-train=no` flags (EU DSM Art. 4) for user policy
+   call.
+4. Anti-bot — Cloudflare/Akamai? JS-rendered? Test with a sample fetch.
+5. Auth strategy — if login needed.
+6. URL patterns — listing / project / firm / tag pages.
+7. Data shape — fetch one sample project, identify HTML/JSON-LD/OG
+   selectors.
+8. Pagination + discovery — sitemap, archives, search.
+9. Rate limit estimate — observation + community reports.
+10. Comparison vs existing sources — what's similar / unique value-add.
+11. Feasibility verdict — easy / moderate / hard / hostile.
+
+If multiple candidate sources are being investigated, also append a
+row to `.claude/research/_crawl-targets.md` (cross-comparison table).
+
+### Step 2 — User policy decision (`ai-train=no` / ToS scrape ban)
+
+If the recon flags either of:
+- a stated `Content-Signal: ai-train=no` reservation, or
+- a ToS that explicitly prohibits "automatic device / robot / spider"
+
+then **stop here** until the user decides: respect / override / negotiate.
+Document the decision in the research doc. Do NOT write crawler code
+without that gate cleared.
+
+### Step 3 — Code skeleton (mirror Architizer or Archello)
+
+Three files under `crawl/<source>/`:
+
+```
+crawl/<source>/
+├── __init__.py     (empty package marker)
+├── db.py           SQLite schema + queue helpers
+├── parsers.py      HTML / sitemap / JSON parsing
+└── crawler.py      phases + CLI entry (mirrors run_all + main pattern)
+```
+
+Pattern guidance:
+- Use `crawl/architizer/` as the reference for **sitemap-driven public**
+  sources (most common case): two-phase (sitemap → enqueue → deep-fetch).
+- Use `crawl/divisare/` as the reference for **authenticated** sources:
+  add an `auth.py` and a session refresh path; use a region-walk +
+  architect-walk pattern when there's no published sitemap.
+- Use `crawl/archello/` as the reference for sources with **per-project
+  detail rows** (one-to-many child entities: products, photos, etc.).
+
+Schema convention per source:
+- One **entity table** per crawl-able noun (`<source>_projects`, optionally
+  `<source>_firms`, `<source>_brands`, `<source>_awards`).
+- One **detail table** if the source has structured per-project child
+  rows (Archello has `archello_project_details`; Architizer has
+  `architizer_awards`).
+- One **`pending_*` queue table** per discovery axis with status
+  enum `pending|done|failed`.
+- Indexes on `pending_*.status`, plus per-entity `country` / `year` /
+  `firm` indexes where the column is queryable.
+
+URL-only image policy: never queue image rows for download at stage 1.
+Persist `cover_image_url` + `gallery_image_urls` (JSON) + optionally
+`drawing_image_urls` (JSON) on the entity row. Cover selection + R2
+upload happen at stage 4 (`canonical/image_dedup` — Task.md Phase 10)
++ stage 5 (upload — Task.md Phase 9).
+
+### Step 4 — `core/config.py` constants
+
+Add a constant block for the new source mirroring the existing pattern:
+
+```python
+SOURCE_BASE_URL              = "https://example.com"
+SOURCE_REQUEST_DELAY_SECONDS = 2.0   # respect robots.txt crawl-delay; default to ≥2s
+SOURCE_USER_AGENT            = "Mozilla/5.0 ..."  # browser UA, not ClaudeBot
+SOURCE_DB_PATH               = os.path.join(CRAWL_DIR, "<source>.db")
+# If auth required:
+SOURCE_LOGIN_URL             = "..."
+SOURCE_SESSION_PATH          = os.path.join(DATA_DIR, ".source_session.json")
+```
+
+### Step 5 — `run.py` wiring
+
+Add a `cmd_crawl_<source>` function + a `crawl-<source>` argparser block
+that mirrors `cmd_crawl_architizer` / `cmd_crawl_divisare`. The user
+should be able to run `python3 run.py crawl-<source> --phase ... --limit
+N` without invoking the module directly.
+
+### Step 6 — Smoke test
+
+Per the recon's URL patterns:
+1. Sitemap-discovery phase → verify `pending_*` queue gets populated
+   with the expected row count.
+2. Deep-fetch a small batch (`--limit 5` or `10`).
+3. Inspect 3-5 random rows — name + key fields + cover_image_url
+   populated; description length plausible.
+4. Run for a longer batch (~100) and watch the log for redirect /
+   timeout / parse errors.
+
+If `core/utils.fetch_page` raises an unfamiliar `RequestException` type
+that escapes the crawler's per-row try/except, fix `fetch_page` (it
+should return `None` on terminal HTTP errors, not raise — see commit
+2026-04-28 utils fix for the TooManyRedirects precedent).
+
+### Step 7 — Wire into the canonical layer (Phase 9.5)
+
+The crawler produces `data/crawl/<source>.db`. To make it part of the
+strict canonical artefact:
+
+- Extend `canonical/match_architects.py` to optionally match against
+  the new source's architect/firm table.
+- Extend `canonical/match_buildings.py` similarly for projects.
+- Extend `canonical/build.py` to fold the new source's matches into
+  `canonical_buildings_strict.json`, with provenance per field.
+- Update `canonical/qc.py` invariants if the new source introduces a
+  new field type.
+- Update `.claude/REPORT.md` §1 (per-source crawl state) with row counts.
+- Update `.claude/PROJECT.md` §3 file structure tree.
+
+### Step 8 — Document + commit
+
+- Add a 1-line entry to `.claude/Task.md ## Handoffs`:
+  `RESEARCH-COMPLETE: <source>-schema` (after Step 1) and
+  `IMPLEMENTATION-COMPLETE: <source>-crawler` (after Step 6).
+- Commit per logical change (recon doc / crawler code / canonical
+  extension are three separate commits).
+
+---
+
+## 12. Pipeline 5 stages vs Phase work-order — orthogonal
+
+Two coordinate systems coexist:
+
+- **Pipeline stages (1-5)** = the *structure* of the data flow. Always
+  the same regardless of source: crawl → enrich → canonical → upload.
+  See §2.1 mermaid. New code goes in the right stage's package.
+
+- **Phases (0, 1, 2, …, 11, …)** = the *time-order* of work units (a
+  feature, a refactor, a backfill). One phase typically touches one
+  stage but not always — Phase 11 (metalocus URL-only) touched stages
+  1, 2-3 because the URL-only switch propagates from crawl through
+  enrich.
+
+Phase numbering is intentionally a flat sequence (no "Phase 11.0a.iii"
+sub-tree). When in doubt, just allocate the next number. The roadmap
+file (`~/.claude/plans/db-fuzzy-lerdorf.md`) keeps phases in narrative
+order; `Task.md` keeps the open / in-progress / resolved cuts.

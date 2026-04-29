@@ -64,8 +64,11 @@ weaknesses is more useful than 96/100 with silent drift.
 
 ## Current State Reference
 
-- `.claude/REPORT.md` — live system state, counts, known issues
-- `.claude/PROJECT.md` — schema + vocabularies + tool specs
+- `.claude/REPORT.md` — live per-source counts, canonical state, running processes
+- `.claude/PROJECT.md` — schema + vocabularies + tool specs + 5-stage architecture
+  + new-source runbook (§11) + phase-vs-stage distinction (§12)
 - `.claude/Task.md` — open/in-progress/resolved work + cross-agent handoffs
-- `~/.claude/plans/db-fuzzy-lerdorf.md` — full 7-phase architecture roadmap with
-  per-phase outcomes
+- `.claude/WORKFLOW.md` — 8 operational Cases (per-batch, per-source, per-upload)
+- `.claude/research/<source>-schema.md` — per-source recon for each crawled site
+- `~/.claude/plans/db-fuzzy-lerdorf.md` — multi-phase roadmap with per-phase
+  outcomes (Phases 0-11+; sequential, flat numbering)
