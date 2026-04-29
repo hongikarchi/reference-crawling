@@ -404,18 +404,40 @@ def build_all(*, strict: bool = False, output_path: Optional[str] = None) -> dic
         )
 
         if cb.divisare_id is not None:
-            # Full match: always keep
+            # Full match: cross-source confirmed → KEEP T1 always
             matched_count += 1
-            canonical_records.append(cb.to_dict())
-        elif cb.architect_canonical_ids:
-            # Arch-only: in strict mode, clean the name then filter
+            d = cb.to_dict()
             if strict:
+                d["confidence_tier"] = "T1"
+            canonical_records.append(d)
+        elif cb.architect_canonical_ids:
+            # Arch-only: in strict mode, clean the name then run reality_filter
+            if strict:
+                from canonical.reality_filter import reality_filter_with_default_l4
                 original = cb.name or ""
                 cleaned = _clean_building_name(original)
                 if cleaned != original and cleaned:
                     cb.set_field("name", cleaned, SOURCE_DERIVED)
-                drop, reason = _is_article_title(cleaned)
-                if drop:
+                # Build a transient dict mirroring what reality_filter expects
+                rf_input = cb.to_dict()
+                rf_input["name"] = cleaned
+                # Feed metalocus building_type / metalocus tags from the source
+                # 'b' (raw metalocus row) so L3 source-type signal can fire.
+                if b.get("building_type"):
+                    rf_input["building_type"] = b["building_type"]
+                if b.get("tags"):
+                    rf_input["tags"] = b["tags"]
+                if b.get("year"):
+                    rf_input["year"] = b["year"]
+                if b.get("location_country"):
+                    rf_input["country"] = b["location_country"]
+                decision, tier, reason = reality_filter_with_default_l4(
+                    rf_input,
+                    multi_source_confirmed=False,        # arch_only path
+                    architect_verified=True,             # has architect_canonical_ids
+                    l4_default="DROP",                   # conservative until Haiku wired
+                )
+                if decision == "DROP":
                     arch_only_dropped += 1
                     drop_reasons[reason] = drop_reasons.get(reason, 0) + 1
                     if len(dropped_examples) < 25:
@@ -427,8 +449,13 @@ def build_all(*, strict: bool = False, output_path: Optional[str] = None) -> dic
                             "program": cb.program,
                         })
                     continue
-            arch_only_kept += 1
-            canonical_records.append(cb.to_dict())
+                arch_only_kept += 1
+                d = cb.to_dict()
+                d["confidence_tier"] = tier
+                canonical_records.append(d)
+            else:
+                arch_only_kept += 1
+                canonical_records.append(cb.to_dict())
         else:
             # Pure orphan: drop in strict mode, keep otherwise
             if strict:

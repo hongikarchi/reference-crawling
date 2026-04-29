@@ -51,11 +51,17 @@ from typing import Optional, Literal
 # ---------------------------------------------------------------------------
 
 # L2a — negative patterns
+# Note: dropped "use/uses/open/opens/present/presents" from earlier list —
+# they collide with common architectural compound nouns:
+#   "Mixed-Use Building" (Use=adjective)
+#   "Open Box" / "Open Air Cinema" (Open=adjective)
+#   "Present-Day Pavilion" (Present=adjective)
+# Without those, the regex still catches the actual article-style verbs.
 _ARTICLE_VERB_RE = re.compile(
     r"\b(?:wins?|won|announces?|announced|reveals?|revealed|applies|applied|"
-    r"uses?|used|opens?|opened|presents?|presented|launches?|launched|"
-    r"unveil(?:s|ed)?|debuts?|debuted|nominates?|nominated|"
-    r"publishes?|published|exhibits?|exhibited|showcases?|showcased)\b",
+    r"launches?|launched|unveil(?:s|ed)?|debuts?|debuted|"
+    r"nominates?|nominated|publishes?|published|"
+    r"exhibits?|exhibited|showcases?|showcased)\b",
     re.IGNORECASE,
 )
 
@@ -75,20 +81,26 @@ _INTERVIEW_KEYWORDS_RE = re.compile(
 )
 
 # L2b — positive override (KEEP even if L2a negative pattern hits).
-# 40+ building nouns: explicit building / landscape / residential / F&B /
-# studio / cultural typology terms. If the name contains any of these as a
-# whole word, the row is almost certainly about a real architectural
-# project, not an article about an event.
+# 50+ building nouns: explicit building / landscape / residential / F&B /
+# studio / cultural typology terms + generic compound-noun stems
+# (Building, Development, Housing, Storage, Complex, Mixed-Use). If the
+# name contains any of these as a whole word, the row is almost certainly
+# about a real architectural project, not an article about an event.
 _BUILDING_NOUN_RE = re.compile(
+    # Generic stems (catch "Building", "Mixed-Use Building", "Storage",
+    # "Development" — common across firm-uploaded data)
+    r"\b(?:Building|Buildings|Development|Housing|Storage|Complex|"
+    r"Mixed-Use|"
     # Explicit building types
-    r"\b(?:Pavilion|Pavillon|House|Tower|Museum|Library|School|Hospital|"
+    r"Pavilion|Pavillon|House|Tower|Museum|Library|School|Hospital|"
     r"Stadium|Arena|Cathedral|Chapel|Bridge|Embassy|Mosque|Temple|Synagogue|"
     r"Office|Offices|Headquarters|Hall|Theater|Theatre|Gallery|Cinema|"
     r"Church|Residence|Center|Centre|Hotel|Hostel|Resort|"
     # Landscape architecture
     r"Plaza|Park|Garden|Memorial|Cemetery|Promenade|"
     # Residential
-    r"Apartment|Apartments|Loft|Condominium|Villa|Cabin|Cottage|Cottages|"
+    r"Apartment|Apartments|Loft|Condominium|Villa|Villas|"
+    r"Cabin|Cabins|Cottage|Cottages|"
     # Hospitality / F&B / wellness
     r"Restaurant|Cafe|Café|Bar|Spa|Sauna|"
     # Studio / workshop / industrial
@@ -96,7 +108,7 @@ _BUILDING_NOUN_RE = re.compile(
     # Educational extras
     r"University|Campus|Kindergarten|Nursery|"
     # Civic / cultural
-    r"Town\s*Hall|City\s*Hall|Library|Pavilion"
+    r"Town\s*Hall|City\s*Hall"
     r")\b",
     re.IGNORECASE,
 )
