@@ -329,6 +329,23 @@ def _build_one(b: dict, *, arch_map: dict, building_match: Optional[dict],
         # Divisare deep-fetch description (rare in lite mode but possible)
         cb.set_field("description", div_proj["description"], SOURCE_DIVISARE)
 
+    # ---- Phase 14b: description_per_source map (for concat enrich) ----
+    # Populated for every row where ≥1 source has a description; harness
+    # later reads this and passes the concatenation to text enrich.
+    desc_map: dict = {}
+    if b.get("description"):
+        desc_map["metalocus"] = b["description"]
+    if div_proj:
+        # Divisare: prefer the long description; fall back to abstract
+        if div_proj.get("description"):
+            desc_map["divisare"] = div_proj["description"]
+        elif div_proj.get("abstract"):
+            desc_map["divisare"] = div_proj["abstract"]
+    # Architizer / Archello will be added by Phase 9.5 when those DBs
+    # are wired into _build_one. For now, only the matched 2-source pair.
+    if desc_map:
+        cb.description_per_source = desc_map
+
     if b.get("visual_description"):
         cb.set_field("visual_description", b["visual_description"], SOURCE_METALOCUS)
 

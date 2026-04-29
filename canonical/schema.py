@@ -102,6 +102,14 @@ class CanonicalBuilding:
     #   T3 = Haiku-validated borderline
     #   None = pre-Phase-14a row OR non-strict build
     confidence_tier:           Optional[str]   = None
+
+    # Phase 14b — per-source description map for enrich concat.
+    # Keys: "metalocus" | "divisare" | "architizer" | "archello".
+    # Empty dict for pre-14b rows. Populated by canonical/build.py from
+    # whichever source DBs have a description field for the matched ID.
+    # The single-string `description` field above is still set (chosen
+    # source per source-priority) for backward compat.
+    description_per_source:    dict            = field(default_factory=dict)
     # Provenance shape:
     #   {"name": "divisare", "description": "metalocus", "program": "derived",
     #    "atmosphere": "metalocus", ...}

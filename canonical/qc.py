@@ -167,7 +167,8 @@ def check_field_coverage(records: list[dict]) -> CheckResult:
 _NON_PROVENANCE_FIELDS = {
     "divisare_id", "divisare_slug", "metalocus_building_id",
     "embedding", "vocab_version", "prompt_version", "provenance",
-    "confidence_tier",   # set by reality_filter, not a content field
+    "confidence_tier",         # set by reality_filter, not a content field
+    "description_per_source",  # Phase 14b: source-by-source raw map for enrich
 }
 
 
