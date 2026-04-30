@@ -154,7 +154,95 @@ def upload_to_r2(client, bucket: str, key: str, image_bytes: bytes,
 
 
 # ---------------------------------------------------------------------------
-# Combined: process one cover end-to-end
+# 5-type R2 key template (Phase 13/14 decision #2)
+# ---------------------------------------------------------------------------
+
+# Per-type R2 key template. {building_id}/{type}{ext} keeps the old single-
+# cover layout discoverable (existing rows used {building_id}/cover{ext})
+# while adding type-specific keys for the new 5-bucket scheme.
+_R2_KEY_BY_TYPE_TEMPLATE = "{building_id}/{img_type}{ext}"
+
+
+def process_covers_by_type(
+    *,
+    building_id: str,
+    covers_by_type_urls: dict[str, str],
+    r2_client,
+    r2_bucket: str,
+    public_url_base: Optional[str] = None,
+    skip_if_exists: bool = True,
+    existing_keys: Optional[set] = None,
+    compute_hash_for_primary: bool = True,
+    primary_type: str = "exterior",
+) -> dict:
+    """Upload up to 5 type-specific covers (Phase 13/14 decision #2).
+
+    Args:
+      covers_by_type_urls: {type: source_url, ...} — keys ⊆ IMAGE_TYPES.
+        Missing types are simply skipped (not all buildings have all types).
+      primary_type: which type's image gets the BlurHash computed (single
+        BlurHash per row → one for the swipe-card placeholder; default
+        'exterior' since make_web's default fallback is the source cover
+        and exterior is the dominant default).
+
+    Returns:
+      {
+        "covers_by_type_cdn": {type: r2_url, ...},  # for Neon JSONB column
+        "cover_blurhash":      str | None,
+        "errors":              {type: error_str, ...},  # per-type failures
+      }
+    """
+    cdn_by_type: dict[str, str] = {}
+    errors: dict[str, str] = {}
+    cover_blurhash: Optional[str] = None
+
+    for img_type, src_url in covers_by_type_urls.items():
+        if not src_url:
+            continue
+        ext_from_url = os.path.splitext(urlparse(src_url).path)[1].lower()
+        if ext_from_url not in _VALID_IMAGE_TYPES.values():
+            ext_from_url = ".jpg"
+        candidate_key = _R2_KEY_BY_TYPE_TEMPLATE.format(
+            building_id=building_id, img_type=img_type, ext=ext_from_url,
+        )
+        if skip_if_exists and existing_keys is not None and candidate_key in existing_keys:
+            cdn_by_type[img_type] = (f"{public_url_base.rstrip('/')}/{candidate_key}"
+                                      if public_url_base
+                                      else f"s3://{r2_bucket}/{candidate_key}")
+            continue
+        try:
+            image_bytes, ext = fetch_image_bytes(src_url)
+        except Exception as e:
+            errors[img_type] = f"fetch_failed: {type(e).__name__}: {e}"
+            continue
+        final_key = _R2_KEY_BY_TYPE_TEMPLATE.format(
+            building_id=building_id, img_type=img_type, ext=ext,
+        )
+        if compute_hash_for_primary and img_type == primary_type and cover_blurhash is None:
+            try:
+                cover_blurhash = compute_blurhash(image_bytes)
+            except RuntimeError as e:
+                print(f"  [process_covers_by_type] blurhash dep missing: {e}")
+        try:
+            content_type = next((ct for ct, e in _VALID_IMAGE_TYPES.items() if e == ext),
+                                "image/jpeg")
+            cdn_by_type[img_type] = upload_to_r2(
+                r2_client, r2_bucket, final_key, image_bytes,
+                content_type=content_type, public_url_base=public_url_base,
+            )
+        except Exception as e:
+            errors[img_type] = f"r2_upload_failed: {type(e).__name__}: {e}"
+
+    return {
+        "covers_by_type_cdn": cdn_by_type,
+        "cover_blurhash":     cover_blurhash,
+        "errors":             errors,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Combined: process one cover end-to-end (legacy single-cover — kept for
+# back-compat with the existing 3,465 production rows on architecture_vectors)
 # ---------------------------------------------------------------------------
 
 def process_one_cover(
