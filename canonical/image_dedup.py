@@ -93,6 +93,92 @@ def _classify_source(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Image-type classification (5 types): exterior / interior / drawing /
+# aerial / detail. See ~/.claude/plans/db-fuzzy-lerdorf.md Phase 13/14
+# decision #2 for rationale.
+# ---------------------------------------------------------------------------
+
+# Five image-type categories used to populate covers_by_type per canonical
+# row. make_web picks the displayed cover based on user intent (Task #19).
+IMAGE_TYPES = ("exterior", "interior", "drawing", "aerial", "detail")
+
+# Filename-keyword cascades. First matching cascade wins (drawing > aerial >
+# interior > detail > exterior fallback). Strings are compared in lowercase
+# against the filename + URL path + alt_text concatenation.
+_DRAWING_KEYWORDS = (
+    "plan", "section", "elevation", "axonometr", "diagram", "sketch",
+    "drawing", "constructive", "isometric",
+)
+_AERIAL_KEYWORDS  = ("aerial", "drone", "birdseye", "bird-eye", "topdown", "top-down", "rooftop")
+_INTERIOR_KEYWORDS = ("interior", "indoor", "lobby", "kitchen", "bedroom",
+                      "living", "bathroom", "hall", "atrium", "corridor")
+_DETAIL_KEYWORDS  = ("detail", "closeup", "close-up", "texture", "joint", "macro")
+
+
+def classify_image_type(
+    url: str,
+    *,
+    alt_text: Optional[str] = None,
+    kind_hint: Optional[str] = None,
+) -> tuple[str, str]:
+    """Filename-based 5-type classifier (no LLM).
+
+    Returns (type, confidence): type ∈ IMAGE_TYPES.
+    confidence ∈ {'high', 'low'}. 'low' means the heuristic defaulted to
+    'exterior' without a positive signal — caller may run a Vision pass
+    to refine.
+
+    kind_hint is the source-supplied broad bucket ('cover' / 'gallery' /
+    'drawing'). 'drawing' kind is treated as a high-confidence drawing.
+    """
+    # Strong source signal: metalocus already split drawings from photos
+    if kind_hint == "drawing":
+        return "drawing", "high"
+
+    # Combined search text (lowercased)
+    text = (url + " " + (alt_text or "")).lower()
+
+    for kw in _DRAWING_KEYWORDS:
+        if kw in text:
+            return "drawing", "high"
+    for kw in _AERIAL_KEYWORDS:
+        if kw in text:
+            return "aerial", "high"
+    for kw in _INTERIOR_KEYWORDS:
+        if kw in text:
+            return "interior", "high"
+    for kw in _DETAIL_KEYWORDS:
+        if kw in text:
+            return "detail", "high"
+    # Default — exterior is the dominant category for architecture photos.
+    # Mark as 'low' so a Vision pass can refine if cost-approved.
+    return "exterior", "low"
+
+
+def pick_per_type_covers(images: list[dict]) -> dict[str, dict]:
+    """Given the deduped image list (each dict has at minimum
+    {url, source, type, image_order, source_priority}), pick the single
+    best image per type. Tiebreak per Phase 13/14 decision #5:
+       (1) image_order ascending (cover_order=0 first)
+       (2) source priority (architizer > divisare > archello > metalocus)
+    Returns {type: image_dict} for types that have at least one image.
+    """
+    by_type: dict[str, list[dict]] = defaultdict(list)
+    for img in images:
+        t = img.get("type") or "exterior"
+        by_type[t].append(img)
+
+    out: dict[str, dict] = {}
+    for t, imgs in by_type.items():
+        ranked = sorted(imgs, key=lambda im: (
+            im.get("image_order", 999),                     # cover order=0 first
+            -SOURCE_PRIORITY.get(im.get("source"), 0),      # higher priority first
+        ))
+        out[t] = ranked[0]
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Per-row image enumeration
 # ---------------------------------------------------------------------------
 
