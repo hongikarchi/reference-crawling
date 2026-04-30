@@ -60,7 +60,9 @@ ALTER TABLE architecture_vectors
     ADD COLUMN IF NOT EXISTS gallery_image_urls       TEXT[],
     ADD COLUMN IF NOT EXISTS cover_blurhash           TEXT,
     -- Phase 14a
-    ADD COLUMN IF NOT EXISTS confidence_tier          TEXT;
+    ADD COLUMN IF NOT EXISTS confidence_tier          TEXT,
+    -- Phase 13/14 decision #2 — 5 image-type buckets
+    ADD COLUMN IF NOT EXISTS covers_by_type           JSONB;
 """
 
 
@@ -76,7 +78,7 @@ INSERT INTO architecture_vectors (
     architect_canonical_ids, divisare_tags, divisare_credits,
     cover_image_url_divisare, divisare_gallery_urls,
     cover_image_cdn_url, gallery_image_urls, cover_blurhash,
-    confidence_tier,
+    confidence_tier, covers_by_type,
     provenance, embedding
 ) VALUES (
     %(building_id)s, %(slug)s, %(name_en)s, %(project_name)s, %(architect)s,
@@ -89,7 +91,7 @@ INSERT INTO architecture_vectors (
     %(architect_canonical_ids)s, %(divisare_tags)s, %(divisare_credits)s,
     %(cover_image_url_divisare)s, %(divisare_gallery_urls)s,
     %(cover_image_cdn_url)s, %(gallery_image_urls)s, %(cover_blurhash)s,
-    %(confidence_tier)s,
+    %(confidence_tier)s, %(covers_by_type)s,
     %(provenance)s, %(embedding)s
 )
 ON CONFLICT (building_id) DO UPDATE SET
@@ -128,6 +130,7 @@ ON CONFLICT (building_id) DO UPDATE SET
     gallery_image_urls       = EXCLUDED.gallery_image_urls,
     cover_blurhash           = EXCLUDED.cover_blurhash,
     confidence_tier          = EXCLUDED.confidence_tier,
+    covers_by_type           = EXCLUDED.covers_by_type,
     provenance               = EXCLUDED.provenance,
     embedding                = EXCLUDED.embedding;
 """
@@ -232,6 +235,11 @@ def _prepare_row(c: dict, metaloc_idx: dict) -> Optional[dict]:
         "cover_blurhash":           c.get("cover_blurhash"),
         # Phase 14a — confidence tier from reality_filter
         "confidence_tier":          c.get("confidence_tier"),
+        # Phase 13/14 decision #2 — covers_by_type {exterior, interior, drawing,
+        # aerial, detail}. Each value is the R2 CDN URL (or source URL for
+        # types whose cover wasn't uploaded). make_web picks per user intent.
+        "covers_by_type":           json.dumps(c.get("covers_by_type"))
+                                    if c.get("covers_by_type") else None,
         "provenance":               provenance,
         "embedding":          embedding_str,
     }
