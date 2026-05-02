@@ -41,6 +41,15 @@ TIEBREAK_OUTPUT  = "data/canonical/architect_tiebreak_pairs.json"
 
 SOURCE_PRIORITY = {"architizer": 0, "divisare": 1, "archello": 2, "metalocus": 3}
 
+# Per advisor (after Plan B v1 found Star false-merges via 95-98 sim chains):
+# Only sim ≥ 99 OR exact name_core matches escalate to graph union.
+# Lower sim auto-accepts (95-98) demote to tiebreak queue.
+STRICT_UNION_SIM = 99.0
+
+# Component-size cap as safety net. Real prolific architecture firms
+# cluster at 4-8 across 4 sources; anything > 10 is suspect.
+MAX_COMPONENT_SIZE = 10
+
 
 def _load_metalocus_clusters() -> list[dict]:
     with open(METALOCUS_CLUSTERS) as f:
@@ -102,8 +111,12 @@ def build_canonical_clusters(
             item_index[src][item["id"]] = len(nodes)
             nodes.append({**item, "_global_idx": len(nodes)})
 
-    # Collect auto-accept edges and tiebreak pairs across all 6 pairs
+    # Collect auto-accept edges and tiebreak pairs across all 6 pairs.
+    # Apply STRICT_UNION_SIM: edges with sim < 99 AND non-exact name_core
+    # are demoted to tiebreak queue (avoids 95-98 sim chains creating
+    # false-merge stars like the Bofill/Foster v1 result).
     auto_edges: list[tuple[int, int, float, str]] = []
+    demoted_count = 0
     tiebreak_pairs: list[dict] = []
     for (a, b), payload in pair_results.items():
         for m in payload["matches"]:
@@ -113,7 +126,23 @@ def build_canonical_clusters(
                 bi = item_index[b].get(m[f"{b}_id"])
                 if ai is None or bi is None:
                     continue
-                auto_edges.append((ai, bi, m["name_sim"], verdict))
+                a_obj = nodes[ai]
+                b_obj = nodes[bi]
+                exact_core = (a_obj["name_core"] != "" and
+                              a_obj["name_core"] == b_obj["name_core"])
+                if m["name_sim"] >= STRICT_UNION_SIM or exact_core:
+                    auto_edges.append((ai, bi, m["name_sim"], verdict))
+                else:
+                    # Demote: keep edge for Haiku review but don't union
+                    tiebreak_pairs.append({
+                        "a_idx": ai, "b_idx": bi,
+                        "source_a": a, "name_a": m[f"{a}_name"],
+                        "source_b": b, "name_b": m[f"{b}_name"],
+                        "sim": m["name_sim"],
+                        "country_match": m["country_match"],
+                        "_demoted_from": verdict,
+                    })
+                    demoted_count += 1
             elif verdict == "needs_tiebreak":
                 top = m.get("top_candidate")
                 if not top:
@@ -129,9 +158,11 @@ def build_canonical_clusters(
                     "country_match": m["country_match"],
                 })
 
-    print(f"\nAuto-accept edges (6 pairs combined): {len(auto_edges)}",
+    print(f"\nAuto-accept edges (sim≥99 OR exact-core): {len(auto_edges)}",
           flush=True)
-    print(f"Tiebreak pairs (advisory queue):       {len(tiebreak_pairs)}",
+    print(f"Demoted from auto (sim 95-98, non-exact): {demoted_count}",
+          flush=True)
+    print(f"Tiebreak pairs (Haiku queue, total):       {len(tiebreak_pairs)}",
           flush=True)
 
     # Connected components on auto-accept edges only
@@ -151,10 +182,66 @@ def build_canonical_clusters(
     for ai, bi, _sim, _verdict in auto_edges:
         union(ai, bi)
 
-    components: dict[int, list[int]] = defaultdict(list)
+    raw_components: dict[int, list[int]] = defaultdict(list)
     for i in range(len(nodes)):
-        components[find(i)].append(i)
-    print(f"Connected components: {len(components)}", flush=True)
+        raw_components[find(i)].append(i)
+    print(f"Raw components: {len(raw_components)}", flush=True)
+
+    # Cap oversize components: split → singletons, demote their edges to tiebreak
+    member_to_comp: dict[int, int] = {}
+    for ci, members in enumerate(raw_components.values()):
+        for m in members:
+            member_to_comp[m] = ci
+    raw_comp_list = list(raw_components.values())
+    oversize_ci = {ci for ci, members in enumerate(raw_comp_list)
+                   if len(members) > MAX_COMPONENT_SIZE}
+    if oversize_ci:
+        print(f"  oversize-cap (>{MAX_COMPONENT_SIZE}): "
+              f"splitting {len(oversize_ci)} components "
+              f"({sum(len(raw_comp_list[ci]) for ci in oversize_ci)} members → singletons)",
+              flush=True)
+        new_auto_edges: list = []
+        demoted_oversize = 0
+        preserved_in_oversize = 0
+        for ai, bi, sim, verdict in auto_edges:
+            if member_to_comp[ai] in oversize_ci or member_to_comp[bi] in oversize_ci:
+                a_obj, b_obj = nodes[ai], nodes[bi]
+                # Per advisor v3: preserve identical-name edges inside oversize
+                # components (Foster ↔ Foster, sim=100) so the real cluster
+                # survives even when surrounded by chain-induced false members.
+                same_name = (a_obj["name"].strip().lower()
+                             == b_obj["name"].strip().lower()
+                             and a_obj["name"].strip())
+                if same_name and sim >= 99.0:
+                    new_auto_edges.append((ai, bi, sim, verdict))
+                    preserved_in_oversize += 1
+                else:
+                    tiebreak_pairs.append({
+                        "a_idx": ai, "b_idx": bi,
+                        "source_a": a_obj["source"], "name_a": a_obj["name"],
+                        "source_b": b_obj["source"], "name_b": b_obj["name"],
+                        "sim": sim,
+                        "country_match": False,
+                        "_demoted_from": "oversize_cap",
+                    })
+                    demoted_oversize += 1
+            else:
+                new_auto_edges.append((ai, bi, sim, verdict))
+        print(f"  edges re-routed to tiebreak: {demoted_oversize}", flush=True)
+        print(f"  edges preserved (same-name in oversize): {preserved_in_oversize}",
+              flush=True)
+        # Re-build components after dropping oversize edges
+        parent = list(range(len(nodes)))
+        for ai, bi, _sim, _v in new_auto_edges:
+            union(ai, bi)
+        final_components: dict[int, list[int]] = defaultdict(list)
+        for i in range(len(nodes)):
+            final_components[find(i)].append(i)
+        components = final_components
+    else:
+        components = raw_components
+
+    print(f"Final components: {len(components)}", flush=True)
 
     multi_source = sum(1 for members in components.values()
                        if len({nodes[m]["source"] for m in members}) >= 2)
