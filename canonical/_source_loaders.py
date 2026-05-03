@@ -94,6 +94,10 @@ def load_divisare() -> Iterator[dict]:
 
 
 def load_architizer() -> Iterator[dict]:
+    """Yields architects from architizer_firms (sitemap master) PLUS any
+    firm_slugs found in architizer_projects that are missing from the firms
+    table (post-sitemap project crawl picks up new firms not on the original
+    /firms/ index)."""
     conn = sqlite3.connect(ARCHITIZER_DB)
     conn.row_factory = sqlite3.Row
     # Backfill: firm-level country = mode of project countries
@@ -110,6 +114,7 @@ def load_architizer() -> Iterator[dict]:
     ):
         backfill[row[0]] = row[1]
 
+    seen_slugs: set[str] = set()
     rows = conn.execute(
         "SELECT slug, name, office_locations, project_count_seen "
         "FROM architizer_firms WHERE name IS NOT NULL AND name != ''"
@@ -127,6 +132,7 @@ def load_architizer() -> Iterator[dict]:
             pass
         if not country:
             country = _clean_country(backfill.get(r["slug"]))
+        seen_slugs.add(r["slug"])
         yield {
             "name":          r["name"],
             "source":        "architizer",
@@ -134,25 +140,74 @@ def load_architizer() -> Iterator[dict]:
             "country":       country,
             "project_count": r["project_count_seen"],
         }
+
+    # Firms discovered through projects but absent from the firms table.
+    # firm_name + most-common project country + project count provide the
+    # same shape; tiebreak handles dup detection against existing canonicals.
+    extra = conn.execute(
+        "SELECT firm_slug, MAX(firm_name) AS firm_name, "
+        "       COUNT(*) AS pcount, MAX(location_country) AS country "
+        "FROM architizer_projects "
+        "WHERE firm_slug IS NOT NULL AND firm_slug != '' "
+        "  AND firm_name IS NOT NULL AND firm_name != '' "
+        "GROUP BY firm_slug"
+    ).fetchall()
+    for r in extra:
+        if r["firm_slug"] in seen_slugs:
+            continue
+        yield {
+            "name":          r["firm_name"],
+            "source":        "architizer",
+            "source_id":     r["firm_slug"],
+            "country":       _clean_country(backfill.get(r["firm_slug"]) or r["country"]),
+            "project_count": r["pcount"],
+        }
     conn.close()
 
 
 def load_archello() -> Iterator[dict]:
+    """Yields architects from archello_firms (sitemap master) PLUS any
+    architect_brand_ids found in archello_projects that are missing from
+    the firms table (post-sitemap project crawl picks up many small firms
+    not on the original /brands/architects/ index)."""
     conn = sqlite3.connect(ARCHELLO_DB)
     conn.row_factory = sqlite3.Row
+
+    seen_ids: set[str] = set()
     rows = conn.execute(
         "SELECT slug, brand_id, name, location_country, project_count_archello "
         "FROM archello_firms WHERE name IS NOT NULL AND name != ''"
     ).fetchall()
     for r in rows:
-        # Prefer brand_id (numeric, more stable) when present, else slug
         sid = str(r["brand_id"]) if r["brand_id"] else r["slug"]
+        seen_ids.add(sid)
         yield {
             "name":          r["name"],
             "source":        "archello",
             "source_id":     sid,
             "country":       _clean_country(r["location_country"]),
             "project_count": r["project_count_archello"],
+        }
+
+    # Brand-IDs discovered through projects but absent from the firms table.
+    extra = conn.execute(
+        "SELECT architect_brand_id, MAX(architect_name) AS name, "
+        "       COUNT(*) AS pcount, MAX(location_country) AS country "
+        "FROM archello_projects "
+        "WHERE architect_brand_id IS NOT NULL "
+        "  AND architect_name IS NOT NULL AND architect_name != '' "
+        "GROUP BY architect_brand_id"
+    ).fetchall()
+    for r in extra:
+        sid = str(r["architect_brand_id"])
+        if sid in seen_ids:
+            continue
+        yield {
+            "name":          r["name"],
+            "source":        "archello",
+            "source_id":     sid,
+            "country":       _clean_country(r["country"]),
+            "project_count": r["pcount"],
         }
     conn.close()
 
