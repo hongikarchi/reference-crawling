@@ -1,6 +1,39 @@
 # make_db — Current State Report
 
-*Updated: 2026-04-29*
+*Updated: 2026-05-05*
+
+---
+
+## 0. Pipeline state — Stage A → B → F complete
+
+**Final canonical artifact**:
+  `data/canonical/canonical_buildings_4source.json`
+  146,432 unified building records across 4 sources
+
+| Stage | What | Output | Commit |
+|---|---|---|---|
+| **A** | 4-source architect matching | 39,423 canonical architects (6,640 multi-source, 172 four-source) | `0507bdc` → `dbb07c8` |
+| **B** | 4-source building matching (Pass 1+2 + tiebreak + Hybrid feedback) | 146,432 canonical buildings (10,583 multi-source, 6 four-source) | `8576f46` |
+| **F** | 4-source assembly | unified records with all source URLs preserved | `2f6ac56` |
+| handoff doc | make_web schema, image policy, confidence tiers | `.claude/MAKE_WEB_HANDOFF.md` | `f3f12fe` |
+
+**Field coverage in canonical_buildings_4source.json**:
+  arch_id 95.9% / country 95.7% / city 90.8% / year 85.0% / typology 99.7%
+  cover URLs: 28,620 div + 9,826 arz + 115,689 arc + 3,127 met = 157,262
+
+**Quality safeguards enforced**:
+- Conservative bias: TYPE_C ambiguous → DIFFERENT default in Sonnet tiebreak
+- name_sim ≥ 75 gate on Hybrid feedback (filtered 178 collab/supplier
+  false-merges like Barovier&Toso ↔ L&L Luce&Light)
+- registry safety: skip pairs whose source_id is already attached to any
+  canonical (no source-id move between canonicals)
+
+**Remaining stages (out-of-scope this session)**:
+- Stage D: text + image enrichment (LLM heavy, ~$30-50)
+- Stage E: phash image dedup (network-heavy, ~hours)
+- Stage G: Neon upload (manual gate, requires user approval)
+
+---
 
 > **Reading order**: this doc tells you "what data we currently have +
 > what's running right now." For "how the pipeline is structured" see
