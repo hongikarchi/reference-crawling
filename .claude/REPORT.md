@@ -27,13 +27,21 @@
   false-merges like Barovier&Toso ↔ L&L Luce&Light)
 - registry safety: skip pairs whose source_id is already attached to any
   canonical (no source-id move between canonicals)
-- Post-fix splits (commit `544cdae`):
+- Post-fix splits (commit `544cdae` + 2026-05-05 follow-up):
   - 61 generic-name + multi-city false-merges split (e.g., 15 different
     "Private Residence" buildings across USA/Lebanon/Russia/Taiwan/UK)
   - 94 code-diff series false-merges split (e.g., Serpentine Pavilion
     2015/2016/2017/2018 were one cluster — split into 4)
+  - +33 short-prefix false-merges split (PK/FT/RF Apartment etc — 2-letter
+    client codes wrongly merged because outer "Apartment" word matched)
+  - +1 architect placeholder split: arch_025729 "ARCHITECTS OFFICE -
+    Architizer" was 16 different firms wrongly merged via shared generic
+    name → split into 16 individual canonicals with their actual firm names
+  - **Total false-merge fixes: 188 building clusters + 1 architect cluster**
 - Spot-check (post-fix): ~13% suspect rate, mostly borderline (Innhouse vs
   Innhouse Kunming type), no egregious false-merges remain
+- Final building count: **146,524** active canonicals (10,127 + 385 + 6
+  multi-source = 10,518)
 
 **Known gaps (NOT addressed this session)**:
 - 3,913 metalocus buildings crawled but not in 4_buildings_final.json
