@@ -219,21 +219,27 @@ def _parse_year(v) -> Optional[int]:
     return None
 
 
-def _arch_lookup_for_building(
-    cid: str, registry: BuildingRegistry, arch_reg: ArchitectRegistry,
-    bld_to_native_arch: dict,
-) -> list[str]:
-    """Get all canonical_arch_ids for a building canonical via its source members."""
-    entry = registry.data.get(cid, {})
-    arch_canonicals: set[str] = set()
-    arch_src_idx: dict[tuple, str] = {}
+def _build_arch_src_idx(arch_reg: ArchitectRegistry) -> dict[tuple, str]:
+    """Pre-build (source, native_arch_id) → canonical_arch_id index. ONCE."""
+    idx: dict[tuple, str] = {}
     for arch_cid, ae in arch_reg.data.items():
         if ae.get("redirected_to"):
             continue
         for src, ids in ae.get("source_refs", {}).items():
             for sid in ids:
-                arch_src_idx[(src, str(sid))] = arch_cid
+                idx[(src, str(sid))] = arch_cid
+    return idx
 
+
+def _arch_lookup_for_building(
+    cid: str, registry: BuildingRegistry, arch_reg: ArchitectRegistry,
+    bld_to_native_arch: dict, arch_src_idx: dict,
+) -> list[str]:
+    """Get all canonical_arch_ids for a building canonical via its source members.
+    arch_src_idx must be pre-built once via _build_arch_src_idx (don't rebuild
+    per call — that's O(N_arch × N_buildings) = blow-up)."""
+    entry = registry.data.get(cid, {})
+    arch_canonicals: set[str] = set()
     for src, ids in entry.get("source_refs", {}).items():
         for sid in ids:
             for native_arch_id in bld_to_native_arch.get((src, str(sid)), []):
@@ -297,6 +303,10 @@ def main() -> int:
     bld_to_native_arch = _load_building_to_native_arch()
     print(f"  {len(bld_to_native_arch)} mappings", flush=True)
 
+    print("building arch_src_idx (once) …", flush=True)
+    arch_src_idx = _build_arch_src_idx(arch_reg)
+    print(f"  {len(arch_src_idx)} (source, sid) keys", flush=True)
+
     print("\nassembling 4-source canonical records …", flush=True)
     out: list[dict] = []
     n = 0
@@ -331,7 +341,7 @@ def main() -> int:
             gallery_by_source[src] = d.get("gallery_urls") or []
 
         canonical_arch_ids = _arch_lookup_for_building(
-            cid, bld_reg, arch_reg, bld_to_native_arch
+            cid, bld_reg, arch_reg, bld_to_native_arch, arch_src_idx
         )
 
         out.append({
