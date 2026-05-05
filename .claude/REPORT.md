@@ -1,10 +1,51 @@
 # make_db — Current State Report
 
-*Updated: 2026-05-05*
+*Updated: 2026-05-05 (post-redesign)*
 
 ---
 
-## 0. Pipeline state — Stage A → B → F complete
+## 0. Pipeline state — Stage A → B (redesigned) → F complete
+
+**Final canonical artifact**:
+  `data/canonical/canonical_buildings_4source.json`
+  **38,553** unified building records (div+arc base + met/arc enrichment)
+
+**Architectural redesign (2026-05-05, user-driven)**:
+  Old design merged all 4 sources equally → 146K canonical, but archello's
+  poor data quality (1,365 multi-listing canonicals + supplier brands as
+  architects + placeholder image URLs) caused systemic false-merges.
+  New design uses divisare + architizer as base (clean 1-source-id-per-
+  building), with metalocus + archello as MATCH-OR-DROP enrichment.
+  Result: 146K → 38K canonicals, but data integrity dramatically improved.
+
+| Phase | Action | Result |
+|---|---|---|
+| 1 | Divisare base | 28,903 canonicals |
+| 2 | Architizer match-or-create | 38,295 canonicals (+9,392 arc-only) |
+| 3 | Metalocus MATCH-OR-DROP | 804 matched, 2,661 dropped |
+| 4 | Archello MATCH-OR-DROP | 12,853 matched, 114K dropped |
+| Tiebreak | 6,106 pairs (rule + Sonnet) | 2,826 SAME merges |
+| Multi-arch split | ≥3 architects = false-merge | 42 clusters split |
+| Demote no-base | met/arc-only orphans removed | 2,500 demoted |
+
+**Final breakdown**:
+- 1-source: 28,379
+- 2-source: 9,783
+- 3-source: 385
+- 4-source: 6
+- Multi-source total: **10,174**
+
+| Stage | What | Output | Commit |
+|---|---|---|---|
+| **A** | 4-source architect matching | 39,438 canonical architects (6,640 multi-source) | `0507bdc` → `dbb07c8` |
+| **B (redesigned)** | div+arc base + met/arc match-or-drop | 38,553 canonical buildings | (pending commit) |
+| **F** | 4-source assembly | unified records with all source URLs preserved | `2f6ac56` |
+
+(Old 146K canonical info below kept for history.)
+
+---
+
+## OLD STATE (pre-redesign, 146K canonical) — for reference
 
 **Final canonical artifact**:
   `data/canonical/canonical_buildings_4source.json`

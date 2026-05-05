@@ -459,30 +459,35 @@ def main() -> int:
     n1 = phase_1_divisare(registry, pool)
     print(f"phase 1 done: {n1}; registry: {registry.stats()}", flush=True)
 
-    print("\n--- Phase 2: Architizer ---", flush=True)
+    print("\n--- Phase 2: Architizer (allow_new) ---", flush=True)
     counts = phase_match_against_pool(
         registry, pool, load_architizer(_arch_idx),
         label="architizer", allow_new=True, tiebreak_queue=tiebreak_queue,
     )
     print(f"phase 2 done: {counts}; registry: {registry.stats()}", flush=True)
 
-    print("\n--- Phase 3: Archello ---", flush=True)
+    # NEW DESIGN (2026-05-05): Metalocus + Archello are MATCH-OR-DROP only.
+    # Rationale: divisare + architizer have clean 1-source-id-per-building
+    # data. Metalocus + Archello have known data-quality issues (multi-listing,
+    # supplier-as-architect). Treat them as enrichment, not as new canonicals.
+
+    print("\n--- Phase 3: Metalocus (match-or-drop) ---", flush=True)
     counts = phase_match_against_pool(
-        registry, pool, load_archello(_arch_idx),
-        label="archello", allow_new=True, tiebreak_queue=tiebreak_queue,
+        registry, pool, load_metalocus(_arch_idx),
+        label="metalocus", allow_new=False, tiebreak_queue=tiebreak_queue,
     )
     print(f"phase 3 done: {counts}; registry: {registry.stats()}", flush=True)
 
-    print("\n--- Phase 4: Metalocus ---", flush=True)
+    print("\n--- Phase 4: Archello (match-or-drop) ---", flush=True)
     counts = phase_match_against_pool(
-        registry, pool, load_metalocus(_arch_idx),
-        label="metalocus", allow_new=True, tiebreak_queue=tiebreak_queue,
+        registry, pool, load_archello(_arch_idx),
+        label="archello", allow_new=False, tiebreak_queue=tiebreak_queue,
     )
     print(f"phase 4 done: {counts}; registry: {registry.stats()}", flush=True)
 
-    print(f"\n=== PASS 2 (orphan rescue) ===", flush=True)
-    p2 = pass_2_orphan_rescue(registry, pool, tiebreak_queue)
-    print(f"pass 2 done: {p2}; registry: {registry.stats()}", flush=True)
+    # No Pass 2 in new design — div+arc base is already authoritative,
+    # no orphan rescue needed since archello/metalocus orphans were dropped
+    # rather than created.
 
     registry.save()
     print(f"\n✓ registry saved → {registry.path}", flush=True)
