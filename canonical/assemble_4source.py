@@ -168,23 +168,36 @@ def _load_source_data() -> dict[tuple, dict]:
         }
     conn.close()
 
-    # Metalocus (from 4_buildings_final.json)
+    # Metalocus — join 4_buildings_final.json with metalocus DB (which has real
+    # web URLs cover_image_url + gallery_image_urls per Phase 11). The legacy
+    # 4_buildings_final 'images' field has LOCAL file paths that don't exist
+    # on disk — we must use DB URLs instead.
+    metaloc_conn = sqlite3.connect("data/crawl/metalocus.db")
+    metaloc_conn.row_factory = sqlite3.Row
+    # Build slug → (cover_url, gallery_urls) lookup
+    slug_to_url: dict[str, dict] = {}
+    for r in metaloc_conn.execute(
+        "SELECT a.slug, b.cover_image_url, b.gallery_image_urls "
+        "FROM buildings b JOIN articles a ON b.article_id = a.id "
+        "WHERE b.cover_image_url IS NOT NULL"
+    ):
+        try:
+            gallery = json.loads(r["gallery_image_urls"]) if r["gallery_image_urls"] else []
+        except (json.JSONDecodeError, TypeError):
+            gallery = []
+        slug_to_url[r["slug"]] = {"cover": r["cover_image_url"], "gallery": gallery}
+    metaloc_conn.close()
+
     final = json.load(open(METALOCUS_FINAL))
     for b in final:
         bid = b.get("building_id")
         if not bid:
             continue
-        # Cover URL: prefer cover_image_url field, else first uploaded image local path
-        cover = b.get("cover_image_url")
-        if not cover:
-            for img in (b.get("images") or []):
-                if img.get("order") == 0 and img.get("upload"):
-                    cover = f"images/{bid}/{img['filename']}"
-                    break
-        gallery = []
-        for img in (b.get("images") or []):
-            if img.get("upload"):
-                gallery.append(f"images/{bid}/{img['filename']}")
+        # Try DB URL via slug (most reliable; web-fetchable)
+        slug = b.get("slug")
+        url_info = slug_to_url.get(slug, {})
+        cover = url_info.get("cover")
+        gallery = url_info.get("gallery", []) or []
         out[("metalocus", str(bid))] = {
             "name":         b.get("name_en") or b.get("project_name") or "",
             "country":      b.get("location_country"),
