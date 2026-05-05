@@ -38,6 +38,17 @@
     Architizer" was 16 different firms wrongly merged via shared generic
     name → split into 16 individual canonicals with their actual firm names
   - **Total false-merge fixes: 188 building clusters + 1 architect cluster**
+- **2026-05-05 user-flagged 3rd round** (44 multi-arch splits):
+  - User spot-check found "Private Residence Philadelphia" (5 archs),
+    "Single-family home in Rodersdorf" (5 archs), "Forest House
+    Oostvoorne" (4 archs) STILL merged because previous detector required
+    "ALL tokens generic" — but city/proper-noun tokens disqualified them.
+  - Stronger detector: any building canonical with ≥3 distinct
+    canonical_arch_ids + ≥3 source members = false-merge (real collabs
+    are typically 1-2 architects).
+  - 44 clusters split → 203 new orphans. Top 6-arch / 5-arch / 4-arch
+    clusters all eliminated. Post-fix: 0 clusters remain with ≥3 archs.
+  - **Cumulative split count: 232 building clusters + 1 architect cluster**
 - Spot-check (post-fix): ~13% suspect rate, mostly borderline (Innhouse vs
   Innhouse Kunming type), no egregious false-merges remain
 - Final building count: **146,524** active canonicals (10,127 + 385 + 6
