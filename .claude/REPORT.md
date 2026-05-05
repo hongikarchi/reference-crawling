@@ -27,6 +27,21 @@
   false-merges like Barovier&Toso ↔ L&L Luce&Light)
 - registry safety: skip pairs whose source_id is already attached to any
   canonical (no source-id move between canonicals)
+- Post-fix splits (commit `544cdae`):
+  - 61 generic-name + multi-city false-merges split (e.g., 15 different
+    "Private Residence" buildings across USA/Lebanon/Russia/Taiwan/UK)
+  - 94 code-diff series false-merges split (e.g., Serpentine Pavilion
+    2015/2016/2017/2018 were one cluster — split into 4)
+- Spot-check (post-fix): ~13% suspect rate, mostly borderline (Innhouse vs
+  Innhouse Kunming type), no egregious false-merges remain
+
+**Known gaps (NOT addressed this session)**:
+- 3,913 metalocus buildings crawled but not in 4_buildings_final.json
+  (Phase 11 enrichment pending) — excluded from Stage B; future work
+- Bilbao Guggenheim, Lotus Temple, Apple Cupertino NOT FOUND in any
+  source (data gap, not a matching error)
+- Some borderline same-firm-same-city series may still be mis-merged
+  (~5-10% remaining) — Stage D enrichment can verify per-canonical
 
 **Remaining stages (out-of-scope this session)**:
 - Stage D: text + image enrichment (LLM heavy, ~$30-50)
