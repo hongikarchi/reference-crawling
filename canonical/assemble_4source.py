@@ -71,6 +71,9 @@ GENERIC_NAME_TOKENS = {
     "untitled", "private", "residence",
 }
 
+# Architizer's facebook OG fallback when no real image exists
+ARCHITIZER_PLACEHOLDER_PATTERN = "facebook-default-thumb"
+
 # Source priority for field-pick (highest-quality metadata first)
 SOURCE_PRIORITY = ["divisare", "architizer", "archello", "metalocus"]
 
@@ -123,13 +126,21 @@ def _load_source_data() -> dict[tuple, dict]:
             gallery = json.loads(r["gallery_image_urls"]) if r["gallery_image_urls"] else []
         except (json.JSONDecodeError, TypeError):
             gallery = []
+        # Drop architizer's facebook OG placeholder — those projects have no
+        # real images. Single-source canonicals with only this URL get None
+        # cover; multi-source can fall back to other sources' cover.
+        cover = r["cover_image_url"]
+        if cover and ARCHITIZER_PLACEHOLDER_PATTERN in cover:
+            cover = None
+        gallery = [g for g in gallery
+                   if not (g and ARCHITIZER_PLACEHOLDER_PATTERN in g)]
         out[("architizer", str(r["id"]))] = {
             "name":         r["name"],
             "country":      r["location_country"],
             "city":         r["location_city"],
             "year":         r["completion_year"],
             "typology":     cats[0] if cats else None,
-            "cover_url":    r["cover_image_url"],
+            "cover_url":    cover,
             "gallery_urls": gallery,
         }
     conn.close()
