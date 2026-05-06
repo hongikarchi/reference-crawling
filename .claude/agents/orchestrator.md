@@ -114,18 +114,28 @@ Anything that costs LLM tokens runs on Codex by default — see
 RECOGNIZE which work falls into that bucket and dispatch it accordingly:
 
 - "Write/fix code" → always `dispatch.sh <team>` (codex)
-- "Review the just-landed change" → dispatch.sh to the team OR to
-  reviewer; prefer the team's `codex review` for static checks, save
-  DB-REVIEWER (claude) for semantic spot-checks
-- "Run a long Python script" → dispatch.sh to the team; if codex
-  sandbox blocks (e.g. `nice() failed: operation not permitted`), fall
-  back to DB-MAIN `nohup` BUT note the escalation in Handoffs and try
-  `codex --sandbox danger-full-access` next time
+- "Review a just-landed change" → **split** into two dispatches when
+  the review has both static and semantic parts:
+  ```
+  ./tools/dispatch.sh <team>     "Static review of <sha>: pytest, scope, schema. Emit REVIEWER-STATIC-PASS/BLOCK."
+  ./tools/dispatch.sh reviewer   "Semantic spot-check of <artefact>: 10 random rows, judge X. Emit REVIEWER-PASS/BLOCK."
+  ```
+  Reviewer (claude) waits for STATIC-PASS before starting semantic work.
+- "Run a long Python script" (>5 min — phash cache, matcher, embedding
+  job): **launch from DB-MAIN nohup directly.** Codex sandbox blocks
+  `nohup nice()` — proven twice on Phase 15 (phash builder, Stage B
+  matcher). The codex tab still owns the runner's CODE; only the
+  launch happens here. Document in Handoffs as
+  `<TEAM>-DONE: <runner>_running v<n> (PID=<pid>, DB-MAIN nohup, ETA <est>)`.
+- "Codex got stuck mid-commit" → use `./tools/safe_commit.sh "<subject>"`
+  to land staged changes from DB-MAIN. Note the failure mode in
+  Handoffs (`commit fallback used: <reason>`).
 
 When you find yourself reaching for the Bash tool to run something that
 isn't a routing/observation command (`./tools/dispatch.sh`,
-`./tools/poll.sh`, `tail -20 .claude/Task.md`, `git status/log/commit`),
-stop and ask: should this be a dispatch instead?
+`./tools/poll.sh`, `./tools/safe_commit.sh`, `tail -20 .claude/Task.md`,
+`git status/log/commit`, `nohup ... &` for long ops), stop and ask:
+should this be a dispatch instead?
 
 ## What you do NOT do
 

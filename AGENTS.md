@@ -31,6 +31,45 @@ When in doubt: ask "does this task call an LLM API?" If yes → codex.
 If no → either, and codex is still preferred for the visibility / log
 trail it leaves in your tab.
 
+### Long-running OS operations: skip the codex sandbox attempt
+
+Empirically, codex's default sandbox refuses `nohup` (the syscall
+`nice() failed: operation not permitted`) and refuses tools that fork
+into the background. Two confirmed escalations on Phase 15: phash
+cache build, Stage B matcher run.
+
+**Pattern**: when DB-MAIN dispatches a long-running OS operation (a
+process expected to live more than 5 minutes — phash cache build,
+matcher run, embedding job, mass image fetch), DO NOT ask the codex
+team to launch it via `nohup`. Launch it from DB-MAIN directly:
+
+```bash
+nohup python3 -m canonical.<runner> --flags > logs/<name>.log 2>&1 &
+echo $! > /tmp/<runner>_pid.txt
+```
+
+The codex tab still owns the **code** behind the runner; only the
+launch leaves codex's sandbox. Document the launch in Handoffs as
+`<TEAM>-DONE: <runner>_running v<n> (PID=<pid>, DB-MAIN nohup, ETA
+<estimate>)` so the team's logs reflect what's actually executing.
+
+### When codex can't finish a commit
+
+Codex sometimes fails mid-commit (`git apply --cached` patch
+corruption, auto-reviewer hang in a long approval loop). When this
+happens, the staged changes are still on disk. DB-MAIN has a fallback:
+
+```bash
+./tools/safe_commit.sh "<commit subject>" "body line 1" "body line 2" ...
+```
+
+`safe_commit.sh` refuses suspicious paths (`.env`, `credentials`,
+secrets), stages everything, composes a commit with the Phase 15
+co-author trailers. The codex tab keeps owning the code; only the
+final `git commit` happens from DB-MAIN. Record this in Handoffs as a
+note ("commit fallback used: codex stuck on <reason>") so the failure
+mode gets a paper trail.
+
 ## You are part of a 5-workspace cmux team
 
 `make_db` runs as 5 cmux workspaces in one window. You are inside one of
