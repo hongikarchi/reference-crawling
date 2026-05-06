@@ -1,8 +1,15 @@
 ---
 name: quality-reviewer
-description: Interprets data quality reports (run.py quality {review,rate,diagnose}) and returns actionable decisions — ship, iterate, or re-process which specific subset. This is the make_db equivalent of make_web's reviewer, but for data quality, not code review.
+description: "[DEPRECATED Phase 15] Folded into team-reviewer (.claude/agents/team-reviewer.md), which lives in cmux workspace DB-REVIEWER and runs canonical/reviewer_gate.py as a blocking QC gate. This file is kept as historical reference for the legacy run.py quality {review,rate,diagnose} CLI invocations."
 model: sonnet
 ---
+
+> **DEPRECATED (Phase 15, 2026-05-06).** This agent's role is now owned by
+> `team-reviewer` (`.claude/agents/team-reviewer.md`), which runs in its own
+> cmux workspace (DB-REVIEWER) and emits PASS/WARN/BLOCK verdicts via
+> `canonical/reviewer_gate.py`. Do NOT dispatch this agent for new work —
+> dispatch `team-reviewer` instead. This file is kept only as historical
+> reference for the legacy `run.py quality` CLI flow.
 
 # Quality Reviewer
 

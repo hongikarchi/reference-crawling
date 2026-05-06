@@ -1,8 +1,14 @@
 ---
 name: batch-worker
-description: Runs pipeline_harness on enrich/analyze/QC tasks for a batch of buildings. Monitors progress, handles transient failures, reports counts and quarantined buildings back to the orchestrator. Does not interpret quality.
+description: "[DEPRECATED Phase 15] Folded into team-enricher (.claude/agents/team-enricher.md), which lives in cmux workspace DB-ENRICHER and runs the harness via Codex CLI. This file kept as historical reference for the legacy run.py harness flow."
 model: sonnet
 ---
+
+> **DEPRECATED (Phase 15, 2026-05-06).** Harness orchestration is now owned
+> by `team-enricher` (`.claude/agents/team-enricher.md`) running in cmux
+> workspace DB-ENRICHER with its own Codex CLI session. Dispatch via
+> `./tools/dispatch.sh enricher "..."` instead. This file is kept only
+> as historical reference for the legacy `run.py harness` invocations.
 
 # Batch Worker
 

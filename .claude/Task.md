@@ -185,6 +185,14 @@ best-quality deduped image URLs. Same drawing on Architizer + Archello
 
 ## In Progress
 
+- **Phase 15 (multi-team QC refactor)** — cmux 5-workspace layout +
+  AGENTS.md + reviewer_gate.py + match_phash_check.py + phash_cache.py
+  all landed and self-heal-loop verified end-to-end (2 dispatch + 2
+  reviewer cycles, 0 user intervention). Currently running:
+  `python3 -m canonical.phash_cache --build --workers 8` in background
+  (PID 21376, ETA ~24h, ~700K image fetches across 4 sources, $0).
+  Next on completion: dispatch matcher to re-run Stage A/B with phash
+  gate (#35).
 - **Phase 8 (Archello full crawl)** — PID 19814, started 2026-04-28
   ~23:59 KST. 22,887 / ~135K projects done; ~111K pending. ETA ~10 days.
   Resume-friendly via `pending_projects.status`. No further action
@@ -196,6 +204,21 @@ best-quality deduped image URLs. Same drawing on Architizer + Archello
 
 (rolling window — most recent ~12)
 
+- **Phase 15 infra (2026-05-06)** — cmux 5-workspace multi-team
+  architecture (`tools/cmux_setup.sh` + `dispatch.sh` + `poll.sh`),
+  AGENTS.md baseline for codex sessions, 4 team-* agent files
+  (crawler/matcher/enricher/reviewer), `canonical/reviewer_gate.py`
+  blocking QC for Stage A/B/D/F, `canonical/match_phash_check.py`
+  + 4 unit tests (golden bld_026977 BLOCK case),
+  `canonical/phash_cache.py` + 1 unit test, `dispatch.sh` paste-mode
+  fix (Enter ×2). Self-heal hard caps in core/config.py
+  (CODEX_RETRY_CAP=5, CODEX_COST_CAP_USD=20). Commits `79c2f88`,
+  `7a370f5`, `810af85`, `3b1cb11`, `6e987b5`, `b6f7730`, `2aeb2ce`,
+  `3c26e6f`. Suspended T2 enrichment at 90/288 batches (will be
+  re-run via team-enricher post-phash-gate). Reviewer caught
+  pre-existing OOV (style="Futuristic" in 2 batches) + 1824
+  visual_description length issues that prior per-batch validation
+  missed — confirms gate's value before going wide.
 - **Phase 11.0 + 11a — metalocus URL-only crawler conversion + resume**
   (2026-04-29): added `METALOCUS_DOWNLOAD_IMAGES = False` flag, new
   `buildings.cover_image_url` / `gallery_image_urls` /
@@ -255,6 +278,7 @@ MATCH-DONE: phash_check v1
 - REVIEWER-PASS: phash_check v1 — 4/4 unit tests pass; scope clean (canonical/match_phash_check.py + tests/ only); BLOCK fires iff a_n>=2 AND b_n>=2 AND zero cross-source phash cluster overlap (Hamming<=8); golden bld_026977-style fixture BLOCKs as required.
 MATCH-DONE: phash_cache_code v1
 - REVIEWER-PASS: phash_cache_code v1 — 1/1 test passes (build + resume); scope clean (canonical/phash_cache.py + tests/); cache format `{"<source>:<source_id>": [<phash_hex>, …]}` matches match_phash_check reader; CLI `--build [--limit N] [--source <name>] [--workers 8]` present; resume via data/canonical/phash_cache_progress.json + per-row skip + write_every=100 atomic flush; reuses canonical/image_dedup.fetch_image_metadata (no duplication); per-future try/except + fetcher=None tolerated; imagehash.phash hash_size=16 (256-bit) inherited from image_dedup.
+MATCH-ESCALATE: phash_cache_smoke fetch all-fails: 100 rows processed, 0 rows with phashes
 
 ## Research Ready
 

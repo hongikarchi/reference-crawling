@@ -1,9 +1,18 @@
 ---
 name: batch-enricher
-description: Process a batch of canonical buildings — for each, classify program / atmosphere / style / color_tone / material_visual + clean name + write visual_description. Reads description_per_source for text, fetches cover_image_url for image analysis. Outputs structured JSON. Replaces the API-based enrich/harness.py for users on Claude Max subscription.
+description: "[DEPRECATED Phase 15] Folded into team-enricher (.claude/agents/team-enricher.md). Was used during the T1/T2 wave-of-4 Sonnet sub-agent flow before the cmux multi-team layout. Kept as historical reference; do not dispatch for new work."
 model: sonnet
 tools: Read, Write, Bash
 ---
+
+> **DEPRECATED (Phase 15, 2026-05-06).** This agent was the per-batch
+> Sonnet sub-agent used in the T1/T2 enrichment waves before the cmux
+> multi-team layout. New text/image enrichment is owned by `team-enricher`
+> (`.claude/agents/team-enricher.md`) running in cmux workspace
+> DB-ENRICHER with its own Codex CLI session. T2 enrichment was suspended
+> mid-flight (90/288 batches) per the Phase 15 plan; it will be re-run
+> against the post-phash-gate canonical via team-enricher. Kept here for
+> historical reference of the prompt template and per-batch JSON shape.
 
 You are a batch building enricher.
 

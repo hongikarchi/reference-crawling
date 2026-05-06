@@ -135,103 +135,100 @@ new directory under `crawl/`.
 
 ```
 make_db/
-├── CLAUDE.md                  ← Claude session instructions
+├── CLAUDE.md                  ← Claude session instructions (entry point)
+├── AGENTS.md                  ← Codex CLI baseline (Phase 15)
 ├── .claude/PROJECT.md         ← This file: full spec
 ├── .claude/REPORT.md          ← Current state + status
+├── .claude/WORKFLOW.md        ← operational Cases + Phase 15 self-heal loop
+├── .claude/Goal.md  / Task.md
+├── .claude/agents/            ← team-* (Phase 15) + legacy in-session sub-agents
+│   ├── orchestrator.md            ← DB-MAIN router (dispatch.sh)
+│   ├── team-crawler.md            ← DB-CRAWLER lead (codex)
+│   ├── team-matcher.md            ← DB-MATCHER lead (codex)
+│   ├── team-enricher.md           ← DB-ENRICHER lead (codex)
+│   ├── team-reviewer.md           ← DB-REVIEWER lead (claude)
+│   ├── reporter.md / researcher.md / upload-guard.md / git-manager.md
+│   └── quality-reviewer.md / batch-worker.md / batch-enricher.md  [DEPRECATED]
+├── .claude/escalations/       ← Phase 15 reviewer BLOCK diagnoses (gitignored)
 ├── run.py                     ← Unified CLI (sole script at root)
 ├── requirements.txt
 ├── .env                       ← gitignored
 │
 ├── core/                      ← Shared infrastructure
 │   ├── vocab.py               ← Canonical vocab + migrations + QC
-│   ├── config.py              ← Paths + rate limits + constants
+│   ├── config.py              ← Paths + rate limits + Phase-15 caps
 │   └── utils.py               ← Logger, rate limiter, HTTP, slugs
 │
 ├── crawl/                     ← Stage 1: per-source raw scraping
-│   ├── metalocus/
-│   │   ├── crawler.py         ← 4-phase orchestrator + filter
-│   │   ├── parsers.py         ← HTML parsing
-│   │   ├── database.py        ← metalocus.db CRUD
-│   │   ├── models.py          ← BuildingData, ImageData
-│   │   └── downloader.py      ← Image downloader
-│   └── divisare/
-│       ├── crawler.py         ← Authenticated 4-phase crawler
-│       ├── auth.py            ← Login + session cookie
-│       ├── db.py              ← divisare.db CRUD
-│       └── parsers.py         ← HTML parsing for Divisare
+│   ├── metalocus/             ← crawler / parsers / database / models / downloader
+│   ├── divisare/              ← crawler / auth / db / parsers
+│   ├── architizer/            ← crawler / db / parsers (Phase 7)
+│   └── archello/              ← crawler / db / parsers (Phase 8)
 │
 ├── enrich/                    ← Stages 2-3: text + image LLM
-│   ├── export.py              ← SQLite → 1_buildings_raw.json
-│   ├── dedup.py               ← Dedup + ID assignment
-│   ├── embed.py               ← Embeddings → 4_buildings_final.json
-│   ├── harness.py             ← Queue-driven AI worker
-│   ├── llm_parser.py          ← Text enrichment (Anthropic SDK)
-│   ├── image_analysis.py      ← Image analysis (Anthropic SDK)
-│   ├── tasks_db.py            ← AI task queue ledger (SQLite)
-│   ├── quality.py             ← review + fix + rate + diagnose
-│   ├── eval.py                ← Score prompts vs golden
-│   ├── label_golden.py        ← Seed eval golden set
-│   ├── migrate_vocab.py       ← Vocab migration audit/apply
-│   └── reprocess.py           ← Targeted re-processing plan/apply
+│   ├── export.py / dedup.py / embed.py
+│   ├── harness.py / llm_parser.py / image_analysis.py / tasks_db.py
+│   ├── quality.py / eval.py / label_golden.py
+│   └── migrate_vocab.py / reprocess.py
 │
 ├── canonical/                 ← Stage 4: matching + canonical artefact
-│   ├── schema.py              ← CanonicalBuilding dataclass
-│   ├── consolidate.py         ← metalocus architect alias clusters
-│   ├── match_architects.py    ← cluster ↔ Divisare architect
-│   ├── match_buildings.py     ← metalocus building ↔ Divisare project
-│   ├── match_to_canonical.py  ← legacy single-pass matcher
-│   ├── manual_tiebreaks.py    ← apply manual review decisions
-│   ├── build.py               ← assemble canonical_buildings.json
-│   └── qc.py                  ← 9 invariant checks
+│   ├── schema.py / registry.py
+│   ├── consolidate.py / consolidate_helpers.py
+│   ├── match_architects.py / match_architects_extended.py
+│   ├── match_buildings.py / match_buildings_sequential.py / match_to_canonical.py
+│   ├── manual_tiebreaks.py
+│   ├── build.py / assemble_4source.py
+│   ├── qc.py                  ← 10 invariant checks
+│   ├── image_dedup.py         ← Phase 10 phash cluster + cover ranking
+│   ├── reviewer_gate.py       ← Phase 15 blocking QC gate (Stage A/B/D/F)
+│   ├── match_phash_check.py   ← Phase 15 has_phash_overlap() function
+│   └── phash_cache.py         ← Phase 15 cache builder (CLI: --build)
 │
 ├── upload/                    ← Stage 5: Neon + R2 (manual gate)
 │   ├── neon.py                ← legacy 4_buildings_final upload + R2
 │   └── neon_strict.py         ← strict canonical → in-place migration
 │
 ├── tools/                     ← Dev utilities (not in pipeline)
-│   ├── divisare_server.py     ← Local Divisare gallery server
-│   ├── generate_gallery.py    ← HTML gallery generator
-│   ├── gallery.html
-│   └── divisare_gallery.html
+│   ├── cmux_setup.sh          ← Phase 15: create 5 cmux workspaces
+│   ├── dispatch.sh            ← Phase 15: DB-MAIN → other-tab cmux send
+│   ├── poll.sh                ← Phase 15: read-screen on a team's tab
+│   ├── divisare_server.py / divisare_gallery.html
+│   ├── divisare_gap_check.py / divisare_smartsweep.py / divisare_topup.py
+│   ├── generate_gallery.py / gallery.html
+│   ├── build_d1_batches.py / build_round2_batches.py / build_tiebreak_*.py
+│   ├── apply_*_results.py / split_code_diffs.py
+│   └── rule_resolve_buildings.py / match_architects_regression.py
 │
-├── data/                      ← Data artefacts, sub-divided by stage
-│   ├── crawl/                 ← Stage 1: source-of-truth raw DBs
-│   │   ├── metalocus.db (+ wal/shm)
-│   │   └── divisare.db  (+ wal/shm)
+├── tests/                     ← unit tests (pytest)
+│   ├── test_phash_check.py
+│   └── test_phash_cache.py
+│
+├── data/                      ← Data artefacts, sub-divided by stage (gitignored)
+│   ├── crawl/                 ← Stage 1: per-source DBs
+│   │   ├── metalocus.db / divisare.db / architizer.db / archello.db (+ wal/shm)
 │   │
-│   ├── enrich/                ← Stages 2-3: pipeline + datasets
-│   │   ├── 1_buildings_raw.json
-│   │   ├── 2_buildings_enriched.json
-│   │   ├── 3_buildings_analyzed.json
-│   │   ├── 4_buildings_final.json    ← stage-3 output (embeddings)
-│   │   ├── tasks.db (+ wal/shm)      ← LLM task queue
-│   │   ├── golden/buildings.json     ← eval golden set
-│   │   └── few_shot/enrich_examples.json
+│   ├── enrich/                ← Stages 2-3
+│   │   ├── 1_buildings_raw.json / 2_buildings_enriched.json
+│   │   ├── 3_buildings_analyzed.json / 4_buildings_final.json
+│   │   ├── tasks.db / golden/ / few_shot/
 │   │
-│   ├── canonical/             ← Stage 4: matching + canonical artefacts
-│   │   ├── metalocus_architect_clusters.json
-│   │   ├── canonical_buildings_strict.json   ← upload-target artefact
+│   ├── canonical/             ← Stage 4 outputs
+│   │   ├── architects_canonical.json
+│   │   ├── canonical_buildings_4source.json
+│   │   ├── canonical_buildings_strict.json
+│   │   ├── phash_cache.json + phash_cache_progress.json   (Phase 15)
+│   │   ├── d1_batches_t2/ + d1_results_t2/   (T2 enrichment, suspended)
 │   │   └── match/
-│   │       ├── metalocus_architect_to_divisare.json
-│   │       └── metalocus_to_divisare_buildings.json
 │   │
-│   ├── reports/               ← QC + audit (cross-stage)
-│   │   ├── canonical_qc.json
-│   │   ├── canonical_qc_strict.json
-│   │   ├── rating_report.json
-│   │   ├── review_report.json
-│   │   ├── fix_report.json
-│   │   ├── eval_report.json
-│   │   ├── reprocess_plan.json
-│   │   └── vocab_migration.json
+│   ├── reports/               ← QC + audit
+│   │   └── canonical_qc.json / rating_report.json / review_report.json /
+│   │       fix_report.json / eval_report.json / vocab_migration.json
 │   │
-│   ├── id_registry.json       ← stable global registry — NEVER delete
-│   └── .divisare_session.json ← runtime auth cache (gitignored)
+│   ├── id_registry_buildings.json / id_registry_architects.json   ← NEVER delete
+│   └── .divisare_session.json ← gitignored auth cache
 │
-└── images/                    ← {building_id}/{n}_{slug}_{caption}.jpg
-    └── {building_id}/
-        ├── 0_cover.jpg
-        └── 1_interior.jpg
+└── images/                    ← legacy per-source on-disk images (mostly empty
+    └── {building_id}/             post-Phase 11 URL-only crawler change)
 ```
 
 ---

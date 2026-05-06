@@ -1,6 +1,65 @@
 # make_db — Current State Report
 
-*Updated: 2026-05-05 (post-redesign)*
+*Updated: 2026-05-06 (Phase 15 multi-team architecture live)*
+
+---
+
+## −1. Phase 15: multi-team QC refactor (2026-05-06, in progress)
+
+**Why:** 232 false-merge cluster splits to date were all caught by user
+spot-check post-canonical, never blocked in-pipeline. Today's discovery —
+**bld_026977** (Austin Maynard's Terrace House Brunswick + Terracotta
+House Fitzroy auto-merged via shared architect + ±1 year + 95% name token
+similarity) — confirmed the structural QC gap: no blocking gate at the
+matcher's decision point, no perceptual-image sanity check.
+
+**What landed:**
+
+* **5-workspace cmux layout**: DB-MAIN (claude orchestrator), DB-CRAWLER /
+  DB-MATCHER / DB-ENRICHER (codex, write+fix code), DB-REVIEWER (claude,
+  blocking QC). Setup via `./tools/cmux_setup.sh` (idempotent).
+* **Inter-tab plumbing**: `tools/dispatch.sh <team> "<msg>"` (cmux send +
+  Enter×2 to handle Claude Code paste-mode), `tools/poll.sh <team> [N]`
+  (read-screen on the team's surface).
+* **AGENTS.md** (project root): Codex CLI baseline, mirrors CLAUDE.md.
+  Documents 4-team mapping, handoff signals, hard guardrails (never edit
+  vocab.py, never delete registry, never push, never run upload).
+* **`canonical/reviewer_gate.py`**: blocking QC for stages A/B/D/F.
+  Verdict ∈ {PASS, WARN, BLOCK}; on BLOCK writes
+  `.claude/escalations/<stage>_<ts>.md` with diagnosis + sample rows
+  + suggested fix.
+* **`canonical/match_phash_check.py`** + 4 unit tests: pure-image false-
+  merge gate. BLOCK iff both sides have ≥2 images AND zero cross-source
+  phash cluster overlap (Hamming ≤ 8). Golden-set test on bld_026977
+  fixture: BLOCK as required.
+* **`canonical/phash_cache.py`** + smoke test: one-time + incremental
+  builder for `data/canonical/phash_cache.json`. CLI:
+  `python3 -m canonical.phash_cache --build [--limit N] [--source <name>]
+  [--workers 8]`. Resume-friendly (per-row progress file, atomic flush
+  every 100 rows). Reuses `canonical/image_dedup.fetch_image_metadata`.
+* **Self-heal loop verified**: 2 dispatch + 2 reviewer cycles, 0 user
+  intervention. DB-MAIN read DB-MATCHER's commits + handoffs via poll.sh,
+  routed to DB-REVIEWER, observed REVIEWER-PASS verdicts in Task.md.
+* **Hard caps in core/config.py**: `CODEX_RETRY_CAP = 5`,
+  `CODEX_COST_CAP_USD = 20`. At cap → escalate to user, no further retry.
+
+**Currently running (background, PID 21376):**
+`python3 -m canonical.phash_cache --build --workers 8` against all 4
+source DBs. Scope: ~175K source rows × ~4 image URLs = ~700K fetches at
+8-parallel. **Realistic ETA ~24h** (Plan 15 estimate of 8h was
+optimistic — archello at 127K projects is dominant). Disk impact ~45 MB
+JSON; image bytes are not stored. Cost $0.
+
+**Suspended:**
+T2 enrichment (Stage D-1 wave-of-4 sub-agent flow) at 90/288 batches.
+Will be re-run via team-enricher against the post-phash-gate canonical;
+result files preserved at `data/canonical/d1_results_t2/` for cost
+comparison.
+
+**Known QC issues this refactor will surface (next step #35):**
+- bld_026977 Terrace/Terracotta false-merge (golden-set BLOCK case)
+- Likely 50–300 other phash-rejected merges (estimate; actual count
+  emerges after first reviewer_gate run on Stage B with phash gate active)
 
 ---
 
