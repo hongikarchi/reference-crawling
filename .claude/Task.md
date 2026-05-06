@@ -282,6 +282,7 @@ MATCH-ESCALATE: phash_cache_smoke fetch all-fails: 100 rows processed, 0 rows wi
 MATCH-DONE: matcher_phash_integration v1
 MATCH-DONE: phash_cache_perf v1
 - REVIEWER-PASS: phash_cache_perf v1 — 2/2 tests pass (resume + inter-row parallelism, 50 rows × 4 URLs in <5s @ 50ms latency); scope clean (canonical/phash_cache.py + tests/); per-row `_fetch_phashes` removed, replaced by `_fetch_chunk` that submits all `(key, idx)→url` futures from a chunk to a single ThreadPoolExecutor (phash_cache.py:271-318); rows yielded only after `state[key]["remaining"] == 0` so done-set integrity preserved; write_every=100 flush + final flush retained; `_iter_pending_chunks` streams via sqlite cursor in chunks (default 1000) — 175K rows not loaded at once; workers default = 32 (build_cache:325, CLI:387); on-disk cache format unchanged — spot-check live cache shows `divisare:100046 → ['f3c01e96…' (64-char hex)]`, 1,655 keys so far, readable by match_phash_check unchanged.
+MATCH-DONE: phash_cache_scope_filter v1
 
 ## Research Ready
 

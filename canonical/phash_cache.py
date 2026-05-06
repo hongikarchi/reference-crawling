@@ -22,6 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_DIR = PROJECT_ROOT / "data" / "canonical"
 CACHE_PATH = CANONICAL_DIR / "phash_cache.json"
 PROGRESS_PATH = CANONICAL_DIR / "phash_cache_progress.json"
+CANONICAL_BUILDINGS_PATH = CANONICAL_DIR / "canonical_buildings_4source.json"
 METALOCUS_FINAL_PATH = PROJECT_ROOT / "data" / "enrich" / "4_buildings_final.json"
 
 
@@ -110,6 +111,33 @@ def _load_progress(path: Path) -> set[str]:
 
 def _write_progress(path: Path, done: set[str]) -> None:
     _write_json_atomic(path, {"done": sorted(done)})
+
+
+def _canonical_rows(payload) -> list[dict]:
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("buildings", "clusters"):
+        rows = payload.get(key)
+        if isinstance(rows, list):
+            return [row for row in rows if isinstance(row, dict)]
+    return []
+
+
+def _allowed_keys(canonical_path: Path = CANONICAL_BUILDINGS_PATH) -> set[str]:
+    payload = _read_json(canonical_path, {})
+    allowed: set[str] = set()
+    for row in _canonical_rows(payload):
+        refs = row.get("source_refs") or {}
+        if not isinstance(refs, dict):
+            continue
+        for src, ids in refs.items():
+            if not isinstance(ids, list):
+                continue
+            for source_id in ids:
+                allowed.add(_cache_key(str(src), str(source_id)))
+    return allowed
 
 
 def _parse_url_list(value) -> list[str]:
@@ -244,6 +272,7 @@ def _iter_pending_chunks(
     source: Optional[str],
     source_specs: Optional[dict[str, SourceSpec]],
     done: set[str],
+    allowed_keys: Optional[set[str]],
     limit: Optional[int],
     chunk_size: int,
     summary: dict[str, int],
@@ -252,6 +281,9 @@ def _iter_pending_chunks(
     queued = 0
     for item in iter_source_rows(source=source, source_specs=source_specs):
         key = _cache_key(item["source"], item["source_id"])
+        if allowed_keys is not None and key not in allowed_keys:
+            summary["rows_skipped_not_in_canonical"] += 1
+            continue
         if key in done:
             summary["rows_skipped_done"] += 1
             continue
@@ -329,13 +361,17 @@ def build_cache(
     fetcher: Callable[..., Optional[dict]] = fetch_image_metadata,
     write_every: int = 100,
     chunk_size: int = 1000,
+    canonical_only: bool = True,
+    canonical_path: Path = CANONICAL_BUILDINGS_PATH,
 ) -> dict[str, int]:
     cache = _load_cache(cache_path)
     done = _load_progress(progress_path) | set(cache.keys())
+    allowed = _allowed_keys(canonical_path) if canonical_only else None
 
     summary = {
         "rows_seen": 0,
         "rows_skipped_done": 0,
+        "rows_skipped_not_in_canonical": 0,
         "rows_processed": 0,
         "rows_with_phashes": 0,
         "phashes_written": 0,
@@ -348,6 +384,7 @@ def build_cache(
         source=source,
         source_specs=source_specs,
         done=done,
+        allowed_keys=allowed,
         limit=limit,
         chunk_size=max(chunk_size, 1),
         summary=summary,
@@ -385,13 +422,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--limit", type=int, default=None, help="process at most N new rows")
     parser.add_argument("--source", choices=sorted(SOURCE_SPECS), default=None)
     parser.add_argument("--workers", type=int, default=32)
+    parser.add_argument("--canonical-path", type=Path, default=CANONICAL_BUILDINGS_PATH)
+    canonical_group = parser.add_mutually_exclusive_group()
+    canonical_group.add_argument("--canonical-only", dest="canonical_only",
+                                 action="store_true", default=True)
+    canonical_group.add_argument("--no-canonical-only", dest="canonical_only",
+                                 action="store_false")
     args = parser.parse_args(argv)
 
     if not args.build:
         parser.print_help()
         return 2
 
-    summary = build_cache(limit=args.limit, source=args.source, workers=args.workers)
+    summary = build_cache(
+        limit=args.limit,
+        source=args.source,
+        workers=args.workers,
+        canonical_only=args.canonical_only,
+        canonical_path=args.canonical_path,
+    )
     print(json.dumps(summary, indent=2, sort_keys=True))
     print(f"wrote {CACHE_PATH}")
     print(f"progress {PROGRESS_PATH}")
