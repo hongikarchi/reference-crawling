@@ -46,11 +46,13 @@ from canonical._building_loaders import (
 from canonical.match_architects import (
     _normalize_name, _is_substring_match,
 )
+from canonical.match_phash_check import has_phash_overlap
 from canonical.registry import ArchitectRegistry, BuildingRegistry
 
 
 CANONICAL_OUTPUT = "data/canonical/buildings_canonical.json"
 TIEBREAK_OUTPUT  = "data/canonical/building_tiebreak_pairs.json"
+PHASH_BLOCKS_OUTPUT = "data/reports/phash_blocks.json"
 
 # Auto-accept gate (per decision #4): strictest combo
 AUTO_ACCEPT_NAME_SIM = 90.0
@@ -61,6 +63,7 @@ PASS2_AUTO_NAME_SIM  = 90.0
 PASS2_MIN_TOKEN_OVERLAP = 2
 YEAR_TOLERANCE       = 2   # Pass 1 ±N years
 PASS2_YEAR_TOLERANCE = 1   # Pass 2 tighter
+PHASH_GATE_ENABLED   = True
 
 # Generic name tokens that don't count toward token overlap
 GENERIC_TOKENS = {
@@ -71,9 +74,120 @@ GENERIC_TOKENS = {
     "residence", "residential", "apartment", "apartments", "complex",
 }
 
+PHASH_BLOCK_COUNTER: Counter = Counter()
+PHASH_BLOCK_LOG: list[dict] = []
+
 
 def _name_tokens(core: str) -> set[str]:
     return {t for t in core.split() if len(t) >= 3 and t not in GENERIC_TOKENS}
+
+
+def _write_phash_blocks(path: str = PHASH_BLOCKS_OUTPUT) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(PHASH_BLOCK_LOG, f, indent=2, ensure_ascii=False)
+
+
+def _reset_phash_blocks() -> None:
+    PHASH_BLOCK_COUNTER.clear()
+    PHASH_BLOCK_LOG.clear()
+
+
+def _record_phash_block(
+    *,
+    existing_cid: str,
+    incoming_id: str,
+    src_a: str,
+    src_b: str,
+    result: dict,
+    phase: str,
+) -> None:
+    PHASH_BLOCK_COUNTER["total"] += 1
+    PHASH_BLOCK_COUNTER[phase] += 1
+    PHASH_BLOCK_LOG.append({
+        "phase": phase,
+        "cluster_id_a": existing_cid,
+        "cluster_id_b": incoming_id,
+        "src_a": src_a,
+        "src_b": src_b,
+        "overlap": result.get("overlap", 0),
+        "a_n": result.get("a_n", 0),
+        "b_n": result.get("b_n", 0),
+    })
+    _write_phash_blocks(PHASH_BLOCKS_OUTPUT)
+
+
+def _phash_allows_merge(
+    registry: BuildingRegistry,
+    existing_cid: str,
+    incoming_refs: dict[str, list[str]],
+    *,
+    incoming_id: str,
+    phase: str,
+) -> bool:
+    if not PHASH_GATE_ENABLED:
+        return True
+    existing_cid = registry.follow(existing_cid)
+    existing_refs = registry.data.get(existing_cid, {}).get("source_refs", {})
+    for src_a, src_a_ids in existing_refs.items():
+        for src_b, src_b_ids in incoming_refs.items():
+            if src_a == src_b:
+                continue
+            result = has_phash_overlap(src_a_ids, src_b_ids, src_a, src_b)
+            if result.get("verdict") == "BLOCK":
+                _record_phash_block(
+                    existing_cid=existing_cid,
+                    incoming_id=incoming_id,
+                    src_a=src_a,
+                    src_b=src_b,
+                    result=result,
+                    phase=phase,
+                )
+                return False
+    return True
+
+
+def _append_tiebreak(
+    tiebreak_queue: list,
+    *,
+    pass_no: int,
+    item: dict,
+    top: dict,
+    strict: float,
+    loose: float,
+    phash_blocked: bool = False,
+) -> None:
+    tiebreak_queue.append({
+        "pass":           pass_no,
+        "source_a":       item["source"],
+        "id_a":           item["id"],
+        "name_a":         item["name"],
+        "arch_names_a":   item["canonical_arch_ids"],
+        "country_a":      item.get("country"),
+        "city_a":         item.get("city"),
+        "year_a":         item.get("year"),
+        "typology_a":     item.get("typology"),
+        "cover_a":        item.get("cover_image_url"),
+        "cid_b":          top["cid"],
+        "name_b":         top["name"],
+        "arch_names_b":   top.get("canonical_arch_ids") or [],
+        "country_b":      top.get("country"),
+        "city_b":         top.get("city"),
+        "year_b":         top.get("year"),
+        "typology_b":     top.get("typology"),
+        "cover_b":        top.get("cover_image_url"),
+        "strict_sim":     round(strict, 1),
+        "loose_sim":      round(loose, 1),
+        "phash_blocked":  phash_blocked,
+    })
+
+
+def _print_phase_summary(phase: str, counts: dict[str, int]) -> None:
+    print(
+        f"Phase {phase}: {counts.get('auto_accept', 0)} auto-accepts, "
+        f"{counts.get('phash_block', 0)} phash-blocks",
+        flush=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -262,43 +376,53 @@ def phase_match_against_pool(
         ranked = sorted(zip(cands, scores), key=lambda t: -t[1][1])
         top, (strict, loose) = ranked[0]
         verdict = _classify_pass1(item, top, strict, loose)
-        counts[verdict] += 1
 
         if verdict == "auto_accept":
+            incoming_refs = {item["source"]: [item["id"]]}
+            if not _phash_allows_merge(
+                registry,
+                top["cid"],
+                incoming_refs,
+                incoming_id=item["id"],
+                phase=label,
+            ):
+                counts["phash_block"] += 1
+                counts["needs_tiebreak"] += 1
+                _append_tiebreak(
+                    tiebreak_queue,
+                    pass_no=1,
+                    item=item,
+                    top=top,
+                    strict=strict,
+                    loose=loose,
+                    phash_blocked=True,
+                )
+                continue
             registry.append(top["cid"],
                             names={item["name"]},
-                            source_refs={item["source"]: [item["id"]]})
+                            source_refs=incoming_refs)
             # Pool entry gets new source_ref but stays under same cid (no new pool entry needed)
+            counts["auto_accept"] += 1
         elif verdict == "needs_tiebreak":
-            tiebreak_queue.append({
-                "pass":           1,
-                "source_a":       item["source"],
-                "id_a":           item["id"],
-                "name_a":         item["name"],
-                "arch_names_a":   item["canonical_arch_ids"],
-                "country_a":      item.get("country"),
-                "city_a":         item.get("city"),
-                "year_a":         item.get("year"),
-                "typology_a":     item.get("typology"),
-                "cover_a":        item.get("cover_image_url"),
-                "cid_b":          top["cid"],
-                "name_b":         top["name"],
-                "arch_names_b":   top.get("canonical_arch_ids") or [],
-                "country_b":      top.get("country"),
-                "city_b":         top.get("city"),
-                "year_b":         top.get("year"),
-                "typology_b":     top.get("typology"),
-                "cover_b":        top.get("cover_image_url"),
-                "strict_sim":     round(strict, 1),
-                "loose_sim":      round(loose, 1),
-            })
+            counts["needs_tiebreak"] += 1
+            _append_tiebreak(
+                tiebreak_queue,
+                pass_no=1,
+                item=item,
+                top=top,
+                strict=strict,
+                loose=loose,
+            )
         elif allow_new:
+            counts[verdict] += 1
             cid, _ = registry.match_or_create(
                 names={item["name"]},
                 source_refs={item["source"]: [item["id"]]},
             )
             pool.add(item, cid)
             counts["new_orphan"] += 1
+        else:
+            counts[verdict] += 1
 
         if n % 5000 == 0:
             print(f"  [{label}] progress: {n} {dict(counts)}", flush=True)
@@ -345,40 +469,48 @@ def pass_2_orphan_rescue(
         ranked = sorted(zip(cands, scores), key=lambda t: -t[1][1])
         top, (strict, loose) = ranked[0]
         verdict = _classify_pass2(item, top, strict, loose)
-        counts[verdict] += 1
 
         if verdict == "auto_accept":
             # Merge cid → top["cid"]: redirect cid; copy source_refs over
             entry = registry.data[cid]
+            if not _phash_allows_merge(
+                registry,
+                top["cid"],
+                entry.get("source_refs", {}),
+                incoming_id=cid,
+                phase="pass2",
+            ):
+                counts["phash_block"] += 1
+                counts["needs_tiebreak"] += 1
+                _append_tiebreak(
+                    tiebreak_queue,
+                    pass_no=2,
+                    item=item,
+                    top=top,
+                    strict=strict,
+                    loose=loose,
+                    phash_blocked=True,
+                )
+                continue
             for src, ids in entry.get("source_refs", {}).items():
                 registry.append(top["cid"],
                                 names=set(entry.get("names", [])),
                                 source_refs={src: ids})
             entry["redirected_to"] = top["cid"]
+            counts["auto_accept"] += 1
             counts["pass2_merged"] += 1
         elif verdict == "needs_tiebreak":
-            tiebreak_queue.append({
-                "pass":          2,
-                "source_a":      item["source"],
-                "id_a":          item["id"],
-                "name_a":        item["name"],
-                "arch_names_a":  item["canonical_arch_ids"],
-                "country_a":     item.get("country"),
-                "city_a":        item.get("city"),
-                "year_a":        item.get("year"),
-                "typology_a":    item.get("typology"),
-                "cover_a":       item.get("cover_image_url"),
-                "cid_b":         top["cid"],
-                "name_b":        top["name"],
-                "arch_names_b": top.get("canonical_arch_ids") or [],
-                "country_b":     top.get("country"),
-                "city_b":        top.get("city"),
-                "year_b":        top.get("year"),
-                "typology_b":    top.get("typology"),
-                "cover_b":       top.get("cover_image_url"),
-                "strict_sim":    round(strict, 1),
-                "loose_sim":     round(loose, 1),
-            })
+            counts["needs_tiebreak"] += 1
+            _append_tiebreak(
+                tiebreak_queue,
+                pass_no=2,
+                item=item,
+                top=top,
+                strict=strict,
+                loose=loose,
+            )
+        else:
+            counts[verdict] += 1
 
         if n % 5000 == 0:
             print(f"  [pass2] progress: {n}/{len(orphan_cids)} {dict(counts)}",
@@ -451,12 +583,16 @@ def main() -> int:
     registry = BuildingRegistry()
     pool = BuildingPool()
     tiebreak_queue: list = []
+    _reset_phash_blocks()
+    if PHASH_GATE_ENABLED:
+        _write_phash_blocks()
     print(f"initial registry: {registry.stats()}", flush=True)
 
     print("\n=== PASS 1 ===", flush=True)
 
     print("\n--- Phase 1: Divisare base (1:1) ---", flush=True)
     n1 = phase_1_divisare(registry, pool)
+    _print_phase_summary("1", {})
     print(f"phase 1 done: {n1}; registry: {registry.stats()}", flush=True)
 
     print("\n--- Phase 2: Architizer (allow_new) ---", flush=True)
@@ -464,6 +600,7 @@ def main() -> int:
         registry, pool, load_architizer(_arch_idx),
         label="architizer", allow_new=True, tiebreak_queue=tiebreak_queue,
     )
+    _print_phase_summary("2", counts)
     print(f"phase 2 done: {counts}; registry: {registry.stats()}", flush=True)
 
     # NEW DESIGN (2026-05-05): Metalocus + Archello are MATCH-OR-DROP only.
@@ -476,6 +613,7 @@ def main() -> int:
         registry, pool, load_metalocus(_arch_idx),
         label="metalocus", allow_new=False, tiebreak_queue=tiebreak_queue,
     )
+    _print_phase_summary("3", counts)
     print(f"phase 3 done: {counts}; registry: {registry.stats()}", flush=True)
 
     print("\n--- Phase 4: Archello (match-or-drop) ---", flush=True)
@@ -483,6 +621,7 @@ def main() -> int:
         registry, pool, load_archello(_arch_idx),
         label="archello", allow_new=False, tiebreak_queue=tiebreak_queue,
     )
+    _print_phase_summary("4", counts)
     print(f"phase 4 done: {counts}; registry: {registry.stats()}", flush=True)
 
     # No Pass 2 in new design — div+arc base is already authoritative,
