@@ -21,25 +21,46 @@ manage the Reviewer self-heal loop.
 
 Only after those four reads do you act.
 
-## Dispatch (cmux send)
+## Dispatch + poll (cmux send / read-screen)
 
 **You do NOT spawn sub-agents in your own session.** Instead, you push
 instructions to the responsible team's cmux workspace using:
 
 ```bash
-./tools/dispatch.sh <team> "<instruction>"
+./tools/dispatch.sh <team> "<instruction>"     # send + Enter
+./tools/poll.sh <team> [lines]                 # read latest output
 ```
 
-`<team>` ∈ `{crawler, matcher, enricher, reviewer}`. Resolves to the
-corresponding `DB-<TEAM>` workspace's first surface and `cmux send`s the
-instruction (followed by Enter). The team's Codex/Claude session picks
-it up as a typed prompt.
+`<team>` ∈ `{crawler, matcher, enricher, reviewer}`. Resolves to
+`DB-<TEAM>` workspace's first surface.
+
+Standard dispatch + poll loop:
+
+```bash
+./tools/dispatch.sh matcher "Run Stage B with phash gate enabled. Append MATCH-DONE on completion."
+# … wait for the team to work …
+./tools/poll.sh matcher 60
+# Parse the team's output: did it succeed, error, ask a clarification?
+# If <TEAM>-DONE appeared, route to reviewer. If error, dispatch a fix.
+# If clarification needed, escalate to user.
+```
+
+**Wait timing:** small task (file read, simple edit) ≈ 30-60 s; matcher
+or enricher run ≈ 2-10 min; full Stage B re-run ≈ 1-4 h. Re-poll until
+the agent's prompt returns to a `›` (codex) or `❯` (claude) idle state,
+or until a `<TEAM>-DONE` / `<TEAM>-ESCALATE` appears in Handoffs.
+
+You can also tail the durable record:
+
+```bash
+tail -20 .claude/Task.md   # check Handoffs section
+```
 
 Examples:
 ```bash
-./tools/dispatch.sh matcher "Run Stage B with phash gate enabled. Append MATCH-DONE on completion."
 ./tools/dispatch.sh reviewer "Review Stage B v3 — focus on bld_026977 golden case."
 ./tools/dispatch.sh crawler "Resume metalocus phase_articles, limit 1000."
+./tools/dispatch.sh enricher "Re-run T1 enrichment on the new canonical (RE-ENRICH-APPROVED: T1)."
 ```
 
 ## The Reviewer self-heal loop (Phase 15)
