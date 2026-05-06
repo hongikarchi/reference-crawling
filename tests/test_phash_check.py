@@ -182,3 +182,27 @@ def test_no_block_when_name_missing_one_side(tmp_path, monkeypatch):
     )
 
     assert result == {"verdict": "TIEBREAKER_PASS", "overlap": 0, "a_n": 2, "b_n": 2}
+
+
+def test_no_block_when_names_differ_only_in_case_or_whitespace(tmp_path, monkeypatch):
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "divisare:fendi_a": ["0000000000000000", "00000000000000ff"],
+            "archello:fendi_b": ["ffffffffffffffff", "ffffffffffffff00"],
+        },
+    )
+
+    result = match_phash_check.has_phash_overlap(
+        ["fendi_a"],
+        ["fendi_b"],
+        "divisare",
+        "archello",
+        name_a="FENDI Factory",
+        name_b="Fendi\xa0Factory",
+        year_a=2018,
+        year_b=2020,
+    )
+
+    assert result == {"verdict": "TIEBREAKER_PASS", "overlap": 0, "a_n": 2, "b_n": 2}

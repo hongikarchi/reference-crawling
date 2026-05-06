@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -15,6 +16,7 @@ PHASH_CACHE_PATH = (
     Path(__file__).resolve().parents[1] / "data" / "canonical" / "phash_cache.json"
 )
 _MISSING = object()
+_UNICODE_SPACE_RE = re.compile(r"[\s\u00a0\u200b\u3000]+")
 
 
 def _cache_key(source: str, source_id: str) -> str:
@@ -87,6 +89,12 @@ def _parse_year(value: object) -> int | None:
     return year
 
 
+def _normalize_name(s: str) -> str:
+    if not s:
+        return ""
+    return _UNICODE_SPACE_RE.sub(" ", s.casefold()).strip()
+
+
 def _text_confirms_block(
     *,
     name_a: object = _MISSING,
@@ -100,8 +108,8 @@ def _text_confirms_block(
     if year_a is _MISSING or year_b is _MISSING:
         return None
 
-    name_a_text = str(name_a or "").strip()
-    name_b_text = str(name_b or "").strip()
+    name_a_text = _normalize_name(str(name_a or ""))
+    name_b_text = _normalize_name(str(name_b or ""))
     if not name_a_text or not name_b_text:
         return False
 
