@@ -43,7 +43,8 @@ DIVISARE_DB    = "data/crawl/divisare.db"
 ARCHITIZER_DB  = "data/crawl/architizer.db"
 ARCHELLO_DB    = "data/crawl/archello.db"
 METALOCUS_FINAL = "data/enrich/4_buildings_final.json"
-BATCH_DIR      = "data/canonical/d1_batches"
+BATCH_ROOT     = "data/canonical/d1_batches"
+RESULTS_ROOT   = "data/canonical/d1_results"
 
 MAX_DESC_LEN = 1500   # truncate per-source descriptions to keep prompt manageable
 
@@ -94,6 +95,31 @@ def _load_arch_names() -> dict[str, str]:
     return {a["canonical_arch_id"]: a["canonical_name"] for a in arch["clusters"]}
 
 
+def _load_canonical_buildings(path: str) -> list[dict]:
+    """Load v1 buildings or v3/v4 clusters from a canonical artifact."""
+    with open(path) as f:
+        data = json.load(f)
+
+    rows = data.get("clusters") or data.get("buildings")
+    if not isinstance(rows, list):
+        raise ValueError(f"{path} must contain a 'clusters' or 'buildings' list")
+    return rows
+
+
+def _scoped_dir(root: str, scope: str, suffix: str) -> str:
+    return f"{root}_{scope}{suffix}"
+
+
+def _primary_name(row: dict) -> str:
+    names = row.get("names") or row.get("all_names") or []
+    return (
+        row.get("primary_name")
+        or row.get("canonical_name")
+        or (names[0] if names else None)
+        or row["canonical_bld_id"]
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scope",
@@ -101,8 +127,14 @@ def main() -> int:
                     default="t1",
                     help="t1 = 3+ source, t2 = 2-source, multi = 2+ source, all = everything")
     ap.add_argument("--batch-size", type=int, default=30)
-    ap.add_argument("--out-dir", default=BATCH_DIR)
+    ap.add_argument("--canonical-input", default=CANONICAL_PATH)
+    ap.add_argument("--out-dir-suffix", default="",
+                    help="Suffix for d1_batches_<scope> and d1_results_<scope>, e.g. _v4")
+    ap.add_argument("--out-dir", default=None,
+                    help="Override batch output directory; otherwise uses data/canonical/d1_batches_<scope><suffix>")
     args = ap.parse_args()
+    out_dir = args.out_dir or _scoped_dir(BATCH_ROOT, args.scope, args.out_dir_suffix)
+    results_dir = _scoped_dir(RESULTS_ROOT, args.scope, args.out_dir_suffix)
 
     print("loading descriptions …", flush=True)
     desc = _load_descriptions()
@@ -110,16 +142,15 @@ def main() -> int:
     arch_names = _load_arch_names()
 
     print("loading canonical buildings …", flush=True)
-    data = json.load(open(CANONICAL_PATH))
-    b = data["buildings"]
+    b = _load_canonical_buildings(args.canonical_input)
 
     # Filter by scope
     if args.scope == "t1":
-        targets = [x for x in b if x["n_sources"] >= 3]
+        targets = [x for x in b if x.get("n_sources", 0) >= 3]
     elif args.scope == "t2":
-        targets = [x for x in b if x["n_sources"] == 2]
+        targets = [x for x in b if x.get("n_sources", 0) == 2]
     elif args.scope == "multi":
-        targets = [x for x in b if x["n_sources"] >= 2]
+        targets = [x for x in b if x.get("n_sources", 0) >= 2]
     else:
         targets = b
     print(f"  scope={args.scope}: {len(targets)} canonicals", flush=True)
@@ -128,7 +159,7 @@ def main() -> int:
     entries = []
     for x in targets:
         descs = []
-        for src, ids in x["source_refs"].items():
+        for src, ids in (x.get("source_refs") or {}).items():
             for sid in ids:
                 t = desc.get((src, str(sid)))
                 if t:
@@ -137,34 +168,36 @@ def main() -> int:
         if not descs:
             continue  # skip if no description from any source
 
-        arch_n = [arch_names.get(a, a) for a in x["canonical_arch_ids"][:3]]
+        arch_n = [arch_names.get(a, a) for a in (x.get("canonical_arch_ids") or [])[:3]]
         entries.append({
             "cid":          x["canonical_bld_id"],
-            "primary_name": x["primary_name"],
+            "primary_name": _primary_name(x),
             "arch_names":   arch_n,
-            "city":         x["city"],
-            "country":      x["country"],
-            "year":         x["year"],
-            "typology":     x["typology"],
+            "city":         x.get("city"),
+            "country":      x.get("country"),
+            "year":         x.get("year"),
+            "typology":     x.get("typology"),
             "descriptions": descs,
         })
 
     print(f"  with descriptions: {len(entries)}", flush=True)
 
     # Split into batches
-    os.makedirs(args.out_dir, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
     n_batches = (len(entries) + args.batch_size - 1) // args.batch_size
     for n in range(n_batches):
         chunk = entries[n*args.batch_size:(n+1)*args.batch_size]
         # Add local index for cross-ref
         for i, e in enumerate(chunk):
             e["i"] = i
-        path = os.path.join(args.out_dir, f"batch_{n:03d}.json")
+        path = os.path.join(out_dir, f"batch_{n:03d}.json")
         with open(path, "w") as f:
             json.dump(chunk, f, indent=2, ensure_ascii=False)
 
-    print(f"\n✓ {n_batches} batches × ~{args.batch_size} entries → {args.out_dir}",
+    print(f"\n✓ {n_batches} batches × ~{args.batch_size} entries → {out_dir}",
           flush=True)
+    print(f"  results dir ready → {results_dir}", flush=True)
     return 0
 
 
