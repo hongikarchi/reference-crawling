@@ -87,3 +87,50 @@ def test_passes_when_cache_file_missing(tmp_path, monkeypatch):
 
     assert result == {"verdict": "PASS", "reason": "no cache"}
 
+
+def test_tiebreaker_pass_when_name_and_year_agree(tmp_path, monkeypatch):
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "divisare:open_house_a": ["0000000000000000", "00000000000000ff"],
+            "archello:open_house_b": ["ffffffffffffffff", "ffffffffffffff00"],
+        },
+    )
+
+    result = match_phash_check.has_phash_overlap(
+        ["open_house_a"],
+        ["open_house_b"],
+        "divisare",
+        "archello",
+        name_a="Open House",
+        name_b="Open House",
+        year_a=2014,
+        year_b=2014,
+    )
+
+    assert result == {"verdict": "TIEBREAKER_PASS", "overlap": 0, "a_n": 2, "b_n": 2}
+
+
+def test_block_when_name_and_year_both_disagree(tmp_path, monkeypatch):
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "divisare:bld_026977_a": ["0000000000000000", "00000000000000ff"],
+            "metalocus:bld_026977_b": ["ffffffffffffffff", "ffffffffffffff00"],
+        },
+    )
+
+    result = match_phash_check.has_phash_overlap(
+        ["bld_026977_a"],
+        ["bld_026977_b"],
+        "divisare",
+        "metalocus",
+        name_a="Terrace House",
+        name_b="Terracotta House",
+        year_a=2020,
+        year_b=2021,
+    )
+
+    assert result == {"verdict": "BLOCK", "overlap": 0, "a_n": 2, "b_n": 2}

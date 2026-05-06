@@ -285,6 +285,7 @@ MATCH-DONE: phash_cache_perf v1
 MATCH-DONE: phash_cache_scope_filter v1
 MATCH-ESCALATE: phash_build_codex_blocked process died within 8s; launch emitted "zsh:1: nice(5) failed: operation not permitted"; ps sandbox blocked, escalated ps found no process
 MATCH-ESCALATE: stage_b_codex_blocked nohup matcher PID 56397 died within 8s; logs/match_buildings_v2.log empty; manual backup data/id_registry_buildings.before_phash.json created
+MATCH-DONE: phash_gate_tiebreaker v1
 
 ## Research Ready
 
@@ -297,3 +298,4 @@ MATCH-DONE: phash_cache_scope_filter v1 — commit 1470965
 MATCH-ESCALATE: phash_build_codex_blocked — codex sandbox blocks nohup nice() syscall; long-running background ops must run from DB-MAIN
 MATCH-DONE: phash_cache_running v2 (PID=58924, DB-MAIN nohup, --canonical-only --workers=32, ETA ~1.5h)
 MATCH-DONE: stage_b_phash_running v2 (PID=58304, DB-MAIN nohup, phash gate active, --canonical-output _v2.json --reset, ETA 30m-1h)
+- REVIEWER-BLOCK: stage_b_v2 cycle 1/5 — phash gate over-aggressive: gate codified invariants PASS + multi-source spot-check 10/10 same-building + golden bld_026977 correctly split, BUT phash_blocks 0/20 justified (every sampled BLOCK is a real same-building pair; ~3,230 likely false-negatives = 40% of attempted multi-source joins destroyed). Likely root cause: cross-source CDN re-encoding pushes phash drift > Hamming 8 even on identical photos AND/OR sources curate disjoint photo selections. Diagnosis + 4 fix options in `.claude/escalations/stage_b_v2_20260506_185654.md`. Recommended first try: raise cross-source Hamming threshold 8 → 16, OR demote gate from absolute veto to tie-breaker (require name+architect+year disagreement before BLOCK).

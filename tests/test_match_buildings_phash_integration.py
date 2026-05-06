@@ -82,7 +82,7 @@ def test_auto_accept_merge_allowed_when_phash_overlaps(tmp_path, monkeypatch):
     assert matcher.PHASH_BLOCK_LOG == []
 
 
-def test_auto_accept_merge_blocked_when_phash_has_zero_overlap(tmp_path, monkeypatch):
+def test_auto_accept_merge_allowed_when_zero_phash_but_text_agrees(tmp_path, monkeypatch):
     blocks_path = tmp_path / "blocks.json"
     monkeypatch.setattr(matcher, "PHASH_BLOCKS_OUTPUT", str(blocks_path))
     matcher._reset_phash_blocks()
@@ -106,10 +106,10 @@ def test_auto_accept_merge_blocked_when_phash_has_zero_overlap(tmp_path, monkeyp
         tiebreak_queue=tiebreak_queue,
     )
 
-    assert counts["phash_block"] == 1
-    assert counts["needs_tiebreak"] == 1
-    assert "architizer" not in registry.data[cid]["source_refs"]
-    assert tiebreak_queue[0]["phash_blocked"] is True
+    assert counts["auto_accept"] == 1
+    assert "phash_block" not in counts
+    assert registry.data[cid]["source_refs"]["architizer"] == ["a1"]
+    assert tiebreak_queue == []
 
     blocks = json.loads(blocks_path.read_text(encoding="utf-8"))
     assert blocks == [
@@ -119,9 +119,9 @@ def test_auto_accept_merge_blocked_when_phash_has_zero_overlap(tmp_path, monkeyp
             "cluster_id_b": "a1",
             "src_a": "divisare",
             "src_b": "architizer",
+            "verdict": "tiebreaker_pass",
             "overlap": 0,
             "a_n": 2,
             "b_n": 2,
         }
     ]
-

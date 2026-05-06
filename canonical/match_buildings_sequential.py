@@ -102,14 +102,16 @@ def _record_phash_block(
     result: dict,
     phase: str,
 ) -> None:
-    PHASH_BLOCK_COUNTER["total"] += 1
-    PHASH_BLOCK_COUNTER[phase] += 1
+    if result.get("verdict") == "BLOCK":
+        PHASH_BLOCK_COUNTER["total"] += 1
+        PHASH_BLOCK_COUNTER[phase] += 1
     PHASH_BLOCK_LOG.append({
         "phase": phase,
         "cluster_id_a": existing_cid,
         "cluster_id_b": incoming_id,
         "src_a": src_a,
         "src_b": src_b,
+        "verdict": str(result.get("verdict", "")).lower(),
         "overlap": result.get("overlap", 0),
         "a_n": result.get("a_n", 0),
         "b_n": result.get("b_n", 0),
@@ -124,6 +126,10 @@ def _phash_allows_merge(
     *,
     incoming_id: str,
     phase: str,
+    name_a: str | None = None,
+    name_b: str | None = None,
+    year_a: object = None,
+    year_b: object = None,
 ) -> bool:
     if not PHASH_GATE_ENABLED:
         return True
@@ -133,7 +139,16 @@ def _phash_allows_merge(
         for src_b, src_b_ids in incoming_refs.items():
             if src_a == src_b:
                 continue
-            result = has_phash_overlap(src_a_ids, src_b_ids, src_a, src_b)
+            result = has_phash_overlap(
+                src_a_ids,
+                src_b_ids,
+                src_a,
+                src_b,
+                name_a=name_a,
+                name_b=name_b,
+                year_a=year_a,
+                year_b=year_b,
+            )
             if result.get("verdict") == "BLOCK":
                 _record_phash_block(
                     existing_cid=existing_cid,
@@ -144,6 +159,15 @@ def _phash_allows_merge(
                     phase=phase,
                 )
                 return False
+            if result.get("verdict") == "TIEBREAKER_PASS":
+                _record_phash_block(
+                    existing_cid=existing_cid,
+                    incoming_id=incoming_id,
+                    src_a=src_a,
+                    src_b=src_b,
+                    result=result,
+                    phase=phase,
+                )
     return True
 
 
@@ -385,6 +409,10 @@ def phase_match_against_pool(
                 incoming_refs,
                 incoming_id=item["id"],
                 phase=label,
+                name_a=top.get("name"),
+                name_b=item.get("name"),
+                year_a=top.get("year"),
+                year_b=item.get("year"),
             ):
                 counts["phash_block"] += 1
                 counts["needs_tiebreak"] += 1
@@ -479,6 +507,10 @@ def pass_2_orphan_rescue(
                 entry.get("source_refs", {}),
                 incoming_id=cid,
                 phase="pass2",
+                name_a=top.get("name"),
+                name_b=item.get("name"),
+                year_a=top.get("year"),
+                year_b=item.get("year"),
             ):
                 counts["phash_block"] += 1
                 counts["needs_tiebreak"] += 1
