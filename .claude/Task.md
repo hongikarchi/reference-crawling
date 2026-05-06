@@ -280,6 +280,7 @@ MATCH-DONE: phash_cache_code v1
 - REVIEWER-PASS: phash_cache_code v1 — 1/1 test passes (build + resume); scope clean (canonical/phash_cache.py + tests/); cache format `{"<source>:<source_id>": [<phash_hex>, …]}` matches match_phash_check reader; CLI `--build [--limit N] [--source <name>] [--workers 8]` present; resume via data/canonical/phash_cache_progress.json + per-row skip + write_every=100 atomic flush; reuses canonical/image_dedup.fetch_image_metadata (no duplication); per-future try/except + fetcher=None tolerated; imagehash.phash hash_size=16 (256-bit) inherited from image_dedup.
 MATCH-ESCALATE: phash_cache_smoke fetch all-fails: 100 rows processed, 0 rows with phashes
 MATCH-DONE: matcher_phash_integration v1
+MATCH-DONE: phash_cache_perf v1
 
 ## Research Ready
 

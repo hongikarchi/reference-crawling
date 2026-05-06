@@ -13,7 +13,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 from canonical.image_dedup import fetch_image_metadata
 
@@ -239,41 +239,96 @@ def iter_source_rows(
             yield from _iter_sql_source_rows(spec)
 
 
-def _fetch_phashes(
-    urls: Iterable[str],
+def _iter_pending_chunks(
+    *,
+    source: Optional[str],
+    source_specs: Optional[dict[str, SourceSpec]],
+    done: set[str],
+    limit: Optional[int],
+    chunk_size: int,
+    summary: dict[str, int],
+) -> Iterator[list[dict]]:
+    chunk: list[dict] = []
+    queued = 0
+    for item in iter_source_rows(source=source, source_specs=source_specs):
+        key = _cache_key(item["source"], item["source_id"])
+        if key in done:
+            summary["rows_skipped_done"] += 1
+            continue
+        if limit is not None and queued >= limit:
+            break
+
+        summary["rows_seen"] += 1
+        chunk.append({**item, "key": key})
+        queued += 1
+        if len(chunk) >= chunk_size:
+            yield chunk
+            chunk = []
+    if chunk:
+        yield chunk
+
+
+def _fetch_chunk(
+    chunk: list[dict],
     *,
     workers: int,
-    fetcher: Callable[..., Optional[dict]] = fetch_image_metadata,
-) -> list[str]:
-    ordered_urls = list(urls)
-    phashes_by_url: dict[str, str] = {}
-    with ThreadPoolExecutor(max_workers=max(workers, 1)) as ex:
-        futures = {
-            ex.submit(fetcher, url, timeout=20): url
-            for url in ordered_urls
+    fetcher: Callable[..., Optional[dict]],
+) -> Iterator[tuple[str, list[str], int]]:
+    """Fetch all URLs in a chunk and yield rows after every URL has returned."""
+    state: dict[str, dict] = {}
+    futures = {}
+    for item in chunk:
+        key = item["key"]
+        urls = list(item.get("urls") or [])
+        state[key] = {
+            "remaining": len(urls),
+            "phashes": {},
+            "n_urls": len(urls),
         }
-        for fut in as_completed(futures):
-            url = futures[fut]
+        for idx, url in enumerate(urls):
+            futures[(key, idx)] = url
+
+    if not futures:
+        for key, row in state.items():
+            yield key, [], row["n_urls"]
+        return
+
+    with ThreadPoolExecutor(max_workers=max(workers, 1)) as ex:
+        future_map = {
+            ex.submit(fetcher, url, timeout=20): (key, idx)
+            for (key, idx), url in futures.items()
+        }
+        for fut in as_completed(future_map):
+            key, idx = future_map[fut]
             try:
                 meta = fut.result()
             except Exception:
                 meta = None
             phash = meta.get("phash") if isinstance(meta, dict) else None
             if isinstance(phash, str) and phash:
-                phashes_by_url[url] = phash
-    return [phashes_by_url[url] for url in ordered_urls if url in phashes_by_url]
+                state[key]["phashes"][idx] = phash
+
+            state[key]["remaining"] -= 1
+            if state[key]["remaining"] == 0:
+                phashes_by_index = state[key]["phashes"]
+                ordered_phashes = [
+                    phashes_by_index[i]
+                    for i in sorted(phashes_by_index)
+                ]
+                yield key, ordered_phashes, state[key]["n_urls"]
 
 
 def build_cache(
     *,
     limit: Optional[int] = None,
     source: Optional[str] = None,
-    workers: int = 8,
+    workers: int = 32,
     cache_path: Path = CACHE_PATH,
     progress_path: Path = PROGRESS_PATH,
     source_specs: Optional[dict[str, SourceSpec]] = None,
     fetcher: Callable[..., Optional[dict]] = fetch_image_metadata,
     write_every: int = 100,
+    chunk_size: int = 1000,
 ) -> dict[str, int]:
     cache = _load_cache(cache_path)
     done = _load_progress(progress_path) | set(cache.keys())
@@ -284,28 +339,38 @@ def build_cache(
         "rows_processed": 0,
         "rows_with_phashes": 0,
         "phashes_written": 0,
+        "urls_attempted": 0,
+        "fetch_errors": 0,
     }
 
-    for item in iter_source_rows(source=source, source_specs=source_specs):
-        key = _cache_key(item["source"], item["source_id"])
-        if key in done:
-            summary["rows_skipped_done"] += 1
-            continue
-        if limit is not None and summary["rows_processed"] >= limit:
-            break
+    completed_since_flush = 0
+    for chunk in _iter_pending_chunks(
+        source=source,
+        source_specs=source_specs,
+        done=done,
+        limit=limit,
+        chunk_size=max(chunk_size, 1),
+        summary=summary,
+    ):
+        for key, phashes, n_urls in _fetch_chunk(
+            chunk,
+            workers=workers,
+            fetcher=fetcher,
+        ):
+            cache[key] = phashes
+            done.add(key)
+            summary["rows_processed"] += 1
+            summary["urls_attempted"] += n_urls
+            summary["phashes_written"] += len(phashes)
+            summary["fetch_errors"] += max(n_urls - len(phashes), 0)
+            if phashes:
+                summary["rows_with_phashes"] += 1
 
-        summary["rows_seen"] += 1
-        phashes = _fetch_phashes(item["urls"], workers=workers, fetcher=fetcher)
-        cache[key] = phashes
-        done.add(key)
-        summary["rows_processed"] += 1
-        summary["phashes_written"] += len(phashes)
-        if phashes:
-            summary["rows_with_phashes"] += 1
-
-        if summary["rows_processed"] % max(write_every, 1) == 0:
-            _write_json_atomic(cache_path, cache)
-            _write_progress(progress_path, done)
+            completed_since_flush += 1
+            if completed_since_flush >= max(write_every, 1):
+                _write_json_atomic(cache_path, cache)
+                _write_progress(progress_path, done)
+                completed_since_flush = 0
 
     _write_json_atomic(cache_path, cache)
     _write_progress(progress_path, done)
@@ -319,7 +384,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--build", action="store_true", help="build/update the cache")
     parser.add_argument("--limit", type=int, default=None, help="process at most N new rows")
     parser.add_argument("--source", choices=sorted(SOURCE_SPECS), default=None)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=32)
     args = parser.parse_args(argv)
 
     if not args.build:
@@ -335,4 +400,3 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
