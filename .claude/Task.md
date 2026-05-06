@@ -252,6 +252,7 @@ Append-only cross-agent signals. Rolling window — keep the last ~20 entries.
 - RESEARCH-COMPLETE: archello-schema — `.claude/research/archello-schema.md` (2026-04-28). Verdict: **MODERATE**. Public read, ai-train=no flag, Cloudflare blocks ClaudeBot but passes browser UA. Per-project BIM-spec via `data-key` JSON = unique value. ~135K projects.
 - RESEARCH-COMPLETE: archdaily-schema — `.claude/research/archdaily-schema.md` (2026-04-28). Verdict: **technically EASY, legally HOSTILE** (split — user must decide). Sitemap, no Cloudflare, `cXenseParse:project-*` meta cleaner than Divisare. ToS prohibits scraping; user posture decision required.
 MATCH-DONE: phash_check v1
+- REVIEWER-PASS: phash_check v1 — 4/4 unit tests pass; scope clean (canonical/match_phash_check.py + tests/ only); BLOCK fires iff a_n>=2 AND b_n>=2 AND zero cross-source phash cluster overlap (Hamming<=8); golden bld_026977-style fixture BLOCKs as required.
 MATCH-DONE: phash_cache_code v1
 
 ## Research Ready
