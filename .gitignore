@@ -30,3 +30,6 @@ Thumbs.db
 01_MAKE_DB.md
 .claude/scheduled_tasks.lock
 __pycache__/
+
+# Phase 15 — Reviewer self-heal escalation logs (per-cycle diagnoses)
+.claude/escalations/

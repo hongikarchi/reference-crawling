@@ -103,28 +103,52 @@ The Cases section below describes the agent dispatch *inside* each
 phase box (e.g., Case 7 details how recon happens; Case 1 details how a
 batch enriches; Case 8 details canonical multi-source fold-in).
 
-## Agents (7)
+## Agents
+
+### Phase 15+ team-routed model (current)
+
+The active model is **4 cmux workspaces** mirroring make_web's MAIN/REVIEW/
+BACK/FRONT pattern. Each team has its own workspace, its own running agent,
+and its own Codex CLI (or Claude). DB-MAIN dispatches via `tools/dispatch.sh`
+which wraps `cmux send`.
+
+| cmux workspace | Inside | Agent file | Owns |
+|---|---|---|---|
+| **DB-MAIN** | `claude` (Opus) | `orchestrator.md` | Routing + Reviewer self-heal loop |
+| **DB-CRAWLER** | `codex` | `team-crawler.md` | Stage 1 — 4 source crawlers |
+| **DB-MATCHER** | `codex` | `team-matcher.md` | Stage A + B + E (architect/building/phash) |
+| **DB-ENRICHER** | `codex` | `team-enricher.md` | Stage C + D (LLM text + image enrich) |
+| **DB-REVIEWER** | `claude` (Opus) | `team-reviewer.md` | Blocking QC gate between every stage |
+
+### Legacy in-session sub-agents (still used)
+
+These run as Agent tool dispatches inside DB-MAIN, not as separate cmux tabs:
 
 | Agent | Model | Role |
 |---|---|---|
-| `orchestrator` | opus | Top-level router. Reads Goal/Task/REPORT on every invocation. Dispatches sub-agents. Manages the quality iteration loop (max 2 cycles). Never runs pipeline or upload directly. |
-| `batch-worker` | sonnet | Runs `enrich/harness.py` on a new batch. Monitors progress. Reports counts + quarantined buildings back. Does not interpret quality. |
-| `quality-reviewer` | sonnet | Runs `run.py quality {review,rate,diagnose}` and `run.py canonical-qc`. Interprets results. Decides: ship / iterate / re-process subset. Emits fix orders with concrete building-id lists. |
-| `reporter` | sonnet | Updates `.claude/REPORT.md` after state-changing operations. Moves completed Task.md items from In Progress → Resolved. Keeps the rolling window trimmed. |
-| `researcher` | opus | Investigates ambiguous decisions (new-source recon, vocab expansion, eval thresholds). `WebSearch` + `WebFetch` tools. Writes to `.claude/research/`. Does not touch code or data. |
-| `upload-guard` | sonnet | Pre-upload review gate. Verifies quality rating + audit reports + explicit user approval. Runs `upload/neon{,_strict}.py --dry-run`. Gates but never runs the real upload — user runs it after `UPLOAD-READY` appears in Handoffs. |
-| `git-manager` | haiku | Stages + commits per logical change. Pushes only when the user (or orchestrator on the user's behalf) explicitly says "push" / "푸시해" / "올려". Never `--force`. See `.claude/agents/git-manager.md`. |
+| `reporter` | sonnet | Updates `.claude/REPORT.md` after state-changing ops. Trims rolling window. |
+| `researcher` | opus | Investigates ambiguous decisions (vocab expansion, eval thresholds, new-source recon). WebSearch + WebFetch. Writes to `.claude/research/`. |
+| `upload-guard` | sonnet | Pre-upload gate. Runs `upload/*.py --dry-run`. Emits `UPLOAD-READY`; never runs the real upload. |
+| `git-manager` | haiku | Commits per logical change. Pushes only on explicit user signal. |
+| `quality-reviewer` | sonnet | **Deprecated** (folded into `team-reviewer`). Kept for legacy quality CLI invocations. |
+| `batch-worker` | sonnet | **Deprecated** (folded into `team-enricher`). Kept for legacy harness invocations. |
 
-## Terminal Model
+## Terminal Model (Phase 15+)
 
-Single-terminal is the default for make_db. Unlike make_web, there's no
-frontend/backend concurrency that warrants a 4-terminal split. Research
-*can* run in a second terminal if investigation is long-running (e.g., vocab
-evolution), but most of the time it's:
+5 cmux workspaces in one window. DB-MAIN orchestrates by reading
+Task.md Handoffs and pushing instructions into the other 4 workspaces:
 
 ```
-main terminal ── orchestrator ── sub-agents (as dispatched)
+DB-MAIN ── orchestrator ──→ tools/dispatch.sh
+                                ├─→ cmux send → DB-CRAWLER (codex)
+                                ├─→ cmux send → DB-MATCHER (codex)
+                                ├─→ cmux send → DB-ENRICHER (codex)
+                                └─→ cmux send → DB-REVIEWER (claude)
+                                
+DB-MAIN ←── Handoffs ←── all teams append signals to .claude/Task.md
 ```
+
+Setup (idempotent): `./tools/cmux_setup.sh`
 
 ## Cases
 
@@ -267,16 +291,52 @@ orchestrator
 
 Append-only. Each signal is a single line: `<SIGNAL>: <payload>`. Recognized:
 
-- `BATCH-DONE: N` — Case 1 completed; N new buildings processed.
+### Phase 15 team-routing signals
+
+- `CRAWL-DONE: <source> v<n>` — DB-CRAWLER finished a crawl phase.
+- `MATCH-DONE: <stage> v<n>` — DB-MATCHER finished Stage A/B/E (or Stage F build.py).
+- `ENRICH-DONE: <scope> v<n>` — DB-ENRICHER finished Stage C/D for the given scope.
+- `REVIEWER-PASS: <stage> v<n>` — DB-REVIEWER cleared the artefact.
+- `REVIEWER-WARN: <stage> v<n> <reason>` — concern noted; may proceed.
+- `REVIEWER-BLOCK: <stage> v<n> cycle <c>/5 — <one-line summary>`
+  — full diagnosis at `.claude/escalations/<stage>_<ts>.md`.
+- `<TEAM>-ESCALATE: <stage> exhausted self-heal` — cap (5 cycles or $20) hit; manual.
+- `THRESHOLD-OVERRIDE-APPROVED: <param>=<value> <reason>` — user signed off on a matcher threshold change.
+- `ENRICH-COST-APPROVED: <usd>` — user OK'd a > $5 enrichment task.
+- `RE-ENRICH-APPROVED: <scope>` — user OK'd re-running enrichment on already-enriched rows.
+
+### Legacy signals (still emitted by in-session sub-agents)
+
+- `BATCH-DONE: N` — Case 1 completed.
 - `REPROCESS-APPROVED: <scope>` — user OK'd a re-processing run.
 - `REPROCESS-DONE: <scope>, delta=<score>` — re-processing complete.
 - `PROMPT-VERSION-BUMPED: <old> → <new>, delta=<score>` — Case 4 outcome.
 - `RESEARCH-REQUESTED: <topic>` — orchestrator wants researcher to investigate.
-- `RESEARCH-COMPLETE: <topic>` — researcher done; findings at `.claude/research/<topic>.md`.
-- `IMPLEMENTATION-COMPLETE: <source>-crawler` — Case 7 step 6 done; new source code shipped.
-- `CANONICAL-REBUILT: rows=<N>` — Case 8 done; `canonical_buildings_strict.json` regenerated and QC passed.
-- `UPLOAD-READY: count=<N>, quality=<X>/100` — upload-guard cleared; user may run upload.
-- `ESCALATE: <reason>` — orchestrator hit the 2-iteration limit; hands back to user.
+- `RESEARCH-COMPLETE: <topic>` — researcher done; `.claude/research/<topic>.md`.
+- `IMPLEMENTATION-COMPLETE: <source>-crawler` — Case 7 step 6.
+- `CANONICAL-REBUILT: rows=<N>` — Case 8 done.
+- `UPLOAD-READY: count=<N>, quality=<X>/100` — upload-guard cleared.
+- `ESCALATE: <reason>` — manual takeover.
+
+## Phase 15 self-heal loop (between any two stages)
+
+```
+[team tab] runs stage X        → appends <TEAM>-DONE: X v<n>
+[DB-MAIN] reads Handoffs       → ./tools/dispatch.sh reviewer "Review X v<n>"
+[DB-REVIEWER] runs reviewer_gate.py
+   ├─ PASS    → REVIEWER-PASS  → DB-MAIN dispatches next stage
+   ├─ WARN    → REVIEWER-WARN  → DB-MAIN proceeds with logged concern
+   └─ BLOCK   → REVIEWER-BLOCK + .claude/escalations/X_<ts>.md
+                → DB-MAIN reads escalation, dispatches responsible team:
+                   "Fix per .claude/escalations/<file>; re-run; cycle <c+1>/5"
+                → team's Codex fixes root cause
+                → re-runs the suspect slice (NOT a full pipeline re-run)
+                → appends <TEAM>-DONE: X v<n+1>
+                → loop back to "[DB-MAIN] reads Handoffs"
+
+Hard cap per stage attempt: 5 cycles OR cumulative $20 (Codex + Reviewer + re-run)
+At cap: <TEAM>-ESCALATE → DB-MAIN writes ESCALATE: <reason> → wait for user.
+```
 
 ## Git policy (solo-dev, single-branch)
 

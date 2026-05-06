@@ -4,23 +4,39 @@ Agent-driven pipeline: crawl metalocus.es → enrich + analyze → review → up
 
 ## How to start a session
 
-Non-trivial work routes through the **orchestrator** agent
+**Phase 15+ multi-team mode:** make_db runs across **5 cmux workspaces** in
+one window — DB-MAIN, DB-CRAWLER, DB-MATCHER, DB-ENRICHER, DB-REVIEWER.
+This Claude Code session lives in **DB-MAIN** as the orchestrator
 (`.claude/agents/orchestrator.md`). It reads Goal/Task/REPORT/WORKFLOW first,
-then dispatches sub-agents per the Cases in `.claude/WORKFLOW.md`.
+then dispatches the responsible team via `./tools/dispatch.sh <team> "<msg>"`
+which wraps `cmux send`.
+
+To set up the 5-workspace layout (idempotent):
+```bash
+./tools/cmux_setup.sh
+```
+
+Each non-MAIN workspace runs either `codex` (CRAWLER/MATCHER/ENRICHER —
+writes/fixes pipeline code) or `claude` (REVIEWER — blocking QC gate).
+See `.claude/agents/team-*.md` for per-team responsibilities and
+`.claude/WORKFLOW.md` § "Phase 15 self-heal loop" for the full cycle.
 
 For one-off scripted work (e.g., "just check status"), invoke the relevant
-script directly via the CLI below — agent layer is for multi-step operations.
+script directly via the CLI below — multi-team layer is for multi-step
+quality-gated operations.
 
 ## Documents
 
 - `.claude/Goal.md` — vision + quality targets + non-goals (read first by every agent)
 - `.claude/Task.md` — open / in-progress / resolved + handoff signals
-- `.claude/WORKFLOW.md` — 6 operational Cases + handoff signal vocabulary
+- `.claude/WORKFLOW.md` — operational Cases + handoff signal vocabulary + Phase 15 self-heal loop
 - `.claude/REPORT.md` — live system state (counts, quality, known gotchas)
 - `.claude/PROJECT.md` — schemas + vocabularies + tool specs (technical reference)
-- `.claude/agents/*.md` — 6 sub-agent definitions (orchestrator, batch-worker,
-  quality-reviewer, reporter, researcher, upload-guard)
-- `~/.claude/plans/db-fuzzy-lerdorf.md` — full 7-phase architecture roadmap
+- `.claude/agents/*.md` — agent definitions:
+  - **team layer (Phase 15+, in own cmux workspace):** orchestrator, team-crawler, team-matcher, team-enricher, team-reviewer
+  - **in-session sub-agents:** reporter, researcher, upload-guard, git-manager
+- `.claude/escalations/` — Reviewer BLOCK diagnoses (gitignored)
+- `~/.claude/plans/db-fuzzy-lerdorf.md` — full architecture roadmap (Phases 0-15)
 
 ## Rules
 

@@ -57,6 +57,14 @@ USER_AGENT = "MetalocusArchCrawler/1.0 (academic research; respectful crawling)"
 # rows keep their on-disk images.
 METALOCUS_DOWNLOAD_IMAGES = False
 
+# Phase 15 — multi-team self-heal loop caps. After Reviewer BLOCK, the
+# responsible team's Codex CLI gets up to N retry cycles or $X cumulative
+# cost (whichever hits first) before escalating to the user.
+CODEX_RETRY_CAP      = 5
+CODEX_COST_CAP_USD   = 20.0
+CODEX_CLI_PATH       = "/Users/kms_laptop/.nvm/versions/node/v24.11.0/bin/codex"
+CMUX_CLI_PATH        = "/Applications/cmux.app/Contents/Resources/bin/cmux"
+
 # Harness (enrich/harness.py + agents)
 # State for the queue-driven worker lives in data/enrich/tasks.db (see enrich/tasks_db.py).
 # Hard-failure quarantines are appended to FAILED_LOG_JSON.
