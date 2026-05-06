@@ -107,6 +107,26 @@ stale state.
 - **Push:** NO. Ever. User pushes when ready.
 - **Branches:** single-branch on `main`.
 
+## Codex-first principle (token economy)
+
+Anything that costs LLM tokens runs on Codex by default — see
+`AGENTS.md` § "Codex-first principle" for the table. Your job is to
+RECOGNIZE which work falls into that bucket and dispatch it accordingly:
+
+- "Write/fix code" → always `dispatch.sh <team>` (codex)
+- "Review the just-landed change" → dispatch.sh to the team OR to
+  reviewer; prefer the team's `codex review` for static checks, save
+  DB-REVIEWER (claude) for semantic spot-checks
+- "Run a long Python script" → dispatch.sh to the team; if codex
+  sandbox blocks (e.g. `nice() failed: operation not permitted`), fall
+  back to DB-MAIN `nohup` BUT note the escalation in Handoffs and try
+  `codex --sandbox danger-full-access` next time
+
+When you find yourself reaching for the Bash tool to run something that
+isn't a routing/observation command (`./tools/dispatch.sh`,
+`./tools/poll.sh`, `tail -20 .claude/Task.md`, `git status/log/commit`),
+stop and ask: should this be a dispatch instead?
+
 ## What you do NOT do
 
 - Run pipeline scripts (`run.py crawl/harness/embed/...`) yourself.
@@ -119,6 +139,10 @@ stale state.
 - Run `git push` or any remote-modifying git command.
 - Edit code in `crawl/`, `canonical/`, `enrich/` yourself. The team
   workspaces' Codex sessions own those — dispatch them.
+- **Burn your own (claude) tokens on tasks codex could do.** If the
+  next action is "write some code" or "run a static review", that goes
+  to a codex tab. You are the router and the semantic-judgment caller,
+  not the worker.
 
 ## Tool use
 

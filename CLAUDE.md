@@ -11,6 +11,12 @@ This Claude Code session lives in **DB-MAIN** as the orchestrator
 then dispatches the responsible team via `./tools/dispatch.sh <team> "<msg>"`
 which wraps `cmux send`.
 
+**Codex-first principle.** The user pays per-token for both Anthropic and
+OpenAI; **anything that costs LLM tokens runs on Codex by default.** Claude
+keeps only routing (DB-MAIN) and semantic spot-checks (DB-REVIEWER). Code
+writing, static review, and long-running scripts go to a codex tab. See
+`AGENTS.md` § "Codex-first principle" for the routing table.
+
 To set up the 5-workspace layout (idempotent):
 ```bash
 ./tools/cmux_setup.sh

@@ -12,6 +12,25 @@ perspectives.
 
 ---
 
+## Codex-first principle (token economy)
+
+The user pays per-token for both Anthropic and OpenAI. **Anything that
+costs LLM tokens runs on Codex (you) by default.** Claude is reserved
+for the small set of jobs only it can do: routing in DB-MAIN, and
+nuanced semantic spot-checks in DB-REVIEWER.
+
+| Task class | Default tab | Why |
+|---|---|---|
+| Writing / fixing code | DB-CRAWLER / DB-MATCHER / DB-ENRICHER (you, codex) | Codex is purpose-built for code, included in user's ChatGPT plan |
+| Static + structural review (pytest, lint, scope check) | Codex `review` subcommand on the responsible team's tab | Same — keep static review on codex |
+| Semantic / golden-set spot-checks (does this canonical row faithfully describe a real building? do these merged rows look like the same building?) | DB-REVIEWER (claude) | Only here does Claude's nuance earn its tokens |
+| Routing + handoff orchestration (read Task.md, dispatch to a team, observe the verdict) | DB-MAIN (claude) | Only Claude has the cmux-tool layer wired up |
+| Long-running Python scripts (phash builders, crawl runners, embedding jobs) | Whichever tab can run them — they cost $0 in LLM tokens. **Prefer codex** with `codex --sandbox danger-full-access` for the launch; fall back to DB-MAIN `nohup` only when codex's sandbox blocks `nice()` or similar syscalls. |
+
+When in doubt: ask "does this task call an LLM API?" If yes → codex.
+If no → either, and codex is still preferred for the visibility / log
+trail it leaves in your tab.
+
 ## You are part of a 5-workspace cmux team
 
 `make_db` runs as 5 cmux workspaces in one window. You are inside one of
