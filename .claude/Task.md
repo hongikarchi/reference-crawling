@@ -254,6 +254,7 @@ Append-only cross-agent signals. Rolling window — keep the last ~20 entries.
 MATCH-DONE: phash_check v1
 - REVIEWER-PASS: phash_check v1 — 4/4 unit tests pass; scope clean (canonical/match_phash_check.py + tests/ only); BLOCK fires iff a_n>=2 AND b_n>=2 AND zero cross-source phash cluster overlap (Hamming<=8); golden bld_026977-style fixture BLOCKs as required.
 MATCH-DONE: phash_cache_code v1
+- REVIEWER-PASS: phash_cache_code v1 — 1/1 test passes (build + resume); scope clean (canonical/phash_cache.py + tests/); cache format `{"<source>:<source_id>": [<phash_hex>, …]}` matches match_phash_check reader; CLI `--build [--limit N] [--source <name>] [--workers 8]` present; resume via data/canonical/phash_cache_progress.json + per-row skip + write_every=100 atomic flush; reuses canonical/image_dedup.fetch_image_metadata (no duplication); per-future try/except + fetcher=None tolerated; imagehash.phash hash_size=16 (256-bit) inherited from image_dedup.
 
 ## Research Ready
 
