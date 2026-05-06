@@ -64,5 +64,10 @@ if [ -z "$sref" ]; then
 fi
 
 $CMUX send --workspace "$ws_ref" --surface "$sref" "$MSG"
+# Long messages get caught by Claude Code's paste-mode (a single Enter
+# closes the paste, doesn't submit). Send Enter twice with a short pause —
+# safe for Codex (second Enter on an empty prompt is a no-op there).
+$CMUX send-key --workspace "$ws_ref" --surface "$sref" "Enter"
+sleep 0.4
 $CMUX send-key --workspace "$ws_ref" --surface "$sref" "Enter"
 echo "→ $WS_NAME ($ws_ref / $sref): $MSG"
