@@ -100,12 +100,19 @@ def _text_confirms_block(
     if year_a is _MISSING or year_b is _MISSING:
         return None
 
-    name_sim = fuzz.token_set_ratio(str(name_a or ""), str(name_b or ""))
+    name_a_text = str(name_a or "").strip()
+    name_b_text = str(name_b or "").strip()
+    if not name_a_text or not name_b_text:
+        return False
+
+    name_sim = fuzz.token_set_ratio(name_a_text, name_b_text)
     name_disagrees = name_sim < 90
 
     ya = _parse_year(year_a)
     yb = _parse_year(year_b)
-    year_disagrees = ya is None or yb is None or ya != yb
+    if ya is None or yb is None:
+        return False
+    year_disagrees = abs(ya - yb) > 1
     return name_disagrees and year_disagrees
 
 

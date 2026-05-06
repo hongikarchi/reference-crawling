@@ -130,7 +130,55 @@ def test_block_when_name_and_year_both_disagree(tmp_path, monkeypatch):
         name_a="Terrace House",
         name_b="Terracotta House",
         year_a=2020,
-        year_b=2021,
+        year_b=2023,
     )
 
     assert result == {"verdict": "BLOCK", "overlap": 0, "a_n": 2, "b_n": 2}
+
+
+def test_no_block_when_year_missing_one_side(tmp_path, monkeypatch):
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "divisare:year_a": ["0000000000000000", "00000000000000ff"],
+            "archello:year_b": ["ffffffffffffffff", "ffffffffffffff00"],
+        },
+    )
+
+    result = match_phash_check.has_phash_overlap(
+        ["year_a"],
+        ["year_b"],
+        "divisare",
+        "archello",
+        name_a="Terrace House",
+        name_b="Terracotta House",
+        year_a=2021,
+        year_b=None,
+    )
+
+    assert result == {"verdict": "TIEBREAKER_PASS", "overlap": 0, "a_n": 2, "b_n": 2}
+
+
+def test_no_block_when_name_missing_one_side(tmp_path, monkeypatch):
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "divisare:name_a": ["0000000000000000", "00000000000000ff"],
+            "archello:name_b": ["ffffffffffffffff", "ffffffffffffff00"],
+        },
+    )
+
+    result = match_phash_check.has_phash_overlap(
+        ["name_a"],
+        ["name_b"],
+        "divisare",
+        "archello",
+        name_a="X",
+        name_b=None,
+        year_a=2021,
+        year_b=2024,
+    )
+
+    assert result == {"verdict": "TIEBREAKER_PASS", "overlap": 0, "a_n": 2, "b_n": 2}
