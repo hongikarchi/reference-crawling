@@ -172,7 +172,10 @@ def _pick_urls(cover_url: Optional[str], gallery_urls) -> list[str]:
             urls.append(clean)
 
     add(cover_url)
-    for url in _parse_url_list(gallery_urls)[:3]:
+    # Phase 15+ Stage E: dedup needs ALL gallery images, not just first 3.
+    # Cap at 50 as a safety bound (extreme cases). Resume-friendly cache
+    # extension picks up the additional URLs without re-fetching existing.
+    for url in _parse_url_list(gallery_urls)[:50]:
         add(url)
     return urls
 
