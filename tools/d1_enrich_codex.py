@@ -403,6 +403,10 @@ Source descriptions:
 
 
 def run_codex(prompt: str) -> str:
+    # D-1 task complexity = vocab classification + 60-100 word description.
+    # No high reasoning required. reasoning_effort=low cuts token cost ~4x
+    # without measurable accuracy loss on this structured task. Hard reset
+    # if quality drops noticeably — switch back to medium/high.
     base_command = [
         "codex",
         "exec",
@@ -410,7 +414,7 @@ def run_codex(prompt: str) -> str:
         "-c",
         "model=gpt-5.5",
         "-c",
-        "model_reasoning_effort=xhigh",
+        "model_reasoning_effort=low",
         "-c",
         "service_tier=fast",
         prompt,
