@@ -73,9 +73,15 @@ _DATACLASS_FIELDS = {f.name: f for f in CanonicalBuilding.__dataclass_fields__.v
 def _load_canonical(path: str) -> list[dict]:
     with open(path) as f:
         data = json.load(f)
-    if not isinstance(data, list):
-        raise ValueError(f"expected JSON list at root of {path}; got {type(data).__name__}")
-    return data
+    # Schema-tolerant: legacy v1 was list-at-root; Phase 15 v5+ wraps in
+    # dict {summary, clusters} or {buildings}. Accept all three shapes.
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("clusters", "buildings"):
+            if isinstance(data.get(key), list):
+                return data[key]
+    raise ValueError(f"unrecognized canonical shape at root of {path}; got {type(data).__name__}")
 
 
 def _is_orphan(row: dict) -> bool:
