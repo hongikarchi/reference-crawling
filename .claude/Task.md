@@ -312,3 +312,6 @@ MATCH-DONE: e_image_dedup_code v1 (commit 6da8838) — code ready, request DB-MA
 MATCH-DONE: e1_e2_d2_split_code v2 (commit 31b679b) — ready for DB-MAIN nohup launches
 ENRICH-DONE: d1_enrich_codex_running v1 (PID=3798, log=logs/d1_enrich_codex.log, results=data/canonical/d1_results.jsonl, 183/38295, failures=0)
 MATCH-DONE: e_image_dedup_running v1 (PID=16021, DB-MAIN nohup, --workers 32, log=logs/e_image_dedup.log)
+ENRICH-DONE: d1_enrich_resume2 (PID=96789, low reasoning, 17666 done resume)
+MATCH-DONE: e2_vision_running (PID=96902, codex 5-type)
+ENRICH-DONE: d2_cover_vision_running (PID=97062, codex cover Vision)
