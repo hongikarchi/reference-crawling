@@ -34,7 +34,12 @@ fi
 
 SUBJECT="$1"
 shift
-BODY_LINES=("$@")
+# bash 3.2 + set -u: empty array dereference fails. Use explicit fallback.
+if [ "$#" -gt 0 ]; then
+    BODY_LINES=("$@")
+else
+    BODY_LINES=()
+fi
 
 # Refuse to stage suspicious files
 DANGER_PATTERNS=("\.env$" "\.env\." "credentials" "private_key" "secret")
@@ -66,9 +71,11 @@ fi
 
 # Compose message
 MSG_ARGS=("-m" "$SUBJECT")
-for line in "${BODY_LINES[@]}"; do
-    MSG_ARGS+=("-m" "$line")
-done
+if [ "${#BODY_LINES[@]}" -gt 0 ]; then
+    for line in "${BODY_LINES[@]}"; do
+        MSG_ARGS+=("-m" "$line")
+    done
+fi
 MSG_ARGS+=("-m" "Co-Authored-By: Codex CLI (DB-MATCHER) <noreply@openai.com>")
 MSG_ARGS+=("-m" "Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>")
 

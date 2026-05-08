@@ -1,6 +1,46 @@
 # make_db — Current State Report
 
-*Updated: 2026-05-06 (Phase 15 multi-team architecture live)*
+*Updated: 2026-05-08 (codex usage limit hit; non-LLM prep work landed)*
+
+---
+
+## −2. Pipeline state snapshot (2026-05-08 11:00 KST)
+
+**Stage B (matching) — DONE.** v5 promoted to production
+`canonical_buildings_4source.json`: 38,295 clusters, 7,817 multi-source,
+3 hard-blocks (1/3 justified). Convergence 4-cycle self-heal trajectory
+v2→v5: 0/20 → 0/10 → 0/5 → 1/3 hard-block precision. Recall 4,787 →
+7,817 (+63%).
+
+**Stage D-1 (text enrich) — PAUSED at 52%.**
+- 17,666 successes preserved in `data/canonical/d1_results.jsonl`
+- 5,880 + 1,934 burst failures (codex usage-limit cooldown tail)
+- 18,629 untouched
+- Codex CLI hit ChatGPT plan quota; **resume after 2026-05-13 09:32 KST**
+- Per-call switched to `model_reasoning_effort=low` (was xhigh) for ~4x
+  token reduction once we resume; structured task does not need xhigh.
+
+**Stage E-1 (phash dedup) — RUNNING, ~1-2h ETA.**
+- PID 41745 background, no LLM (Python imagehash + cross-source cluster)
+- 28,100 / 38,295 (73%); rate 100 rows/min
+- Codex usage-limit doesn't affect this stage.
+
+**Stage E-2 / D-2 (Vision) — BLOCKED by codex limit.**
+- Code written and tested (commits 31b679b + d7a46fa)
+- Will dispatch immediately when codex returns (5/13 09:32).
+
+**Stage F (assembly) — partially executable now.**
+- New `tools/build_strict_canonical.py` joins v5 + D-1 + E-1 (+ E-2 + D-2
+  when ready). Schema-tolerant: missing inputs leave fields None, so the
+  same script runs at every pipeline-completion stage.
+- Dry-run output: 38,295 buildings, 20,040 with D-1 (52%), 30,667 with
+  E-1 (80%). Identity name 100%. Still need to populate
+  `canonical_arch_ids` (Stage B never wrote them; F-side lookup TODO).
+
+**Stage G (upload) — NEEDS refactor.**
+- `upload/neon_strict.py` is still metalocus-centric (assumes
+  `bid = metalocus_building_id`, requires embedding). Won't work as-is
+  for 4-source canonical. Refactor task queued for codex when it returns.
 
 ---
 
