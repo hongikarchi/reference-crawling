@@ -24,7 +24,19 @@ CMUX=/Applications/cmux.app/Contents/Resources/bin/cmux
 CWD="/Users/kms_laptop/Documents/archi-tinder/make_db"
 
 # team : start_command  (DB-MAIN excluded — it's the current session)
-TEAMS=("DB-CRAWLER:codex" "DB-MATCHER:codex" "DB-ENRICHER:codex" "DB-REVIEWER:claude")
+#
+# Codex is started with `-c model_reasoning_effort=high` to override the
+# default low/medium. NOTE: editing ~/.codex/config.toml's
+# `model_reasoning_effort = "xhigh"` is NOT applied automatically on
+# codex restart — only `-c` flag at launch time sticks. /model menu in
+# the codex tab can override per-session, but the launch flag is the
+# stable default. Per-task tuning still uses `codex exec -c ...`.
+TEAMS=(
+    "DB-CRAWLER:codex -c model_reasoning_effort=high"
+    "DB-MATCHER:codex -c model_reasoning_effort=high"
+    "DB-ENRICHER:codex -c model_reasoning_effort=high"
+    "DB-REVIEWER:claude"
+)
 
 # Self-discovery prompt sent on first start. Same template for all teams;
 # only the team name varies. Tells the agent to read its baseline + role

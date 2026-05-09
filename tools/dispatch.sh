@@ -63,11 +63,36 @@ if [ -z "$sref" ]; then
     exit 3
 fi
 
-$CMUX send --workspace "$ws_ref" --surface "$sref" "$MSG"
-# Long messages get caught by Claude Code's paste-mode (a single Enter
-# closes the paste, doesn't submit). Send Enter twice with a short pause —
-# safe for Codex (second Enter on an empty prompt is a no-op there).
+# A. Auto-/clear before EVERY review dispatch (DB-REVIEWER context bloat
+# prevention — accumulates 100K+ tokens across self-heal cycles otherwise).
+# Opt-out: DISPATCH_NO_CLEAR=1 ./tools/dispatch.sh reviewer "..."
+if [ "$TEAM" = "reviewer" ] && [ "${DISPATCH_NO_CLEAR:-0}" != "1" ]; then
+    $CMUX send --workspace "$ws_ref" --surface "$sref" "/clear" >/dev/null
+    $CMUX send-key --workspace "$ws_ref" --surface "$sref" "Enter" >/dev/null
+    sleep 3
+    echo "[dispatch] $WS_NAME pre-clear sent"
+fi
+
+# Strip newlines: cmux send types literally and a multi-line message would
+# submit the prompt prematurely on the first \n.
+flat_msg=$(printf '%s' "$MSG" | tr '\n' ' ')
+
+# C. Long-message fallback. cmux send silently truncates past ~1-2 KB.
+# Empirical: ~2.3 KB plans get dropped entirely on first try (codex never
+# sees them). For anything past 1500 chars, write the full plan to a temp
+# file and dispatch a short pointer instead.
+LIMIT=1500
+if [ ${#flat_msg} -gt "$LIMIT" ]; then
+    plan_file="/tmp/dispatch-${TEAM}-$(date +%Y%m%d-%H%M%S).md"
+    printf '%s\n' "$MSG" > "$plan_file"
+    flat_msg="Long plan: read ${plan_file} and execute. Acceptance + handoff signal format are inside. Append handoff line per the file's instructions when done, then stop."
+    echo "[dispatch] $WS_NAME plan → $plan_file (${#MSG} chars; sending pointer)"
+fi
+
+$CMUX send --workspace "$ws_ref" --surface "$sref" "$flat_msg"
+# Send Enter twice (Claude Code paste-mode: first Enter closes paste, second
+# submits). Safe for Codex (second Enter on empty prompt is a no-op there).
 $CMUX send-key --workspace "$ws_ref" --surface "$sref" "Enter"
 sleep 0.4
 $CMUX send-key --workspace "$ws_ref" --surface "$sref" "Enter"
-echo "→ $WS_NAME ($ws_ref / $sref): $MSG"
+echo "→ $WS_NAME ($ws_ref / $sref): $(printf '%.80s' "$flat_msg")$([ ${#flat_msg} -gt 80 ] && echo '…')"
