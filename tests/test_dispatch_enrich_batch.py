@@ -165,6 +165,23 @@ def test_dispatch_prompt_uses_cmux_dispatch_script():
     ]
 
 
+def test_dispatch_prompt_preserves_surface_suffix():
+    calls = []
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return subprocess.CompletedProcess(cmd, 0, stdout="sent", stderr="")
+
+    dispatch_enrich_batch.dispatch_prompt("enricher:27", "hello", runner=fake_runner)
+
+    assert calls == [
+        (
+            ["./tools/dispatch.sh", "enricher:27", "hello"],
+            {"capture_output": True, "text": True, "check": True},
+        )
+    ]
+
+
 def test_poll_screen_reads_mocked_cmux_output_and_extracts_json():
     def fake_runner(cmd, **kwargs):
         assert cmd == ["./tools/poll.sh", "enricher", "1200", "--scrollback"]
@@ -180,6 +197,25 @@ def test_poll_screen_reads_mocked_cmux_output_and_extracts_json():
 
     assert result.rows == [{"cid": "bld_1"}]
     assert result.timed_out is False
+
+
+def test_poll_screen_preserves_surface_suffix():
+    calls = []
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return subprocess.CompletedProcess(cmd, 0, stdout='[{"cid":"bld_1"}]\ntokens used: 4\n›', stderr="")
+
+    result = dispatch_enrich_batch.poll_screen(
+        "enricher:27",
+        timeout_seconds=1,
+        poll_interval_seconds=0,
+        sleeper=lambda _: None,
+        runner=fake_runner,
+    )
+
+    assert calls[0][0] == ["./tools/poll.sh", "enricher:27", "1200", "--scrollback"]
+    assert result.rows == [{"cid": "bld_1"}]
 
 
 def test_poll_screen_short_circuits_on_full_count_match():

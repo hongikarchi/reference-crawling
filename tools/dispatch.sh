@@ -1,8 +1,9 @@
 #!/bin/bash
 # dispatch.sh — DB-MAIN tab pushes a message into another team workspace.
 #
-# Usage:    ./tools/dispatch.sh <team> "<message>"
+# Usage:    ./tools/dispatch.sh <team>[:<surface_idx>] "<message>"
 # Example:  ./tools/dispatch.sh matcher "re-run Stage B with phash gate (cycle 1/5)"
+# Example:  ./tools/dispatch.sh enricher:27 "run batch on this surface"
 #
 # Team ∈ {main, crawler, matcher, enricher, reviewer}.
 # Resolves to cmux workspace "DB-<TEAM>" → that workspace's first surface
@@ -14,13 +15,22 @@ set -euo pipefail
 CMUX=/Applications/cmux.app/Contents/Resources/bin/cmux
 
 if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <team> <message>" >&2
+    echo "Usage: $0 <team>[:<surface_idx>] <message>" >&2
     echo "  team ∈ {main, crawler, matcher, enricher, reviewer}" >&2
     exit 1
 fi
 
-TEAM="$1"; shift
+TARGET="$1"; shift
 MSG="$*"
+TEAM="${TARGET%%:*}"
+SURFACE_IDX=""
+if [[ "$TARGET" == *:* ]]; then
+    SURFACE_IDX="${TARGET#*:}"
+    if [ -z "$TEAM" ] || [ -z "$SURFACE_IDX" ]; then
+        echo "ERROR: invalid target '$TARGET' (expected <team>[:<surface_idx>])" >&2
+        exit 1
+    fi
+fi
 
 # Normalize: matcher → DB-MATCHER
 WS_NAME="DB-$(echo "$TEAM" | tr '[:lower:]' '[:upper:]')"
@@ -52,11 +62,28 @@ if [ -z "$ws_ref" ]; then
     exit 2
 fi
 
-# Pick the first surface of that workspace
-sref=$(
-    $CMUX list-pane-surfaces --workspace "$ws_ref" 2>/dev/null \
-        | awk '{for (i=1;i<=NF;i++) if ($i ~ /^surface:/) { print $i; exit }}'
-)
+# Pick the requested surface, or the first surface of that workspace.
+surfaces=$($CMUX list-pane-surfaces --workspace "$ws_ref" 2>/dev/null)
+if [ -n "$SURFACE_IDX" ]; then
+    want_surface="surface:$SURFACE_IDX"
+    sref=$(
+        printf '%s\n' "$surfaces" \
+            | awk -v want="$want_surface" '
+                { for (i=1;i<=NF;i++) if ($i == want) { print $i; exit } }
+            '
+    )
+    if [ -z "$sref" ]; then
+        echo "ERROR: workspace $ws_ref ($WS_NAME) has no surface '$want_surface'" >&2
+        echo "Current surfaces:" >&2
+        printf '%s\n' "$surfaces" >&2
+        exit 3
+    fi
+else
+    sref=$(
+        printf '%s\n' "$surfaces" \
+            | awk '{for (i=1;i<=NF;i++) if ($i ~ /^surface:/) { print $i; exit }}'
+    )
+fi
 
 if [ -z "$sref" ]; then
     echo "ERROR: workspace $ws_ref has no surfaces" >&2

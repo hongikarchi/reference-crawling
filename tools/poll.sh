@@ -1,8 +1,9 @@
 #!/bin/bash
 # poll.sh — DB-MAIN reads the latest output of another team's tab.
 #
-# Usage:    ./tools/poll.sh <team> [lines]
+# Usage:    ./tools/poll.sh <team>[:<surface_idx>] [lines]
 # Example:  ./tools/poll.sh matcher 100
+# Example:  ./tools/poll.sh enricher:27 100
 #
 # Wraps `cmux read-screen` for the named team's workspace. Useful for:
 #  - confirming a dispatched task ran (or errored)
@@ -17,14 +18,23 @@ set -euo pipefail
 CMUX=/Applications/cmux.app/Contents/Resources/bin/cmux
 
 if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <team> [lines] [--scrollback]" >&2
+    echo "Usage: $0 <team>[:<surface_idx>] [lines] [--scrollback]" >&2
     echo "  team ∈ {main, crawler, matcher, enricher, reviewer}" >&2
     exit 1
 fi
 
-TEAM="$1"
+TARGET="$1"
 LINES="${2:-60}"
 SCROLLBACK="${3:-}"
+TEAM="${TARGET%%:*}"
+SURFACE_IDX=""
+if [[ "$TARGET" == *:* ]]; then
+    SURFACE_IDX="${TARGET#*:}"
+    if [ -z "$TEAM" ] || [ -z "$SURFACE_IDX" ]; then
+        echo "ERROR: invalid target '$TARGET' (expected <team>[:<surface_idx>])" >&2
+        exit 1
+    fi
+fi
 
 WS_NAME="DB-$(echo "$TEAM" | tr '[:lower:]' '[:upper:]')"
 
@@ -51,8 +61,35 @@ if [ -z "$ws_ref" ]; then
     exit 2
 fi
 
-if [ "$SCROLLBACK" = "--scrollback" ]; then
-    $CMUX read-screen --workspace "$ws_ref" --lines "$LINES" --scrollback
+surfaces=$($CMUX list-pane-surfaces --workspace "$ws_ref" 2>/dev/null)
+if [ -n "$SURFACE_IDX" ]; then
+    want_surface="surface:$SURFACE_IDX"
+    sref=$(
+        printf '%s\n' "$surfaces" \
+            | awk -v want="$want_surface" '
+                { for (i=1;i<=NF;i++) if ($i == want) { print $i; exit } }
+            '
+    )
+    if [ -z "$sref" ]; then
+        echo "ERROR: workspace $ws_ref ($WS_NAME) has no surface '$want_surface'" >&2
+        echo "Current surfaces:" >&2
+        printf '%s\n' "$surfaces" >&2
+        exit 3
+    fi
 else
-    $CMUX read-screen --workspace "$ws_ref" --lines "$LINES"
+    sref=$(
+        printf '%s\n' "$surfaces" \
+            | awk '{for (i=1;i<=NF;i++) if ($i ~ /^surface:/) { print $i; exit }}'
+    )
+fi
+
+if [ -z "$sref" ]; then
+    echo "ERROR: workspace $ws_ref has no surfaces" >&2
+    exit 3
+fi
+
+if [ "$SCROLLBACK" = "--scrollback" ]; then
+    $CMUX read-screen --workspace "$ws_ref" --surface "$sref" --lines "$LINES" --scrollback
+else
+    $CMUX read-screen --workspace "$ws_ref" --surface "$sref" --lines "$LINES"
 fi
