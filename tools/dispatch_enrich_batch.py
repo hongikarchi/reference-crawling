@@ -24,6 +24,7 @@ from tools.d2_cover_vision import _load_e1_best_covers
 from tools.e1_phash_dedup import DEFAULT_OUTPUT_PATH as DEFAULT_E1_PATH
 from tools.e2_vision_5type import _iter_jsonl
 from tools.image_dedup_5type import IMAGE_TYPES, PROJECT_ROOT
+from tools.image_dedup_5type import _download_to_tmp as download_image_to_tmp
 
 
 DEFAULT_CANONICAL_PATH = PROJECT_ROOT / "data" / "canonical" / "canonical_buildings_4source.json"
@@ -216,6 +217,35 @@ Input JSON:
     raise ValueError(f"unknown stage: {stage}")
 
 
+def compose_d2_vision_prompt(batch: list[dict[str, Any]], retry_note: str | None = None) -> str:
+    mapping = [
+        {
+            "image_index": idx,
+            "cid": str(row.get("cid")),
+            "cover_image_url": row.get("cover_image_url"),
+            "cover": row.get("cover") or {},
+        }
+        for idx, row in enumerate(batch, 1)
+    ]
+    retry = f"\nPrevious response was invalid: {retry_note}\nReturn only the JSON array.\n" if retry_note else ""
+    return f"""Analyze the {len(batch)} attached cover images as architecture images.
+Each attached image corresponds to the same-numbered item in Image mapping JSON.
+Output ONLY a JSON array of {len(batch)} objects, no Markdown fences, no prose.
+Each object schema:
+{{"cid": "...", "style_image": one of {sorted(STYLE)}, "color_tone_image": one of {sorted(COLOR_TONE)}, "material_visual_image": ["..."], "visual_description_image": "..."}}
+
+Rules:
+- Return exactly one object for every input cid.
+- Use only the listed controlled vocabulary values for style_image and color_tone_image.
+- material_visual_image must be 1-6 lowercase visible material words or short phrases.
+- visual_description_image must be 40-90 words, present tense, based on the attached image.
+- If the image is ambiguous, choose the closest controlled vocabulary value and describe only visible evidence.
+{retry}
+Image mapping JSON:
+{json.dumps(mapping, ensure_ascii=False, indent=2)}
+"""
+
+
 def dispatch_prompt(tab: str, prompt: str, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> None:
     runner(["./tools/dispatch.sh", tab, prompt], capture_output=True, text=True, check=True)
 
@@ -308,6 +338,118 @@ def read_model_meta(
 ) -> tuple[ModelMeta, TokenUsage | None, str]:
     raw = read_screen_raw(tab, runner=runner)
     return parse_model_meta(raw), parse_token_usage(raw), raw
+
+
+def _codex_exec_model_args(model_meta: ModelMeta) -> list[str]:
+    args: list[str] = ["-c", f"model={model_meta.model or 'gpt-5.5'}"]
+    if model_meta.reasoning:
+        args.extend(["-c", f"model_reasoning_effort={model_meta.reasoning}"])
+    if model_meta.fast:
+        args.extend(["-c", f"service_tier={model_meta.fast}"])
+    return args
+
+
+def parse_codex_exec_json_output(text: str) -> tuple[Any, TokenUsage | None]:
+    final_message = None
+    usage = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "item.completed":
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                final_message = str(item.get("text") or "")
+        elif event.get("type") == "turn.completed":
+            event_usage = event.get("usage")
+            if isinstance(event_usage, dict):
+                input_tokens = int(event_usage.get("input_tokens") or 0)
+                output_tokens = int(event_usage.get("output_tokens") or 0)
+                usage = TokenUsage(total=input_tokens + output_tokens, input=input_tokens, output=output_tokens)
+    return final_message, usage
+
+
+def _token_usage_line(usage: TokenUsage | None, *, cached_input_tokens: int | None = None) -> str:
+    if usage is None:
+        return ""
+    cached = f" (+ {cached_input_tokens} cached)" if cached_input_tokens else ""
+    return f"Token usage: total={usage.total} input={usage.input}{cached} output={usage.output}"
+
+
+def _codex_exec_usage_line_from_json(text: str) -> str:
+    for line in reversed(text.splitlines()):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "turn.completed":
+            event_usage = event.get("usage")
+            if isinstance(event_usage, dict):
+                input_tokens = int(event_usage.get("input_tokens") or 0)
+                output_tokens = int(event_usage.get("output_tokens") or 0)
+                cached = int(event_usage.get("cached_input_tokens") or 0)
+                return _token_usage_line(
+                    TokenUsage(total=input_tokens + output_tokens, input=input_tokens, output=output_tokens),
+                    cached_input_tokens=cached,
+                )
+    return ""
+
+
+def run_d2_vision_batch(
+    batch: list[dict[str, Any]],
+    *,
+    model_meta: ModelMeta,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    retry_note: str | None = None,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    downloader: Callable[[str], tuple[Any, bool]] = download_image_to_tmp,
+) -> PollResult:
+    image_paths: list[Path] = []
+    delete_paths: list[Path] = []
+    try:
+        for row in batch:
+            url = str(row.get("cover_image_url") or "")
+            if not url:
+                return PollResult(rows=None, raw=f"missing cover_image_url for cid={row.get('cid')}")
+            image_path, should_delete = downloader(url)
+            if image_path is None:
+                return PollResult(rows=None, raw=f"failed to download cover_image_url for cid={row.get('cid')}: {url}")
+            image_paths.append(image_path)
+            if should_delete:
+                delete_paths.append(image_path)
+
+        prompt = compose_d2_vision_prompt(batch, retry_note=retry_note)
+        cmd = ["codex", "exec", "--json", "--skip-git-repo-check", *_codex_exec_model_args(model_meta)]
+        for image_path in image_paths:
+            cmd.extend(["-i", str(image_path)])
+        cmd.extend(["--", prompt])
+        proc = runner(cmd, capture_output=True, text=True, timeout=timeout_seconds, check=False)
+        raw_events = (proc.stdout or proc.stderr or "").strip()
+        final_message, _ = parse_codex_exec_json_output(raw_events)
+        usage_line = _codex_exec_usage_line_from_json(raw_events)
+        raw = "\n".join(part for part in (final_message, usage_line, raw_events) if part).strip()
+        expected_cids = tuple(str(row["cid"]) for row in batch)
+        rows = extract_json_array(
+            raw,
+            must_have_keys=_STAGE_RESPONSE_KEYS["d2"],
+            expected_cids=expected_cids,
+        )
+        return PollResult(rows=rows, raw=raw, timed_out=(proc.returncode == 124))
+    except subprocess.TimeoutExpired as exc:
+        raw = "\n".join(part for part in (str(exc.stdout or ""), str(exc.stderr or ""), str(exc)) if part).strip()
+        return PollResult(rows=None, raw=raw, timed_out=True)
+    finally:
+        for image_path in delete_paths:
+            try:
+                image_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _looks_idle(raw: str) -> bool:
@@ -636,16 +778,24 @@ def run(args: argparse.Namespace) -> int:
         start_ts = start_dt.isoformat(timespec="seconds")
         start_monotonic = time.monotonic()
         for attempt in range(2):
-            prompt = compose_prompt(args.stage, batch, retry_note=retry_note)
-            dispatch_prompt(args.tab, prompt)
-            result = poll_screen(
-                args.tab,
-                timeout_seconds=args.timeout_seconds,
-                poll_interval_seconds=args.poll_interval_seconds,
-                expected_count=len(batch),
-                expected_cids=tuple(expected_cids),
-                must_have_keys=_STAGE_RESPONSE_KEYS.get(args.stage, ()),
-            )
+            if args.stage == "d2":
+                result = run_d2_vision_batch(
+                    batch,
+                    model_meta=model_meta,
+                    timeout_seconds=args.timeout_seconds,
+                    retry_note=retry_note,
+                )
+            else:
+                prompt = compose_prompt(args.stage, batch, retry_note=retry_note)
+                dispatch_prompt(args.tab, prompt)
+                result = poll_screen(
+                    args.tab,
+                    timeout_seconds=args.timeout_seconds,
+                    poll_interval_seconds=args.poll_interval_seconds,
+                    expected_count=len(batch),
+                    expected_cids=tuple(expected_cids),
+                    must_have_keys=_STAGE_RESPONSE_KEYS.get(args.stage, ()),
+                )
 
             if result.usage_limit_until:
                 wait_seconds = max(0, (result.usage_limit_until - datetime.now()).total_seconds()) + 30

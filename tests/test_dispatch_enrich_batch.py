@@ -222,6 +222,95 @@ def test_metric_jsonl_append_format(tmp_path):
     assert saved["failure_reason"] is None
 
 
+def test_d2_vision_batch_fetches_urls_builds_codex_exec_args_and_cleans_tmpfiles(tmp_path):
+    image_paths = []
+    downloaded_urls = []
+    calls = []
+
+    def fake_downloader(url):
+        downloaded_urls.append(url)
+        image_path = tmp_path / f"cover_{len(downloaded_urls)}.jpg"
+        image_path.write_bytes(b"fake image")
+        image_paths.append(image_path)
+        return image_path, True
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        image_args = [cmd[idx + 1] for idx, value in enumerate(cmd) if value == "-i"]
+        assert image_args == [str(path) for path in image_paths]
+        assert all(path.exists() for path in image_paths)
+        response = json.dumps(
+            [
+                {
+                    "cid": "bld_1",
+                    "style_image": "Contemporary",
+                    "color_tone_image": "Neutral",
+                    "material_visual_image": ["Concrete", "glass"],
+                    "visual_description_image": (
+                        "A contemporary building presents layered concrete and glass surfaces with calm "
+                        "proportions, recessed openings, and a compact urban presence."
+                    ),
+                },
+                {
+                    "cid": "bld_2",
+                    "style_image": "Modern",
+                    "color_tone_image": "Light",
+                    "material_visual_image": ["stucco", "glass"],
+                    "visual_description_image": (
+                        "A modern light-toned building shows simple volumes, crisp glazing, and restrained "
+                        "wall planes arranged around a clear exterior composition."
+                    ),
+                },
+            ]
+        )
+        stdout = "\n".join(
+            [
+                json.dumps({"type": "thread.started", "thread_id": "test"}),
+                json.dumps({"type": "turn.started"}),
+                json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": response}}),
+                json.dumps(
+                    {
+                        "type": "turn.completed",
+                        "usage": {"input_tokens": 1500, "cached_input_tokens": 100, "output_tokens": 500},
+                    }
+                ),
+            ]
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    batch = [
+        {"cid": "bld_1", "cover_image_url": "https://img.test/1.jpg", "cover": {"kind": "cover"}},
+        {"cid": "bld_2", "cover_image_url": "https://img.test/2.jpg", "cover": {"kind": "cover"}},
+    ]
+    result = dispatch_enrich_batch.run_d2_vision_batch(
+        batch,
+        model_meta=dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast"),
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert downloaded_urls == ["https://img.test/1.jpg", "https://img.test/2.jpg"]
+    assert result.rows is not None
+    assert [row["cid"] for row in result.rows] == ["bld_1", "bld_2"]
+    assert all(not path.exists() for path in image_paths)
+
+    cmd, kwargs = calls[0]
+    assert cmd[:2] == ["codex", "exec"]
+    assert "--json" in cmd
+    assert "--skip-git-repo-check" in cmd
+    assert "-i" in cmd
+    assert "-c" in cmd
+    assert "model=gpt-5.5" in cmd
+    assert "model_reasoning_effort=medium" in cmd
+    assert "service_tier=fast" in cmd
+    assert kwargs["capture_output"] is True
+    assert kwargs["text"] is True
+    assert kwargs["check"] is False
+    assert dispatch_enrich_batch.parse_token_usage(result.raw) == dispatch_enrich_batch.TokenUsage(
+        total=2000, input=1500, output=500
+    )
+
+
 def test_dispatch_prompt_uses_cmux_dispatch_script():
     calls = []
 
