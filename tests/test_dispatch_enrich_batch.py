@@ -167,7 +167,7 @@ def test_dispatch_prompt_uses_cmux_dispatch_script():
 
 def test_poll_screen_reads_mocked_cmux_output_and_extracts_json():
     def fake_runner(cmd, **kwargs):
-        assert cmd == ["./tools/poll.sh", "enricher", "240", "--scrollback"]
+        assert cmd == ["./tools/poll.sh", "enricher", "1200", "--scrollback"]
         return subprocess.CompletedProcess(cmd, 0, stdout='[{"cid":"bld_1"}]\ntokens used: 4\n›', stderr="")
 
     result = dispatch_enrich_batch.poll_screen(
@@ -180,6 +180,46 @@ def test_poll_screen_reads_mocked_cmux_output_and_extracts_json():
 
     assert result.rows == [{"cid": "bld_1"}]
     assert result.timed_out is False
+
+
+def test_poll_screen_short_circuits_on_full_count_match():
+    """When expected_count rows present, return immediately without waiting
+    for tokens-used / placeholder marker — codex doesn't reliably print it."""
+    def fake_runner(cmd, **kwargs):
+        # codex output: 3 JSON rows (matching expected_count=3) + ` › Implement` placeholder,
+        # but NO 'tokens used' / 'Token usage' marker. Old _looks_idle returns False.
+        return subprocess.CompletedProcess(
+            cmd, 0,
+            stdout='[{"cid":"bld_1"},{"cid":"bld_2"},{"cid":"bld_3"}]\n\n› Implement {feature}\n  gpt-5.5 medium fast',
+            stderr="",
+        )
+
+    result = dispatch_enrich_batch.poll_screen(
+        "enricher",
+        timeout_seconds=1,
+        poll_interval_seconds=0,
+        expected_count=3,
+        sleeper=lambda _: None,
+        runner=fake_runner,
+    )
+
+    assert result.rows == [{"cid": "bld_1"}, {"cid": "bld_2"}, {"cid": "bld_3"}]
+    assert result.timed_out is False
+
+
+def test_idle_detection_recognises_token_usage_phrase():
+    """codex CLI prints 'Token usage:' (not 'tokens used') — _looks_idle must match both."""
+    raw = "[{\"cid\":\"x\"}]\n\nToken usage: total=12345 input=11000 output=1345\n\n› Implement {feature}"
+    assert dispatch_enrich_batch._looks_idle(raw) is True
+
+
+def test_idle_detection_rejects_placeholder_alone():
+    """The codex placeholder ('› Write tests', '› Implement') is ALWAYS
+    visible at the bottom of the screen, even mid-response, so it cannot
+    be used as an idle signal on its own. _looks_idle must require an
+    actual footer marker ('tokens used' or 'Token usage')."""
+    raw = "[{\"cid\": \"x\", \"program\": \"Office\"}]\n\n› Write tests for @filename\n  gpt-5.5 medium fast"
+    assert dispatch_enrich_batch._looks_idle(raw) is False
 
 
 def test_idle_detection_handles_long_response_with_footer_after_response():

@@ -205,6 +205,7 @@ def poll_screen(
     *,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
+    expected_count: int | None = None,
     sleeper: Callable[[float], None] = time.sleep,
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> PollResult:
@@ -213,7 +214,7 @@ def poll_screen(
 
     while time.time() < deadline:
         proc = runner(
-            ["./tools/poll.sh", tab, "240", "--scrollback"],
+            ["./tools/poll.sh", tab, "1200", "--scrollback"],
             capture_output=True,
             text=True,
             check=False,
@@ -226,9 +227,16 @@ def poll_screen(
             return PollResult(rows=None, raw=raw, usage_limit_until=limit_until)
 
         rows = extract_json_array(raw)
-        if rows is not None and _looks_idle(raw):
+        idle = _looks_idle(raw)
+        # Short-circuit: a full-size JSON array IS the completion signal.
+        # codex doesn't reliably print 'tokens used' between turns, so
+        # waiting for that marker causes spurious timeouts. Once we see
+        # an array of expected_count rows, return immediately.
+        if rows is not None and expected_count is not None and len(rows) == expected_count:
             return PollResult(rows=rows, raw=raw)
-        if _looks_idle(raw):
+        if rows is not None and idle:
+            return PollResult(rows=rows, raw=raw)
+        if idle:
             return PollResult(rows=None, raw=raw)
 
         sleeper(poll_interval_seconds)
@@ -237,15 +245,34 @@ def poll_screen(
 
 
 def _looks_idle(raw: str) -> bool:
-    """Return True when Codex has completed a response and is awaiting input."""
-    tokens_idx = raw.lower().rfind("tokens used")
+    """Return True when codex has completed a response and is awaiting input.
+
+    codex CLI prints either 'tokens used' or 'Token usage' in its footer
+    after each turn (varies by session state). Both markers are followed
+    by '›' once codex re-renders the input prompt. Either marker confirms
+    the turn is fully complete.
+
+    Note: the '› Implement {feature}' / '› Write tests for @filename'
+    placeholder text is ALWAYS visible at the bottom of the screen, even
+    during codex's processing — it cannot be used as an idle signal on
+    its own. Use poll_screen's expected_count short-circuit when the
+    response is a known-size JSON array."""
+    lower = raw.lower()
+    tokens_idx = max(lower.rfind("tokens used"), lower.rfind("token usage"))
     if tokens_idx == -1:
         return False
     return "›" in raw[tokens_idx:]
 
 
 def extract_json_array(text: str) -> list[dict[str, Any]] | None:
-    """Return the last JSON object array embedded in text, if any."""
+    """Return the largest JSON array of cid-keyed objects embedded in text.
+
+    The screen text contains both the dispatched prompt (which embeds the
+    input batch as a JSON array) AND codex's response (also a JSON array).
+    We pick the longest array of dicts that ALL carry a 'cid' field — this
+    excludes the small in-prompt example arrays (like ['concrete','glass'])
+    and stray empty arrays. Among same-length candidates, prefer the LAST
+    one (codex's response comes after the prompt echo)."""
     candidates: list[list[dict[str, Any]]] = []
     decoder = json.JSONDecoder()
     cleaned = _strip_markdown_fences(text)
@@ -263,10 +290,23 @@ def extract_json_array(text: str) -> list[dict[str, Any]] | None:
                 value = json.loads(re.sub(r",\s*([}\]])", r"\1", block))
             except json.JSONDecodeError:
                 continue
-        if isinstance(value, list) and all(isinstance(row, dict) for row in value):
-            candidates.append(value)
+        if not isinstance(value, list) or not value:
+            continue
+        if not all(isinstance(row, dict) and "cid" in row for row in value):
+            continue
+        candidates.append(value)
 
-    return candidates[-1] if candidates else None
+    if not candidates:
+        return None
+    # Prefer the largest array; on ties, the last one (codex response is
+    # after the echoed prompt). The input-prompt array also has 'cid' but
+    # its rows include 'primary_name' / 'arch_names' / 'descriptions' etc.
+    # whereas codex's response has 'program' / 'style' / 'visual_description'.
+    # Both reach validate_batch — validate_row will reject the input shape
+    # because it lacks 'program' field. Picking the last (= response) array
+    # of equal length avoids unnecessary failures.
+    candidates.sort(key=lambda arr: len(arr))
+    return candidates[-1]
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -444,6 +484,7 @@ def run(args: argparse.Namespace) -> int:
                 args.tab,
                 timeout_seconds=args.timeout_seconds,
                 poll_interval_seconds=args.poll_interval_seconds,
+                expected_count=len(batch),
             )
 
             if result.usage_limit_until:
