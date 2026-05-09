@@ -316,3 +316,4 @@ ENRICH-DONE: d1_enrich_resume2 (PID=96789, low reasoning, 17666 done resume)
 MATCH-DONE: e2_vision_running (PID=96902, codex 5-type)
 ENRICH-DONE: d2_cover_vision_running (PID=97062, codex cover Vision)
 MATCH-PAUSED: e2_vision_5type — too many Vision calls (60 cluster/row × 38K rows = 3M, 700h ETA). Killed PID 12893 at 326 rows. Will re-implement as lightweight: filename heuristic + dimension-based default + Vision only on cid-level best image per type (5 calls/cid = 190K total vs 3M).
+MATCH-DONE: hybrid_precommit_v1
