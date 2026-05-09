@@ -42,6 +42,12 @@ STAGE_FAILURES = {
     "e2": PROJECT_ROOT / "data" / "canonical" / "e2_failures.jsonl",
 }
 
+STAGE_METRICS = {
+    "d1": PROJECT_ROOT / "data" / "canonical" / "d1_metrics.jsonl",
+    "d2": PROJECT_ROOT / "data" / "canonical" / "d2_metrics.jsonl",
+    "e2": PROJECT_ROOT / "data" / "canonical" / "e2_metrics.jsonl",
+}
+
 
 @dataclass(frozen=True)
 class PollResult:
@@ -49,6 +55,20 @@ class PollResult:
     raw: str
     usage_limit_until: datetime | None = None
     timed_out: bool = False
+
+
+@dataclass(frozen=True)
+class TokenUsage:
+    total: int
+    input: int
+    output: int
+
+
+@dataclass(frozen=True)
+class ModelMeta:
+    model: str | None
+    reasoning: str | None
+    fast: str | None
 
 
 def read_done_cids(path: Path) -> set[str]:
@@ -200,6 +220,20 @@ def dispatch_prompt(tab: str, prompt: str, runner: Callable[..., subprocess.Comp
     runner(["./tools/dispatch.sh", tab, prompt], capture_output=True, text=True, check=True)
 
 
+def read_screen_raw(
+    tab: str,
+    *,
+    lines: int = 120,
+    scrollback: bool = True,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> str:
+    cmd = ["./tools/poll.sh", tab, str(lines)]
+    if scrollback:
+        cmd.append("--scrollback")
+    proc = runner(cmd, capture_output=True, text=True, check=False)
+    return (proc.stdout or proc.stderr or "").strip()
+
+
 def poll_screen(
     tab: str,
     *,
@@ -245,6 +279,35 @@ def poll_screen(
         sleeper(poll_interval_seconds)
 
     return PollResult(rows=None, raw=last_raw, timed_out=True)
+
+
+def parse_token_usage(text: str) -> TokenUsage | None:
+    matches = re.findall(
+        r"Token usage:\s*total=(\d+)\s+input=(\d+)(?:\s+\(\+\s*\d+\s+cached\))?\s+output=(\d+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not matches:
+        return None
+    total, input_tokens, output = matches[-1]
+    return TokenUsage(total=int(total), input=int(input_tokens), output=int(output))
+
+
+def parse_model_meta(text: str) -> ModelMeta:
+    matches = re.findall(r"\b(gpt-[\w.-]+)\s+(\w+)\s+(fast|slow|standard)\b", text, flags=re.IGNORECASE)
+    if not matches:
+        return ModelMeta(model=None, reasoning=None, fast=None)
+    model, reasoning, fast = matches[-1]
+    return ModelMeta(model=model, reasoning=reasoning, fast=fast)
+
+
+def read_model_meta(
+    tab: str,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> tuple[ModelMeta, TokenUsage | None, str]:
+    raw = read_screen_raw(tab, runner=runner)
+    return parse_model_meta(raw), parse_token_usage(raw), raw
 
 
 def _looks_idle(raw: str) -> bool:
@@ -472,6 +535,10 @@ def append_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
         f.flush()
 
 
+def append_metric_jsonl(path: Path, row: dict[str, Any]) -> None:
+    append_jsonl(path, [row])
+
+
 def log_failure(path: Path, *, cids: Sequence[str], reason: str, raw: str) -> None:
     rows = [
         {
@@ -495,10 +562,52 @@ def build_records_for_stage(stage: str, *, canonical_path: Path, e1_path: Path, 
     raise ValueError(f"unknown stage: {stage}")
 
 
+def metric_row(
+    *,
+    batch_idx: int,
+    stage: str,
+    surface: str,
+    model_meta: ModelMeta,
+    expected_cids: Sequence[str],
+    start_ts: str,
+    end_ts: str,
+    wallclock_s: float,
+    usage: TokenUsage | None,
+    tokens_delta: int | None,
+    success: bool,
+    failure_reason: str | None,
+) -> dict[str, Any]:
+    return {
+        "batch_idx": batch_idx,
+        "stage": stage,
+        "surface": surface,
+        "model": model_meta.model,
+        "reasoning": model_meta.reasoning,
+        "fast": model_meta.fast,
+        "cids_first": expected_cids[0] if expected_cids else None,
+        "cids_last": expected_cids[-1] if expected_cids else None,
+        "cids_count": len(expected_cids),
+        "start_ts": start_ts,
+        "end_ts": end_ts,
+        "wallclock_s": round(wallclock_s, 3),
+        "tokens_total": usage.total if usage else None,
+        "tokens_input": usage.input if usage else None,
+        "tokens_output": usage.output if usage else None,
+        "tokens_delta": tokens_delta,
+        "success": success,
+        "failure_reason": failure_reason,
+    }
+
+
+def _surface_label(tab: str) -> str:
+    return tab if ":" in tab else f"{tab}:first"
+
+
 def run(args: argparse.Namespace) -> int:
     output_path = args.output or STAGE_OUTPUTS[args.stage]
     resume_path = args.resume_from or output_path
     failure_path = args.failures or STAGE_FAILURES[args.stage]
+    metrics_path = getattr(args, "metrics", None) or STAGE_METRICS[args.stage]
     done_cids = read_done_cids(resume_path)
     rows = build_records_for_stage(
         args.stage,
@@ -506,6 +615,7 @@ def run(args: argparse.Namespace) -> int:
         e1_path=args.e1,
         done_cids=done_cids,
     )
+    model_meta, previous_usage, _ = read_model_meta(args.tab)
 
     print(f"[dispatch] stage={args.stage} pending={len(rows)} skipped_done={len(done_cids)} tab={args.tab}", flush=True)
     if not rows:
@@ -515,9 +625,16 @@ def run(args: argparse.Namespace) -> int:
     for batch in chunked(rows, args.batch_size):
         if args.max_batches is not None and batches_run >= args.max_batches:
             break
+        batch_idx = batches_run + 1
         expected_cids = [str(row["cid"]) for row in batch]
         retry_note = None
         delivered = False
+        success = False
+        failure_reason = None
+        result: PollResult | None = None
+        start_dt = datetime.now()
+        start_ts = start_dt.isoformat(timespec="seconds")
+        start_monotonic = time.monotonic()
         for attempt in range(2):
             prompt = compose_prompt(args.stage, batch, retry_note=retry_note)
             dispatch_prompt(args.tab, prompt)
@@ -538,14 +655,16 @@ def run(args: argparse.Namespace) -> int:
                 continue
 
             if result.timed_out:
-                log_failure(failure_path, cids=expected_cids, reason="timeout_or_no_json", raw=result.raw)
+                failure_reason = "timeout_or_no_json"
+                log_failure(failure_path, cids=expected_cids, reason=failure_reason, raw=result.raw)
                 delivered = True
                 break
 
             if result.rows is None:
                 retry_note = "response did not contain a valid JSON array"
                 if attempt == 1:
-                    log_failure(failure_path, cids=expected_cids, reason=retry_note, raw=result.raw)
+                    failure_reason = retry_note
+                    log_failure(failure_path, cids=expected_cids, reason=failure_reason, raw=result.raw)
                     delivered = True
                     break
                 continue
@@ -554,15 +673,46 @@ def run(args: argparse.Namespace) -> int:
             if not error:
                 append_jsonl(output_path, normalized)
                 delivered = True
+                success = True
                 break
 
             retry_note = error
             if attempt == 1:
-                log_failure(failure_path, cids=expected_cids, reason=error, raw=result.raw)
+                failure_reason = error
+                log_failure(failure_path, cids=expected_cids, reason=failure_reason, raw=result.raw)
                 delivered = True
 
         batches_run += 1
-        print(f"[dispatch] batch {batches_run} done cids={expected_cids[0]}..{expected_cids[-1]}", flush=True)
+        end_dt = datetime.now()
+        wallclock_s = time.monotonic() - start_monotonic
+        usage = parse_token_usage(result.raw) if result else None
+        tokens_delta = usage.total - previous_usage.total if usage and previous_usage else None
+        if usage:
+            previous_usage = usage
+        append_metric_jsonl(
+            metrics_path,
+            metric_row(
+                batch_idx=batch_idx,
+                stage=args.stage,
+                surface=_surface_label(args.tab),
+                model_meta=model_meta,
+                expected_cids=expected_cids,
+                start_ts=start_ts,
+                end_ts=end_dt.isoformat(timespec="seconds"),
+                wallclock_s=wallclock_s,
+                usage=usage,
+                tokens_delta=tokens_delta,
+                success=success,
+                failure_reason=failure_reason,
+            ),
+        )
+        model_display = "/".join(value or "unknown" for value in (model_meta.model, model_meta.reasoning, model_meta.fast))
+        token_display = tokens_delta if tokens_delta is not None else "unknown"
+        print(
+            f"[dispatch] batch {batches_run} done cids={expected_cids[0]}..{expected_cids[-1]} "
+            f"time={wallclock_s:.1f}s tokens={token_display} model={model_display}",
+            flush=True,
+        )
         if args.smoke:
             break
         if not delivered:
@@ -579,6 +729,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--resume-from", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--failures", type=Path, default=None)
+    parser.add_argument("--metrics", type=Path, default=None)
     parser.add_argument("--canonical", type=Path, default=DEFAULT_CANONICAL_PATH)
     parser.add_argument("--e1", type=Path, default=DEFAULT_E1_PATH)
     parser.add_argument("--max-batches", type=int, default=None)

@@ -148,6 +148,80 @@ def test_parse_usage_limit_until_with_same_day_and_rollover():
     assert rollover == datetime(2026, 5, 10, 1, 15)
 
 
+def test_token_usage_parsing():
+    usage = dispatch_enrich_batch.parse_token_usage(
+        "Token usage: total=58963 input=57551 (+ 105856 cached) output=1412"
+    )
+
+    assert usage == dispatch_enrich_batch.TokenUsage(total=58963, input=57551, output=1412)
+
+
+def test_model_meta_parsing():
+    meta = dispatch_enrich_batch.parse_model_meta(
+        "› Explain this codebase\n\n  gpt-5.5 medium fast · ~/Documents/archi-tinder/make_db"
+    )
+
+    assert meta == dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast")
+
+
+def test_metric_jsonl_append_format(tmp_path):
+    metrics_path = tmp_path / "d1_metrics.jsonl"
+    row = dispatch_enrich_batch.metric_row(
+        batch_idx=3,
+        stage="d1",
+        surface="enricher:27",
+        model_meta=dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast"),
+        expected_cids=["bld_1", "bld_2"],
+        start_ts="2026-05-10T12:00:00",
+        end_ts="2026-05-10T12:00:05",
+        wallclock_s=5.1234,
+        usage=dispatch_enrich_batch.TokenUsage(total=1200, input=1000, output=200),
+        tokens_delta=300,
+        success=True,
+        failure_reason=None,
+    )
+
+    dispatch_enrich_batch.append_metric_jsonl(metrics_path, row)
+    saved = json.loads(metrics_path.read_text(encoding="utf-8"))
+
+    assert set(saved) == {
+        "batch_idx",
+        "stage",
+        "surface",
+        "model",
+        "reasoning",
+        "fast",
+        "cids_first",
+        "cids_last",
+        "cids_count",
+        "start_ts",
+        "end_ts",
+        "wallclock_s",
+        "tokens_total",
+        "tokens_input",
+        "tokens_output",
+        "tokens_delta",
+        "success",
+        "failure_reason",
+    }
+    assert saved["batch_idx"] == 3
+    assert saved["stage"] == "d1"
+    assert saved["surface"] == "enricher:27"
+    assert saved["model"] == "gpt-5.5"
+    assert saved["reasoning"] == "medium"
+    assert saved["fast"] == "fast"
+    assert saved["cids_first"] == "bld_1"
+    assert saved["cids_last"] == "bld_2"
+    assert saved["cids_count"] == 2
+    assert saved["wallclock_s"] == 5.123
+    assert saved["tokens_total"] == 1200
+    assert saved["tokens_input"] == 1000
+    assert saved["tokens_output"] == 200
+    assert saved["tokens_delta"] == 300
+    assert saved["success"] is True
+    assert saved["failure_reason"] is None
+
+
 def test_dispatch_prompt_uses_cmux_dispatch_script():
     calls = []
 
