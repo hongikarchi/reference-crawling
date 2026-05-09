@@ -182,6 +182,32 @@ def test_poll_screen_reads_mocked_cmux_output_and_extracts_json():
     assert result.timed_out is False
 
 
+def test_idle_detection_handles_long_response_with_footer_after_response():
+    long_json = json.dumps(
+        [
+            {
+                "cid": f"bld_{idx:06d}",
+                "program": "Housing",
+                "style": "Contemporary",
+                "color_tone": "Neutral",
+                "atmosphere": "Serene",
+                "material_visual": ["concrete", "glass"],
+                "visual_description": "A restrained building with clear massing, neutral materials, and calm daylight.",
+            }
+            for idx in range(30)
+        ]
+    )
+    raw = f"{long_json}\ntokens used\n45123\n› Find and fix a bug in @filename\n"
+
+    assert dispatch_enrich_batch._looks_idle(raw) is True
+
+
+def test_idle_detection_false_during_processing():
+    raw = "...processing spinner › still present...\ntokens used\n123\n... still working"
+
+    assert dispatch_enrich_batch._looks_idle(raw) is False
+
+
 def test_poll_screen_detects_usage_limit_from_mocked_response():
     def fake_runner(cmd, **kwargs):
         return subprocess.CompletedProcess(

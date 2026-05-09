@@ -237,10 +237,11 @@ def poll_screen(
 
 
 def _looks_idle(raw: str) -> bool:
-    # Codex CLI usually returns to an input prompt rendered as `›`, and prints
-    # a tokens-used footer. Tests and older terminals may only include one.
-    tail = "\n".join(raw.splitlines()[-12:]).lower()
-    return "›" in tail or "tokens used" in tail or "token" in tail and "used" in tail
+    """Return True when Codex has completed a response and is awaiting input."""
+    tokens_idx = raw.lower().rfind("tokens used")
+    if tokens_idx == -1:
+        return False
+    return "›" in raw[tokens_idx:]
 
 
 def extract_json_array(text: str) -> list[dict[str, Any]] | None:
