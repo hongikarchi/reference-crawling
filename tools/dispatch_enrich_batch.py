@@ -206,6 +206,7 @@ def poll_screen(
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
     expected_count: int | None = None,
+    expected_cids: tuple[str, ...] | None = None,
     must_have_keys: tuple[str, ...] = (),
     sleeper: Callable[[float], None] = time.sleep,
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
@@ -227,7 +228,7 @@ def poll_screen(
         if limit_until:
             return PollResult(rows=None, raw=raw, usage_limit_until=limit_until)
 
-        rows = extract_json_array(raw, must_have_keys=must_have_keys)
+        rows = extract_json_array(raw, must_have_keys=must_have_keys, expected_cids=expected_cids)
         # Only completion signal we trust: codex's response array of
         # expected_count rows. _looks_idle / placeholder-only / leftover
         # 'Token usage' from previous /clear all produce false-positives
@@ -277,18 +278,26 @@ def _unwrap_terminal(text: str) -> str:
     return re.sub(r'\n\s+', ' ', text)
 
 
-def extract_json_array(text: str, must_have_keys: tuple[str, ...] = ()) -> list[dict[str, Any]] | None:
+def extract_json_array(
+    text: str,
+    must_have_keys: tuple[str, ...] = (),
+    expected_cids: tuple[str, ...] | None = None,
+) -> list[dict[str, Any]] | None:
     """Return the largest JSON array of cid-keyed objects embedded in text.
 
     The screen text typically contains BOTH the dispatched prompt's input
     array (rows have cid + primary_name + descriptions...) AND codex's
     response array (rows have cid + program + style + visual_description...).
-    Without `must_have_keys`, the input array would be returned during
-    early polling (before codex finishes), causing validate_batch to fail
-    with the wrong shape.
+    Plus, when batches accumulate without /clear, the scrollback contains
+    PRIOR batches' responses too — without `expected_cids`, an old batch's
+    full array would beat the current batch's mid-flight partial.
 
     Pass `must_have_keys=('program',)` for d1 / `('style_image',)` for d2
     / `('image_types',)` for e2 to filter for response-shape arrays only.
+
+    Pass `expected_cids=(cid1, cid2, ...)` to restrict matches to arrays
+    whose cid set EXACTLY equals the expected set. This prevents
+    cross-batch confusion in long codex sessions.
 
     The terminal wraps long string values, so attempts to parse the raw
     text usually fail. We retry each candidate after _unwrap_terminal()
@@ -299,6 +308,7 @@ def extract_json_array(text: str, must_have_keys: tuple[str, ...] = ()) -> list[
     candidates: list[list[dict[str, Any]]] = []
     decoder = json.JSONDecoder()
     cleaned = _strip_markdown_fences(text)
+    expected_set = set(expected_cids) if expected_cids else None
 
     for start, char in enumerate(cleaned):
         if char != "[":
@@ -322,6 +332,8 @@ def extract_json_array(text: str, must_have_keys: tuple[str, ...] = ()) -> list[
         if not all(isinstance(row, dict) and "cid" in row for row in value):
             continue
         if must_have_keys and not all(all(k in row for k in must_have_keys) for row in value):
+            continue
+        if expected_set is not None and {str(row["cid"]) for row in value} != expected_set:
             continue
         candidates.append(value)
 
@@ -514,6 +526,7 @@ def run(args: argparse.Namespace) -> int:
                 timeout_seconds=args.timeout_seconds,
                 poll_interval_seconds=args.poll_interval_seconds,
                 expected_count=len(batch),
+                expected_cids=tuple(expected_cids),
                 must_have_keys=_STAGE_RESPONSE_KEYS.get(args.stage, ()),
             )
 
