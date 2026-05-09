@@ -206,6 +206,7 @@ def poll_screen(
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
     expected_count: int | None = None,
+    must_have_keys: tuple[str, ...] = (),
     sleeper: Callable[[float], None] = time.sleep,
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> PollResult:
@@ -226,18 +227,19 @@ def poll_screen(
         if limit_until:
             return PollResult(rows=None, raw=raw, usage_limit_until=limit_until)
 
-        rows = extract_json_array(raw)
-        idle = _looks_idle(raw)
-        # Short-circuit: a full-size JSON array IS the completion signal.
-        # codex doesn't reliably print 'tokens used' between turns, so
-        # waiting for that marker causes spurious timeouts. Once we see
-        # an array of expected_count rows, return immediately.
+        rows = extract_json_array(raw, must_have_keys=must_have_keys)
+        # Only completion signal we trust: codex's response array of
+        # expected_count rows. _looks_idle / placeholder-only / leftover
+        # 'Token usage' from previous /clear all produce false-positives
+        # that cause poll_screen to return prematurely with rows=None.
+        # If we have the right number of rows, codex is done. Otherwise
+        # keep polling until timeout.
         if rows is not None and expected_count is not None and len(rows) == expected_count:
             return PollResult(rows=rows, raw=raw)
-        if rows is not None and idle:
+        # Legacy path: if expected_count not provided AND idle marker is
+        # present (true 'Token usage' followed by '›'), trust it.
+        if expected_count is None and rows is not None and _looks_idle(raw):
             return PollResult(rows=rows, raw=raw)
-        if idle:
-            return PollResult(rows=None, raw=raw)
 
         sleeper(poll_interval_seconds)
 
@@ -264,15 +266,36 @@ def _looks_idle(raw: str) -> bool:
     return "›" in raw[tokens_idx:]
 
 
-def extract_json_array(text: str) -> list[dict[str, Any]] | None:
+def _unwrap_terminal(text: str) -> str:
+    """Collapse '\\n  ' (terminal line wraps: newline + indent) into a
+    single space. cmux/codex display wraps long JSON string values across
+    multiple terminal lines, breaking strict JSON parsing. Whitespace is
+    legal anywhere outside JSON strings, so this is safe for the
+    structural newlines too. Strings can't legally contain literal
+    newlines anyway, so the only cost is loss of intentional whitespace
+    formatting (which we don't care about — we only care about parsing)."""
+    return re.sub(r'\n\s+', ' ', text)
+
+
+def extract_json_array(text: str, must_have_keys: tuple[str, ...] = ()) -> list[dict[str, Any]] | None:
     """Return the largest JSON array of cid-keyed objects embedded in text.
 
-    The screen text contains both the dispatched prompt (which embeds the
-    input batch as a JSON array) AND codex's response (also a JSON array).
-    We pick the longest array of dicts that ALL carry a 'cid' field — this
-    excludes the small in-prompt example arrays (like ['concrete','glass'])
-    and stray empty arrays. Among same-length candidates, prefer the LAST
-    one (codex's response comes after the prompt echo)."""
+    The screen text typically contains BOTH the dispatched prompt's input
+    array (rows have cid + primary_name + descriptions...) AND codex's
+    response array (rows have cid + program + style + visual_description...).
+    Without `must_have_keys`, the input array would be returned during
+    early polling (before codex finishes), causing validate_batch to fail
+    with the wrong shape.
+
+    Pass `must_have_keys=('program',)` for d1 / `('style_image',)` for d2
+    / `('image_types',)` for e2 to filter for response-shape arrays only.
+
+    The terminal wraps long string values, so attempts to parse the raw
+    text usually fail. We retry each candidate after _unwrap_terminal()
+    collapses wrap-induced newlines.
+
+    Among matching arrays, prefer the largest; on ties, the last one
+    (codex's response is rendered after the echoed prompt)."""
     candidates: list[list[dict[str, Any]]] = []
     decoder = json.JSONDecoder()
     cleaned = _strip_markdown_fences(text)
@@ -280,10 +303,14 @@ def extract_json_array(text: str) -> list[dict[str, Any]] | None:
     for start, char in enumerate(cleaned):
         if char != "[":
             continue
+        value: Any = None
         try:
             value, _ = decoder.raw_decode(cleaned[start:])
         except json.JSONDecodeError:
-            block = _balanced_array(cleaned[start:])
+            # Try with terminal-wrap unwrap
+            chunk = cleaned[start:start + 80000]
+            unwrapped = _unwrap_terminal(chunk)
+            block = _balanced_array(unwrapped)
             if block is None:
                 continue
             try:
@@ -294,19 +321,21 @@ def extract_json_array(text: str) -> list[dict[str, Any]] | None:
             continue
         if not all(isinstance(row, dict) and "cid" in row for row in value):
             continue
+        if must_have_keys and not all(all(k in row for k in must_have_keys) for row in value):
+            continue
         candidates.append(value)
 
     if not candidates:
         return None
-    # Prefer the largest array; on ties, the last one (codex response is
-    # after the echoed prompt). The input-prompt array also has 'cid' but
-    # its rows include 'primary_name' / 'arch_names' / 'descriptions' etc.
-    # whereas codex's response has 'program' / 'style' / 'visual_description'.
-    # Both reach validate_batch — validate_row will reject the input shape
-    # because it lacks 'program' field. Picking the last (= response) array
-    # of equal length avoids unnecessary failures.
     candidates.sort(key=lambda arr: len(arr))
     return candidates[-1]
+
+
+_STAGE_RESPONSE_KEYS: dict[str, tuple[str, ...]] = {
+    "d1": ("program", "visual_description"),
+    "d2": ("style_image", "visual_description_image"),
+    "e2": ("image_types",),
+}
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -485,6 +514,7 @@ def run(args: argparse.Namespace) -> int:
                 timeout_seconds=args.timeout_seconds,
                 poll_interval_seconds=args.poll_interval_seconds,
                 expected_count=len(batch),
+                must_have_keys=_STAGE_RESPONSE_KEYS.get(args.stage, ()),
             )
 
             if result.usage_limit_until:
