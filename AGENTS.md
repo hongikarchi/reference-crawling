@@ -31,6 +31,80 @@ When in doubt: ask "does this task call an LLM API?" If yes → codex.
 If no → either, and codex is still preferred for the visibility / log
 trail it leaves in your tab.
 
+## MANDATORY operating rules (Phase 16+, post-2026-05-09 token-burn incident)
+
+These rules exist because Phase 15 D-1/D-2/E-2 enrichment burned ~64% of
+the user's ChatGPT Pro **weekly** quota in a single day through:
+subprocess.run-per-cid wrapper pattern (~13× overhead waste), unmeasured
+quota, gpt-5.5 high reasoning where low would have done, and "그대로
+진행" judgement calls without smoke. **Every rule below is non-negotiable
+and DB-MAIN cannot bypass them on intuition.**
+
+### Rule 1 — Mandatory pre-launch smoke ladder
+
+Before launching ANY new tool / pattern / batch script at full scale, run
+a 3-step smoke ladder. Skip levels only with explicit user approval.
+
+```
+N=10  cids → measure tokens + sample row quality + verify output schema
+N=100 cids → measure tokens/cid + extrapolate full cost (Rule 4 math)
+N=full     → only after both above pass
+```
+
+Each step's measurement (tokens/cid + projected total + sample quality
+verdict) goes into the dispatch handoff line:
+`<TEAM>-DONE: <stage>_smoke_n10 tokens=X/cid quality=PASS|FAIL`.
+
+### Rule 2 — `/status` periodic monitoring
+
+Before any cmux dispatch expected to consume >5K codex calls (matcher
+run, enrichment batch sweep, image dedup), run:
+```
+./tools/dispatch.sh <team> "/status"
+./tools/poll.sh <team> 30
+```
+Read BOTH the 5h limit AND the weekly limit. Stop and ask user if:
+- Weekly remaining < 50% before starting
+- After every 1000 cids processed, re-check; abort if weekly drops < 20%
+
+`tools/quota_check.sh` (Phase 16 Step 5) automates this.
+
+### Rule 3 — Codex docs / feature pre-investigation
+
+Before authoring any codex-invocation script (subprocess wrapper, dispatch
+helper, batch tool), DB-MAIN MUST dispatch one investigative question to
+a codex tab:
+```
+./tools/dispatch.sh <team> "What's the most token-efficient pattern for
+<task description>? List relevant slash commands, sub-agent / skills /
+/fast / model options that apply. Reference codex CLI version 0.129+."
+```
+
+Wait for codex's answer. Reference it in the dispatch plan body. **DB-MAIN
+never assumes codex behavior from intuition.** If codex says "use
+`-c model=gpt-5.5-mini` for this", do that, not gpt-5.5 default.
+
+### Rule 4 — Cost arithmetic in every dispatch plan
+
+Every dispatch plan (the markdown file or message body sent via dispatch.sh)
+MUST include explicit math:
+```
+N cids × (~M tokens prompt input + ~K tokens output + ~12K codex overhead)
+= W total tokens
+projected weekly burn: W / (Pro plan ~2B weekly limit) = A%
+```
+
+Plan does not get dispatched until this arithmetic is in the file.
+**User approval required when projected weekly burn ≥ 25% per stage.**
+
+### How DB-MAIN uses these
+
+When you (codex team) receive a dispatch, the plan should already
+contain Rule 1 smoke results, Rule 2 quota check, Rule 3 codex
+investigation, and Rule 4 cost math. If any of those are missing, REPLY
+with `<TEAM>-NEEDS-CLARIFICATION: dispatch missing Rule N` instead of
+proceeding. DB-MAIN forgot a rule; force the loop back.
+
 ### Long-running OS operations: skip the codex sandbox attempt
 
 Empirically, codex's default sandbox refuses `nohup` (the syscall

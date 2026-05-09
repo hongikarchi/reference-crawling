@@ -110,6 +110,31 @@ stale state.
 - **Push:** NO. Ever. User pushes when ready.
 - **Branches:** single-branch on `main`.
 
+## MANDATORY operating rules (Phase 16+, post-2026-05-09)
+
+Before ANY dispatch you MUST satisfy four rules from
+`AGENTS.md` § "MANDATORY operating rules":
+
+1. **Smoke ladder** — N=10 → N=100 → N=full. Skip only with explicit
+   user approval. Each step's tokens/cid + sample quality recorded in
+   handoff line.
+2. **/status check** — `./tools/quota_check.sh` before dispatch
+   expected to use >5K calls. Stop if weekly < 50% remaining.
+3. **Codex pre-investigation** — dispatch ONE question to a codex tab
+   asking for the most token-efficient pattern + relevant slash commands
+   / model options BEFORE you author any codex-invocation script. Never
+   assume codex behavior from intuition.
+4. **Cost arithmetic** — every dispatch plan body must contain explicit
+   math: `N cids × (M input + K output + ~12K overhead) = W tokens =
+   A% weekly burn`. User approval required when ≥ 25% per stage.
+
+These rules exist because Phase 15 burned ~64% of the user's ChatGPT Pro
+weekly quota in one day through subprocess.run-per-cid (~13× overhead
+waste), unmeasured quota, and "그대로 진행" intuition calls. **You
+cannot bypass these on judgement.** If you find yourself reaching for
+a dispatch without satisfying all four, STOP and write the plan file
+properly first.
+
 ## Codex-first principle (token economy)
 
 Anything that costs LLM tokens runs on Codex by default — see
