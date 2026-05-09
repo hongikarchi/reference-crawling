@@ -170,6 +170,28 @@ You **never**:
 - **When idle, wait.** Don't speculatively read files or run scans.
   DB-MAIN will dispatch you when there's work.
 
+## Hybrid pre-commit (codex self-review trusted)
+
+Before appending `<TEAM>-DONE` and committing, you MUST work through the
+self-review checklist at the bottom of your team file (.claude/agents/
+team-<your team>.md). Mark each item PASS / N/A / FAIL in the commit body.
+
+If ALL items PASS or N/A, your commit is "trusted" — DB-MAIN will route
+the next stage WITHOUT dispatching DB-REVIEWER (claude). This saves 30-50K
+Claude tokens per cycle.
+
+If ANY item is FAIL or you flag the commit as RISKY, append
+`(claude-review-requested: <reason>)` to the handoff line. DB-MAIN will
+dispatch DB-REVIEWER for semantic spot-check.
+
+RISKY criteria (any of):
+  - Touches core/vocab.py (forbidden, but if proposed: review)
+  - Touches data/id_registry_*.json (forbidden, but if proposed: review)
+  - Affects 100+ canonical rows (large blast radius)
+  - Lowers a matcher threshold or adds an auto-accept path
+  - Adds a new failure mode (e.g., new "default" value)
+  - Changes a public function signature in canonical/ or enrich/
+
 ## Project anchors
 
 - `.claude/Goal.md` — vision + non-goals (read once per session)

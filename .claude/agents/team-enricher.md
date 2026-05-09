@@ -62,3 +62,12 @@ Same Phase 15 cycle. Cap: cycle 5 / $20 cumulative → escalate.
 ## When you're idle
 
 Wait at the Codex prompt. DB-MAIN will `cmux send` your next task.
+
+## Self-review checklist (run before DONE handoff)
+
+- [ ] All unit tests pass: `python3 -m pytest tests/test_*.py -v`
+- [ ] Scope clean: only enrich/, tools/, tests/ (NOT canonical/, crawl/, upload/, vocab.py)
+- [ ] If batch >5K cids, RISKY → add `(claude-review-requested: large batch)`
+- [ ] If changing prompt template, smoke test 5 cids, verify vocab compliance
+- [ ] If adding new field to enrichment output, verify F-stage (build_strict_canonical.py) reads it
+- [ ] Commit message has Co-Authored-By: Codex CLI line

@@ -65,20 +65,23 @@ Examples:
 
 ## The Reviewer self-heal loop (Phase 15)
 
-When a stage finishes, you:
+**Hybrid review policy (Phase 15+, post-2026-05-09)**:
 
-1. See `<TEAM>-DONE: <stage> v<n>` appear in `.claude/Task.md` Handoffs.
-2. `./tools/dispatch.sh reviewer "Review <stage> v<n>"`.
-3. Watch Handoffs for the verdict line:
-   - **`REVIEWER-PASS: <stage> v<n>`** → next stage (dispatch the next team).
-   - **`REVIEWER-WARN: <stage> v<n> <reason>`** → log + proceed.
-   - **`REVIEWER-BLOCK: <stage> v<n> cycle <c>/5 — <summary>`** → loop.
-4. On BLOCK: read `.claude/escalations/<stage>_<ts>.md` for the diagnosis,
-   then `./tools/dispatch.sh <responsible-team> "Fix per
-   .claude/escalations/<file>; re-run; cycle <c+1>/5."`
-5. Cap: **5 cycles OR $20 cumulative cost per stage attempt**. At cap,
-   write `ESCALATE: <stage> exhausted self-heal — manual review required`
-   to Handoffs and stop. Do NOT keep trying.
+When `<TEAM>-DONE` appears in Handoffs:
+
+1. **Trusted (default)** — handoff has NO `(claude-review-requested:...)` flag:
+   - Skip DB-REVIEWER. Route to next stage directly.
+   - DB-REVIEWER is reserved for semantic spot-checks of cumulative cycles
+     (e.g., final F-stage strict canonical + qc.py).
+
+2. **Risky** — handoff includes `(claude-review-requested: <reason>)`:
+   - `./tools/dispatch.sh reviewer "Spot-check <stage> for <reason>"`
+   - Wait for REVIEWER-PASS or REVIEWER-BLOCK as before.
+   - Apply existing 5-cycle / $20 cap.
+
+Codex teams MUST work through their team file's self-review checklist
+before appending DONE. The checklist is the gate; DB-REVIEWER is the
+exception, not the rule.
 
 ## Routing table
 

@@ -66,3 +66,16 @@ Same as the standard Phase 15 cycle:
 ## When you're idle
 
 Wait at the Codex prompt. DB-MAIN will `cmux send` your next task.
+
+## Self-review checklist (run before DONE handoff)
+
+Before appending MATCH-DONE, work through this list. Mark PASS / N/A
+/ FAIL in commit body:
+
+- [ ] All unit tests pass: `python3 -m pytest tests/test_*.py -v`
+- [ ] Scope clean: `git show --stat HEAD` shows only canonical/ and tests/
+- [ ] No edits to core/vocab.py, data/id_registry_*.json, upload/, crawl/, enrich/
+- [ ] If changing a matcher threshold, RISKY → add `(claude-review-requested: threshold change)`
+- [ ] If adding a new false-merge invariant, sanity-check on bld_026977 fixture
+- [ ] If touching phash_cache or has_phash_overlap, run `python3 -m canonical.phash_cache --build --canonical-only --limit 10` smoke
+- [ ] Commit message has Co-Authored-By: Codex CLI line

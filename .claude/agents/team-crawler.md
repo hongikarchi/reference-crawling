@@ -63,3 +63,12 @@ Hard cap: at cycle 5 OR cumulative $20, **stop**. Append
 Sit at the Codex prompt, no spinning. DB-MAIN will `cmux send` your next task.
 Optionally read `.claude/Task.md` Handoffs to anticipate, but do not act
 without an explicit dispatch.
+
+## Self-review checklist (run before DONE handoff)
+
+- [ ] All unit tests pass: `python3 -m pytest tests/test_*.py -v`
+- [ ] Scope clean: only crawl/<source>/, tools/<source>_*.py, tests/
+- [ ] If extending crawler scope (new sitemap, new field), RISKY → flag review
+- [ ] If hot-link pattern detected (404s, captchas), STOP and add MATCH-ESCALATE
+- [ ] Source DB schema additions: `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (idempotent)
+- [ ] Commit message has Co-Authored-By: Codex CLI line
