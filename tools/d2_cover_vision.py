@@ -68,8 +68,9 @@ def _load_e1_best_covers(path: Path) -> dict[str, dict]:
 
 
 def vision_enrich_cover(url_or_path: str) -> dict:
-    image_path, should_delete = _download_to_tmp(url_or_path)
-    if image_path is None:
+    try:
+        image_path, should_delete = _download_to_tmp(url_or_path)
+    except Exception:
         return {}
     try:
         proc = subprocess.run(

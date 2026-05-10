@@ -179,6 +179,8 @@ def test_metric_jsonl_append_format(tmp_path):
         tokens_delta=300,
         success=True,
         failure_reason=None,
+        codex_returncode=0,
+        codex_stderr="",
     )
 
     dispatch_enrich_batch.append_metric_jsonl(metrics_path, row)
@@ -201,6 +203,8 @@ def test_metric_jsonl_append_format(tmp_path):
         "tokens_input",
         "tokens_output",
         "tokens_delta",
+        "codex_returncode",
+        "codex_stderr",
         "success",
         "failure_reason",
     }
@@ -218,6 +222,8 @@ def test_metric_jsonl_append_format(tmp_path):
     assert saved["tokens_input"] == 1000
     assert saved["tokens_output"] == 200
     assert saved["tokens_delta"] == 300
+    assert saved["codex_returncode"] == 0
+    assert saved["codex_stderr"] == ""
     assert saved["success"] is True
     assert saved["failure_reason"] is None
 
@@ -299,8 +305,8 @@ def test_d2_vision_batch_fetches_urls_builds_codex_exec_args_and_cleans_tmpfiles
     assert "--json" in cmd
     assert "--skip-git-repo-check" in cmd
     assert "-i" in cmd
-    assert "-c" in cmd
-    assert "model=gpt-5.5" in cmd
+    assert "-m" in cmd
+    assert "gpt-5.5" in cmd
     assert "model_reasoning_effort=medium" in cmd
     assert "service_tier=fast" in cmd
     assert kwargs["capture_output"] is True
@@ -309,6 +315,86 @@ def test_d2_vision_batch_fetches_urls_builds_codex_exec_args_and_cleans_tmpfiles
     assert dispatch_enrich_batch.parse_token_usage(result.raw) == dispatch_enrich_batch.TokenUsage(
         total=2000, input=1500, output=500
     )
+
+
+def test_run_d2_vision_batch_download_failure_records_url_and_exc():
+    batch = [
+        {"cid": "bld_1", "cover_image_url": "https://img.test/1.jpg", "cover": {"kind": "cover"}},
+        {"cid": "bld_2", "cover_image_url": "https://img.test/2.jpg", "cover": {"kind": "cover"}},
+    ]
+
+    def fake_downloader(url):
+        raise RuntimeError("network unreachable")
+
+    def fake_runner(cmd, **kwargs):
+        raise AssertionError("runner should not be called when download fails")
+
+    result = dispatch_enrich_batch.run_d2_vision_batch(
+        batch,
+        model_meta=dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast"),
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert result.rows is None
+    assert result.timed_out is False
+    assert result.failure_reason == (
+        "download_failed: cid=bld_1 url=https://img.test/1.jpg RuntimeError: network unreachable"
+    )
+    assert result.raw == result.failure_reason
+
+
+def test_run_d2_vision_batch_codex_exec_failure_records_returncode_stderr(tmp_path):
+    batch = [
+        {"cid": "bld_1", "cover_image_url": "https://img.test/1.jpg", "cover": {"kind": "cover"}},
+    ]
+
+    def fake_downloader(url):
+        image_path = tmp_path / "cover.jpg"
+        image_path.write_bytes(b"fake image")
+        return image_path, True
+
+    def fake_runner(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, stdout="agent failed", stderr="codex stderr")
+
+    result = dispatch_enrich_batch.run_d2_vision_batch(
+        batch,
+        model_meta=dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast"),
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert result.rows is None
+    assert result.returncode == 1
+    assert result.stderr == "codex stderr"
+    assert result.failure_reason == "codex_exec_failed: returncode=1 stderr=codex stderr"
+    assert "returncode=1" in result.raw
+    assert "codex stderr" in result.raw
+
+
+def test_failure_reason_no_translation_when_specific(tmp_path):
+    batch = [
+        {"cid": "bld_1", "cover_image_url": "https://img.test/1.jpg", "cover": {"kind": "cover"}},
+    ]
+
+    def fake_downloader(url):
+        image_path = tmp_path / "cover.jpg"
+        image_path.write_bytes(b"fake image")
+        return image_path, True
+
+    def fake_runner(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout='{"cid":"bld_1"}', stderr="")
+
+    result = dispatch_enrich_batch.run_d2_vision_batch(
+        batch,
+        model_meta=dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast"),
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert result.rows is None
+    assert result.failure_reason == "parse_failed: response did not contain a valid JSON array"
+    assert result.failure_reason != "response did not contain a valid JSON array"
 
 
 def test_dispatch_prompt_uses_cmux_dispatch_script():

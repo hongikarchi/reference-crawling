@@ -367,7 +367,7 @@ def _filename_heuristic(url: str, kind: Optional[str] = None) -> Optional[str]:
     return None
 
 
-def _download_to_tmp(url: str, *, timeout: int = 30) -> tuple[Optional[Path], bool]:
+def _download_to_tmp(url: str, *, timeout: int = 30) -> tuple[Path, bool]:
     path = Path(url)
     if path.exists():
         return path, False
@@ -395,12 +395,13 @@ def _download_to_tmp(url: str, *, timeout: int = 30) -> tuple[Optional[Path], bo
             tmp_path.unlink()
         except FileNotFoundError:
             pass
-        return None, False
+        raise
 
 
 def vision_classify_image(url_or_path: str) -> str:
-    image_path, should_delete = _download_to_tmp(url_or_path)
-    if image_path is None:
+    try:
+        image_path, should_delete = _download_to_tmp(url_or_path)
+    except Exception:
         return "exterior"
     try:
         proc = subprocess.run(

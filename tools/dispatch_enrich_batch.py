@@ -56,6 +56,9 @@ class PollResult:
     raw: str
     usage_limit_until: datetime | None = None
     timed_out: bool = False
+    failure_reason: str | None = None
+    returncode: int | None = None
+    stderr: str | None = None
 
 
 @dataclass(frozen=True)
@@ -369,7 +372,7 @@ def read_model_meta(
 
 
 def _codex_exec_model_args(model_meta: ModelMeta) -> list[str]:
-    args: list[str] = ["-c", f"model={model_meta.model or 'gpt-5.5'}"]
+    args: list[str] = ["-m", model_meta.model or "gpt-5.5"]
     if model_meta.reasoning:
         args.extend(["-c", f"model_reasoning_effort={model_meta.reasoning}"])
     if model_meta.fast:
@@ -444,10 +447,16 @@ def run_d2_vision_batch(
         for row in batch:
             url = str(row.get("cover_image_url") or "")
             if not url:
-                return PollResult(rows=None, raw=f"missing cover_image_url for cid={row.get('cid')}")
-            image_path, should_delete = downloader(url)
-            if image_path is None:
-                return PollResult(rows=None, raw=f"failed to download cover_image_url for cid={row.get('cid')}: {url}")
+                reason = f"download_failed: cid={row.get('cid')} url={url} missing cover_image_url"
+                return PollResult(rows=None, raw=reason, failure_reason=reason)
+            try:
+                image_path, should_delete = downloader(url)
+            except Exception as exc:
+                reason = (
+                    f"download_failed: cid={row.get('cid')} url={url} "
+                    f"{exc.__class__.__name__}: {exc}"
+                )
+                return PollResult(rows=None, raw=reason, failure_reason=reason)
             image_paths.append(image_path)
             if should_delete:
                 delete_paths.append(image_path)
@@ -458,7 +467,24 @@ def run_d2_vision_batch(
             cmd.extend(["-i", str(image_path)])
         cmd.extend(["--", prompt])
         proc = runner(cmd, capture_output=True, text=True, timeout=timeout_seconds, check=False)
-        raw_events = (proc.stdout or proc.stderr or "").strip()
+        stdout = (proc.stdout or "").strip()
+        stderr = (proc.stderr or "").strip()
+        raw_events = (stdout or stderr).strip()
+        if proc.returncode and proc.returncode != 0:
+            raw = "\n".join(
+                part for part in (stdout, stderr, f"returncode={proc.returncode}") if part
+            ).strip()
+            reason = f"codex_exec_failed: returncode={proc.returncode} stderr={stderr or stdout or ''}".rstrip()
+            if proc.returncode == 124:
+                reason = f"timeout: codex_exec returncode=124 stderr={stderr or stdout or ''}".rstrip()
+            return PollResult(
+                rows=None,
+                raw=raw,
+                timed_out=(proc.returncode == 124),
+                failure_reason=reason,
+                returncode=proc.returncode,
+                stderr=stderr,
+            )
         final_message, _ = parse_codex_exec_json_output(raw_events)
         usage_line = _codex_exec_usage_line_from_json(raw_events)
         raw = "\n".join(part for part in (final_message, usage_line, raw_events) if part).strip()
@@ -468,10 +494,21 @@ def run_d2_vision_batch(
             must_have_keys=_STAGE_RESPONSE_KEYS["d2"],
             expected_cids=expected_cids,
         )
-        return PollResult(rows=rows, raw=raw, timed_out=(proc.returncode == 124))
+        if rows is None:
+            reason = "parse_failed: response did not contain a valid JSON array"
+            return PollResult(
+                rows=None,
+                raw=raw,
+                timed_out=False,
+                failure_reason=reason,
+                returncode=proc.returncode,
+                stderr=stderr,
+            )
+        return PollResult(rows=rows, raw=raw, timed_out=False, returncode=proc.returncode, stderr=stderr)
     except subprocess.TimeoutExpired as exc:
         raw = "\n".join(part for part in (str(exc.stdout or ""), str(exc.stderr or ""), str(exc)) if part).strip()
-        return PollResult(rows=None, raw=raw, timed_out=True)
+        reason = f"timeout: subprocess exceeded {timeout_seconds}s"
+        return PollResult(rows=None, raw=raw, timed_out=True, failure_reason=reason, stderr=str(exc.stderr or "").strip())
     finally:
         for image_path in delete_paths:
             try:
@@ -746,6 +783,8 @@ def metric_row(
     tokens_delta: int | None,
     success: bool,
     failure_reason: str | None,
+    codex_returncode: int | None = None,
+    codex_stderr: str | None = None,
 ) -> dict[str, Any]:
     return {
         "batch_idx": batch_idx,
@@ -764,6 +803,8 @@ def metric_row(
         "tokens_input": usage.input if usage else None,
         "tokens_output": usage.output if usage else None,
         "tokens_delta": tokens_delta,
+        "codex_returncode": codex_returncode,
+        "codex_stderr": codex_stderr,
         "success": success,
         "failure_reason": failure_reason,
     }
@@ -833,15 +874,15 @@ def run(args: argparse.Namespace) -> int:
                 continue
 
             if result.timed_out:
-                failure_reason = "timeout_or_no_json"
+                failure_reason = result.failure_reason or "timeout: unknown"
                 log_failure(failure_path, cids=expected_cids, reason=failure_reason, raw=result.raw)
                 delivered = True
                 break
 
             if result.rows is None:
-                retry_note = "response did not contain a valid JSON array"
+                retry_note = result.failure_reason or "parse_failed: unknown"
                 if attempt == 1:
-                    failure_reason = retry_note
+                    failure_reason = result.failure_reason or retry_note
                     log_failure(failure_path, cids=expected_cids, reason=failure_reason, raw=result.raw)
                     delivered = True
                     break
@@ -882,6 +923,8 @@ def run(args: argparse.Namespace) -> int:
                 tokens_delta=tokens_delta,
                 success=success,
                 failure_reason=failure_reason,
+                codex_returncode=result.returncode if result else None,
+                codex_stderr=result.stderr if result else None,
             ),
         )
         model_display = "/".join(value or "unknown" for value in (model_meta.model, model_meta.reasoning, model_meta.fast))
