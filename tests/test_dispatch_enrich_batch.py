@@ -345,6 +345,57 @@ def test_dispatch_prompt_preserves_surface_suffix():
     ]
 
 
+def test_dispatch_prompt_retries_on_calledprocesserror():
+    calls = []
+    sleeps = []
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        if len(calls) < 3:
+            raise subprocess.CalledProcessError(
+                1,
+                cmd,
+                output=f"stdout {len(calls)}",
+                stderr=f"stderr {len(calls)}",
+            )
+        return subprocess.CompletedProcess(cmd, 0, stdout="sent", stderr="")
+
+    dispatch_enrich_batch.dispatch_prompt("enricher:9", "hello", runner=fake_runner, sleeper=sleeps.append)
+
+    assert [call[0] for call in calls] == [
+        ["./tools/dispatch.sh", "enricher:9", "hello"],
+        ["./tools/dispatch.sh", "enricher:9", "hello"],
+        ["./tools/dispatch.sh", "enricher:9", "hello"],
+    ]
+    assert sleeps == [0.5, 1.5]
+
+
+def test_dispatch_prompt_logs_stderr_on_final_fail(capsys):
+    calls = []
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        raise subprocess.CalledProcessError(
+            1,
+            cmd,
+            output="dispatch stdout detail",
+            stderr="cmux paste-buffer failed",
+        )
+
+    try:
+        dispatch_enrich_batch.dispatch_prompt("enricher:9", "hello", runner=fake_runner, sleeper=lambda _: None)
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        raise AssertionError("dispatch_prompt should re-raise the final CalledProcessError")
+
+    captured = capsys.readouterr()
+    assert len(calls) == 4
+    assert "returncode=1" in captured.err
+    assert "dispatch stdout detail" in captured.err
+    assert "cmux paste-buffer failed" in captured.err
+
+
 def test_poll_screen_reads_mocked_cmux_output_and_extracts_json():
     def fake_runner(cmd, **kwargs):
         assert cmd == ["./tools/poll.sh", "enricher", "1200", "--scrollback"]

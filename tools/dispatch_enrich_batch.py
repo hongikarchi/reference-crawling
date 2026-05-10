@@ -246,8 +246,36 @@ Image mapping JSON:
 """
 
 
-def dispatch_prompt(tab: str, prompt: str, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> None:
-    runner(["./tools/dispatch.sh", tab, prompt], capture_output=True, text=True, check=True)
+def dispatch_prompt(
+    tab: str,
+    prompt: str,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> None:
+    backoffs = (0.5, 1.5, 3.0)
+    last_error: subprocess.CalledProcessError | None = None
+    for attempt in range(len(backoffs) + 1):
+        try:
+            runner(["./tools/dispatch.sh", tab, prompt], capture_output=True, text=True, check=True)
+            return
+        except subprocess.CalledProcessError as exc:
+            last_error = exc
+            stdout = (exc.stdout or "").strip()
+            stderr = (exc.stderr or "").strip()
+            print(
+                f"[dispatch] dispatch_prompt failed attempt={attempt + 1}/{len(backoffs) + 1} "
+                f"tab={tab} returncode={exc.returncode}",
+                file=sys.stderr,
+                flush=True,
+            )
+            if stdout:
+                print(f"[dispatch] dispatch_prompt stdout: {stdout[-2000:]}", file=sys.stderr, flush=True)
+            if stderr:
+                print(f"[dispatch] dispatch_prompt stderr: {stderr[-2000:]}", file=sys.stderr, flush=True)
+            if attempt < len(backoffs):
+                sleeper(backoffs[attempt])
+    if last_error is not None:
+        raise last_error
 
 
 def read_screen_raw(

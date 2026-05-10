@@ -9,3 +9,9 @@ model footer state, and token baselines do not mix across stages.
 
 Do not dispatch a stage to a different surface unless DB-MAIN records an
 explicit handoff approving the context move.
+
+D-1 resume launches should pass the surface explicitly:
+
+```bash
+python3 -m tools.dispatch_enrich_batch --stage d1 --tab enricher:9
+```

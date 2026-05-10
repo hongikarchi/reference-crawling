@@ -69,7 +69,8 @@ if [ -n "$SURFACE_IDX" ]; then
     sref=$(
         printf '%s\n' "$surfaces" \
             | awk -v want="$want_surface" '
-                { for (i=1;i<=NF;i++) if ($i == want) { print $i; exit } }
+                { for (i=1;i<=NF;i++) if ($i == want && !found) { f=$i; found=1 } }
+                END { if (found) print f }
             '
     )
     if [ -z "$sref" ]; then
@@ -81,7 +82,7 @@ if [ -n "$SURFACE_IDX" ]; then
 else
     sref=$(
         printf '%s\n' "$surfaces" \
-            | awk '{for (i=1;i<=NF;i++) if ($i ~ /^surface:/) { print $i; exit }}'
+            | awk '{for (i=1;i<=NF;i++) if ($i ~ /^surface:/ && !found) { f=$i; found=1 }} END { if (found) print f }'
     )
 fi
 
