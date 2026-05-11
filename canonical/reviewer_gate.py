@@ -329,23 +329,25 @@ def _stage_a_basic(arch: list[dict]) -> list[Finding]:
 
 
 def _stage_f_qc(artefact_path: str) -> list[Finding]:
-    """Stage F: run canonical/qc.py 10 invariants."""
+    """Stage F: run canonical/qc.py invariants."""
     try:
-        from canonical.qc import run_all_checks
+        from canonical.qc import run_all
     except Exception as exc:
         return [Finding("stage_f/qc_import", "BLOCK",
                         f"canonical.qc not importable: {exc}")]
     try:
-        report = run_all_checks(artefact_path)
+        report = run_all(canonical_path=artefact_path,
+                         report_path="data/reports/canonical_qc_review.json")
     except Exception as exc:
-        return [Finding("stage_f/qc_run", "BLOCK", f"qc.run_all_checks raised: {exc}")]
+        return [Finding("stage_f/qc_run", "BLOCK", f"qc.run_all raised: {exc}")]
     findings = []
-    for check_name, result in (report.get("checks") or {}).items():
-        ok = result.get("pass") if isinstance(result, dict) else result
+    for check in report.get("checks", []):
+        status = check.get("status", "FAIL")
+        verdict = {"PASS": "PASS", "WARN": "WARN", "FAIL": "BLOCK"}.get(status, "BLOCK")
         findings.append(Finding(
-            invariant=f"stage_f/qc_{check_name}",
-            verdict="PASS" if ok else "BLOCK",
-            summary=str(result),
+            invariant=f"stage_f/qc_{check.get('name', 'unknown')}",
+            verdict=verdict,
+            summary=f"{status}: {check.get('metric') or check.get('details') or ''}"[:300],
         ))
     return findings
 
