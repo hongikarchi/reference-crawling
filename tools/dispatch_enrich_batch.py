@@ -145,15 +145,33 @@ def build_e2_records(
         cid = str(row.get("cid") or "")
         if not cid or cid in done:
             continue
-        best = {}
+        # E-2 lightweight: per-cid TOP 5 candidate images (not all clusters).
+        # Sort by (rank asc, image_order asc, source priority desc, area desc).
+        # filename heuristic (drawing/aerial keywords) is applied codex-side
+        # in the prompt — it skips Vision for those candidates.
+        candidates = []
         for cluster_id, image in (row.get("best_image_per_cluster") or {}).items():
-            if isinstance(image, dict) and image.get("url"):
-                best[str(cluster_id)] = {
+            if not isinstance(image, dict) or not image.get("url"):
+                continue
+            candidates.append({
+                "cluster_id": str(cluster_id),
+                **{
                     key: image.get(key)
                     for key in ("url", "source", "source_id", "kind", "image_order", "rank", "w", "h", "bytes")
                     if key in image
-                }
-        rows.append({"cid": cid, "best_image_per_cluster": best})
+                },
+            })
+
+        def _sort_key(c: dict) -> tuple:
+            area = (c.get("w") or 0) * (c.get("h") or 0)
+            return (
+                int(c.get("rank") or 999),
+                int(c.get("image_order") or 999),
+                -area,
+            )
+
+        candidates.sort(key=_sort_key)
+        rows.append({"cid": cid, "candidates": candidates[:5]})
         if limit is not None and len(rows) >= limit:
             break
     return rows
@@ -187,31 +205,48 @@ Input JSON:
 """
 
     if stage == "d2":
-        return f"""Process these {len(batch)} cover image URL records -> image-based architecture descriptors.
-Output ONLY a JSON array of {len(batch)} objects, no Markdown fences, no prose.
+        return f"""Vision-analyze {len(batch)} cover images and output a JSON array.
+
+For each input row, you must look at the actual image pixels (not just the URL string). Use your background terminal to:
+1. Download each cover_image_url to a tmpfile (curl, wget, or python requests). Use a unique tmpfile path per cid (e.g. /tmp/d2_<cid>.jpg).
+2. Run a single codex Vision subprocess with all {len(batch)} images attached at once:
+   `codex exec --json --skip-git-repo-check -c model=gpt-5.5 -i /tmp/d2_<cid1>.jpg -i /tmp/d2_<cid2>.jpg ... -- '<vision-prompt>'`
+   The vision-prompt should ask for a JSON array of {len(batch)} objects with the schema below, mapping each attached image to its cid in order.
+3. Parse the codex exec stdout for the JSON array, then output that exact array in your chat reply (no other text).
+
 Each object schema:
 {{"cid": "...", "style_image": one of {sorted(STYLE)}, "color_tone_image": one of {sorted(COLOR_TONE)}, "material_visual_image": ["..."], "visual_description_image": "..."}}
 
 Rules:
-- Return exactly one object for every input cid.
+- Return exactly one object for every input cid in the SAME order.
 - Use only the listed controlled vocabulary values for style_image and color_tone_image.
 - material_visual_image must be 1-6 lowercase visible material words or short phrases.
-- visual_description_image must be 40-90 words, present tense, based on the cover image URL.
+- visual_description_image must be 40-90 words, present tense, describing what is actually visible in the image. NEVER fabricate; if you could not analyze the image, report a failure for that cid instead.
+- Output ONLY the JSON array in your final chat reply. No file writes, no progress prose, no explanations.
+- Cleanup tmpfiles after.
 {retry}
 Input JSON:
 {payload}
 """
 
     if stage == "e2":
-        return f"""Classify each best image per cluster into architectural image types.
-Output ONLY a JSON array of {len(batch)} objects, no Markdown fences, no prose.
-Each object schema:
-{{"cid": "...", "image_types": {{"<cluster_id>": one of {list(IMAGE_TYPES)}}}}}
+        return f"""Vision-classify candidate images into architectural image types and output a JSON array.
+
+For each input row, look at the actual image pixels via codex Vision. Process via your background terminal:
+1. For each cid, download all candidate image URLs to tmpfiles (e.g. /tmp/e2_<cid>_<idx>.jpg).
+2. Run a codex Vision subprocess per cid with that cid's candidate images attached:
+   `codex exec --json --skip-git-repo-check -c model=gpt-5.5 -i /tmp/e2_<cid>_0.jpg -i /tmp/e2_<cid>_1.jpg ... -- 'Classify each attached image as exterior|interior|drawing|aerial|detail. Return JSON: {{covers_by_type: {{<type>: <best matching url among candidates>}}}}'`
+3. Parse output → covers_by_type dict. Skip Vision entirely for any candidate already labeled by filename heuristic (drawing/aerial keywords).
+
+Output ONLY a JSON array in your chat reply, one object per cid:
+{{"cid": "...", "covers_by_type": {{"exterior": url|null, "interior": url|null, "drawing": url|null, "aerial": url|null, "detail": url|null}}}}
 
 Rules:
-- Return exactly one object for every input cid.
-- Every input best_image_per_cluster key must appear in image_types.
-- Use only these lowercase labels: {list(IMAGE_TYPES)}.
+- Return exactly one object for every input cid in the SAME order.
+- covers_by_type keys ∈ {list(IMAGE_TYPES)}.
+- Each value is either a candidate URL (the best matching image of that type) or null if no candidate matches.
+- NEVER fabricate. If a Vision call failed for a cid, return that cid with all null covers and append a 'reason' field.
+- Output ONLY the JSON array in your final chat reply. Cleanup tmpfiles after.
 {retry}
 Input JSON:
 {payload}
@@ -616,7 +651,7 @@ def extract_json_array(
 _STAGE_RESPONSE_KEYS: dict[str, tuple[str, ...]] = {
     "d1": ("program", "visual_description"),
     "d2": ("style_image", "visual_description_image"),
-    "e2": ("image_types",),
+    "e2": ("covers_by_type",),
 }
 
 
@@ -721,16 +756,22 @@ def validate_row(stage: str, cid: str, row: dict[str, Any]) -> tuple[dict[str, A
             "visual_description_image": description,
         }, None
     if stage == "e2":
-        image_types = row.get("image_types")
-        if not isinstance(image_types, dict):
-            return {}, "image_types must be an object"
-        clean = {}
-        for cluster_id, value in image_types.items():
-            label = str(value).strip().lower()
-            if label not in IMAGE_TYPES:
-                return {}, f"image_types[{cluster_id!r}]={value!r} not in allowed image types"
-            clean[str(cluster_id)] = label
-        return {"cid": cid, "image_types": clean}, None
+        # E-2 lightweight: per-cid covers_by_type dict (5 type → URL or null).
+        covers = row.get("covers_by_type")
+        if not isinstance(covers, dict):
+            return {}, "covers_by_type must be an object"
+        clean: dict[str, str | None] = {t: None for t in IMAGE_TYPES}
+        for image_type, value in covers.items():
+            key = str(image_type).strip().lower()
+            if key not in IMAGE_TYPES:
+                return {}, f"covers_by_type[{image_type!r}] is not a valid type"
+            if value in (None, "", "null"):
+                clean[key] = None
+            elif isinstance(value, str) and value.startswith(("http://", "https://")):
+                clean[key] = value
+            else:
+                return {}, f"covers_by_type[{image_type!r}]={value!r} must be a URL or null"
+        return {"cid": cid, "covers_by_type": clean}, None
     return {}, f"unknown stage: {stage}"
 
 
@@ -847,24 +888,21 @@ def run(args: argparse.Namespace) -> int:
         start_ts = start_dt.isoformat(timespec="seconds")
         start_monotonic = time.monotonic()
         for attempt in range(2):
-            if args.stage == "d2":
-                result = run_d2_vision_batch(
-                    batch,
-                    model_meta=model_meta,
-                    timeout_seconds=args.timeout_seconds,
-                    retry_note=retry_note,
-                )
-            else:
-                prompt = compose_prompt(args.stage, batch, retry_note=retry_note)
-                dispatch_prompt(args.tab, prompt)
-                result = poll_screen(
-                    args.tab,
-                    timeout_seconds=args.timeout_seconds,
-                    poll_interval_seconds=args.poll_interval_seconds,
-                    expected_count=len(batch),
-                    expected_cids=tuple(expected_cids),
-                    must_have_keys=_STAGE_RESPONSE_KEYS.get(args.stage, ()),
-                )
+            # All stages (d1, d2, e2) now use the same cmux dispatch path.
+            # The codex tab is responsible for vision processing in d2/e2:
+            # the codex agent reads the prompt and uses its background
+            # terminal to download images + spawn codex exec -i Vision
+            # subprocesses, then returns the JSON array in chat.
+            prompt = compose_prompt(args.stage, batch, retry_note=retry_note)
+            dispatch_prompt(args.tab, prompt)
+            result = poll_screen(
+                args.tab,
+                timeout_seconds=args.timeout_seconds,
+                poll_interval_seconds=args.poll_interval_seconds,
+                expected_count=len(batch),
+                expected_cids=tuple(expected_cids),
+                must_have_keys=_STAGE_RESPONSE_KEYS.get(args.stage, ()),
+            )
 
             if result.usage_limit_until:
                 wait_seconds = max(0, (result.usage_limit_until - datetime.now()).total_seconds()) + 30

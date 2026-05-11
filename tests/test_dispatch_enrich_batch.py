@@ -114,7 +114,14 @@ def test_d2_and_e2_batch_builders_from_e1_jsonl_with_resume(tmp_path):
     assert e2_rows == [
         {
             "cid": "bld_pending",
-            "best_image_per_cluster": {"0": {"url": "https://img.test/cover.jpg", "kind": "cover", "rank": 0}},
+            "candidates": [
+                {
+                    "cluster_id": "0",
+                    "url": "https://img.test/cover.jpg",
+                    "kind": "cover",
+                    "rank": 0,
+                }
+            ],
         }
     ]
 
