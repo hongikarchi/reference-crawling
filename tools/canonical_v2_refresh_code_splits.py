@@ -236,12 +236,17 @@ def main() -> int:
     parser.add_argument("--canonical", type=Path, default=DEFAULT_CANONICAL)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--phash-cache", type=Path, default=DEFAULT_PHASH_CACHE_PATH)
+    parser.add_argument("--d1", type=Path, default=DEFAULT_STAGE_PATHS["d1"])
+    parser.add_argument("--e1", type=Path, default=DEFAULT_STAGE_PATHS["e1"])
+    parser.add_argument("--e2", type=Path, default=DEFAULT_STAGE_PATHS["e2"])
+    parser.add_argument("--d2", type=Path, default=DEFAULT_STAGE_PATHS["d2"])
     args = parser.parse_args()
 
     report = prepare_refresh(
         split_report_path=args.split_report,
         canonical_path=args.canonical,
         output_dir=args.output_dir,
+        stage_paths={"d1": args.d1, "e1": args.e1, "e2": args.e2, "d2": args.d2},
         phash_cache_path=args.phash_cache,
     )
     print(
