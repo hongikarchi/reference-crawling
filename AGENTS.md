@@ -12,6 +12,21 @@ perspectives.
 
 ---
 
+## Current default — DB Ops Mode
+
+The current default for make_db is **Codex Ops Main + Process Lanes +
+Claude Gate**, documented in `.claude/DB_OPS.md`.
+
+If the user is working from a single Codex chat or `DB-CODEX-OPS`, you are
+the operational control plane: restore state, create job cards, run smokes,
+prepare/verify code, record long-running runs, and generate compact review
+packets for Claude when semantic judgment is needed.
+
+Do not assume the old always-on `DB-MAIN -> dispatch -> team tab` loop is
+active. Legacy 5-team cmux mode remains available, but it must be explicitly
+chosen or already running. Durable state lives in `.claude/ops/`,
+`.claude/Task.md`, logs, and data artifacts, not terminal memory.
+
 ## Codex-first principle (token economy)
 
 The user pays per-token for both Anthropic and OpenAI. **Anything that

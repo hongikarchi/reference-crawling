@@ -4,11 +4,34 @@ Agent-driven pipeline: crawl metalocus.es → enrich + analyze → review → up
 
 ## How to start a session
 
-**Phase 15+ multi-team mode:** make_db runs across **5 cmux workspaces** in
-one window — DB-MAIN, DB-CRAWLER, DB-MATCHER, DB-ENRICHER, DB-REVIEWER.
-This Claude Code session lives in **DB-MAIN** as the orchestrator
-(`.claude/agents/orchestrator.md`). It reads Goal/Task/REPORT/WORKFLOW first,
-then dispatches the responsible team via `./tools/dispatch.sh <team> "<msg>"`
+**Current default: DB Ops Mode.** make_db now runs with Codex as the
+operational control plane and Claude as a checkpoint reviewer. Read
+`.claude/DB_OPS.md` first. Claude should not resume the old always-on
+DB-MAIN dispatcher pattern unless the user explicitly asks for legacy
+5-team mode.
+
+Default terminal layout:
+- `DB-CODEX-OPS` — Codex operational main: status, job cards, smoke,
+  code, validators, commits.
+- `DB-RUNNER` — shell only: long-running Python processes.
+- `DB-MONITOR` — shell only: logs, counts, progress.
+- `DB-CLAUDE-GATE` — Claude Code: semantic/architecture checkpoint review
+  from compact packets under `.claude/ops/reviews/`.
+- `DB-CODEX-WORKER` — optional Codex worker for bounded side tasks.
+
+Setup/status helpers:
+```bash
+tools/db_ops_status.sh
+tools/db_ops_snapshot_cmux.sh
+tools/db_ops_cmux_setup.sh
+tools/db_ops_send.sh claude-gate "Review .claude/ops/reviews/<packet>.md"
+tools/db_ops_poll.sh claude-gate 80
+```
+
+**Legacy Phase 15+ multi-team mode:** make_db can still run across **5 cmux
+workspaces** in one window — DB-MAIN, DB-CRAWLER, DB-MATCHER, DB-ENRICHER,
+DB-REVIEWER. This mode is for expanded team operations, not the default.
+In that mode DB-MAIN dispatches via `./tools/dispatch.sh <team> "<msg>"`
 which wraps `cmux send`.
 
 **Codex-first principle.** The user pays per-token for both Anthropic and
@@ -38,6 +61,8 @@ quality-gated operations.
 - `.claude/WORKFLOW.md` — operational Cases + handoff signal vocabulary + Phase 15 self-heal loop
 - `.claude/REPORT.md` — live system state (counts, quality, known gotchas)
 - `.claude/PROJECT.md` — schemas + vocabularies + tool specs (technical reference)
+- `.claude/DB_OPS.md` — current Codex Ops + Claude Gate operating model
+- `.claude/ops/` — job cards, run records, review packets, cmux snapshots
 - `.claude/agents/*.md` — agent definitions:
   - **team layer (Phase 15+, in own cmux workspace):** orchestrator, team-crawler, team-matcher, team-enricher, team-reviewer
   - **in-session sub-agents:** reporter, researcher, upload-guard, git-manager

@@ -8,6 +8,27 @@ model: opus
 
 You are the **Reviewer**, running in cmux workspace **DB-REVIEWER**.
 
+## Current default: Claude Gate packet mode
+
+The preferred review workflow is now `DB-CLAUDE-GATE` reading compact
+packets from `.claude/ops/reviews/`, not broad screen/log dispatches.
+When acting as Claude Gate:
+
+- Read the packet and only the referenced small samples/artifacts needed
+  to answer it.
+- Do not browse broad logs or whole datasets unless the packet explicitly
+  asks and the scope is justified.
+- Emit exactly one verdict line:
+  - `CLAUDE-GATE-PASS: <stage> <one-line reason>`
+  - `CLAUDE-GATE-WARN: <stage> <row_ids> <one-line reason>`
+  - `CLAUDE-GATE-BLOCK: <stage> <row_ids> <one-line reason>`
+- If BLOCK, include the smallest actionable diagnosis: failing row ids,
+  likely root cause, and suggested owner (`MATCHER`, `ENRICHER`,
+  `ASSEMBLY`, etc.).
+
+The older `REVIEWER-PASS/WARN/BLOCK` signals remain for legacy 5-team cmux
+mode.
+
 ## Codex-first within the reviewer role
 
 The user pays for both Anthropic and OpenAI tokens; **save your own

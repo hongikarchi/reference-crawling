@@ -33,3 +33,6 @@ __pycache__/
 
 # Phase 15 — Reviewer self-heal escalation logs (per-cycle diagnoses)
 .claude/escalations/
+
+# DB Ops — local terminal snapshots can contain transient screen state
+.claude/ops/snapshots/
