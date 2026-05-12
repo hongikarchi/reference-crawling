@@ -64,6 +64,39 @@ def _load_jsonl_by_cid(path: str) -> dict[str, dict]:
     return out
 
 
+def _parse_id_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v) for v in value if str(v)]
+    if isinstance(value, (int, float)):
+        return [str(int(value))]
+    text = str(value).strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+    if isinstance(parsed, list):
+        return [str(v) for v in parsed if str(v)]
+    if isinstance(parsed, (str, int, float)):
+        return [str(parsed)]
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _arch_source_index(arch_data: dict) -> dict[tuple[str, str], str]:
+    out: dict[tuple[str, str], str] = {}
+    for cluster in arch_data.get("clusters", []):
+        arch_id = cluster.get("canonical_arch_id")
+        if not arch_id:
+            continue
+        for source, ids in (cluster.get("source_refs") or {}).items():
+            for source_id in ids or []:
+                out[(str(source), str(source_id))] = str(arch_id)
+    return out
+
+
 def _open_dbs() -> dict[str, sqlite3.Connection]:
     conns: dict[str, sqlite3.Connection] = {}
     for src, path in SOURCE_DBS.items():
@@ -80,18 +113,22 @@ def _fetch_meta(src: str, sid: str, conn: sqlite3.Connection) -> Optional[dict]:
         "divisare":
             "SELECT name, location_city AS city, location_country AS country, "
             "project_year AS year, architect_names AS architects, cover_image_url AS cover "
+            ", architect_ids AS architect_source_ids "
             "FROM divisare_projects WHERE id=?",
         "architizer":
             "SELECT name, location_city AS city, location_country AS country, "
             "completion_year AS year, firm_name AS architects, cover_image_url AS cover "
+            ", firm_slug AS architect_source_ids "
             "FROM architizer_projects WHERE id=?",
         "archello":
             "SELECT name, location_city AS city, location_country AS country, "
             "project_year AS year, architect_name AS architects, cover_image_url AS cover "
+            ", architect_brand_id AS architect_source_ids "
             "FROM archello_projects WHERE id=?",
         "metalocus":
             "SELECT title AS name, NULL AS city, NULL AS country, NULL AS year, "
             "NULL AS architects, cover_image_url AS cover "
+            ", NULL AS architect_source_ids "
             "FROM buildings WHERE id=?",
     }
     q = queries.get(src)
@@ -103,7 +140,9 @@ def _fetch_meta(src: str, sid: str, conn: sqlite3.Connection) -> Optional[dict]:
         return None
     if not row:
         return None
-    return dict(row)
+    meta = dict(row)
+    meta["architect_source_ids"] = _parse_id_list(meta.get("architect_source_ids"))
+    return meta
 
 
 def _confidence_tier(n_sources: Optional[int]) -> str:
@@ -154,6 +193,30 @@ def _identity_fields(cluster: dict, conns: dict[str, sqlite3.Connection]) -> dic
     return out
 
 
+def _architect_ids_for_cluster(
+    cluster: dict,
+    conns: dict[str, sqlite3.Connection],
+    arch_source_to_id: dict[tuple[str, str], str],
+) -> list[str]:
+    refs = cluster.get("source_refs") or {}
+    out: list[str] = []
+    seen: set[str] = set()
+    for src in SOURCE_PRIORITY:
+        ids = refs.get(src) or []
+        if not ids or src not in conns:
+            continue
+        for source_id in ids:
+            meta = _fetch_meta(src, str(source_id), conns[src])
+            if not meta:
+                continue
+            for arch_source_id in meta.get("architect_source_ids") or []:
+                arch_id = arch_source_to_id.get((src, str(arch_source_id)))
+                if arch_id and arch_id not in seen:
+                    seen.add(arch_id)
+                    out.append(arch_id)
+    return out
+
+
 def build(
     canonical_path: str = CANONICAL_V5,
     output_path: str = OUTPUT_PATH,
@@ -168,6 +231,7 @@ def build(
 
     arch_data = json.load(open(architects_path)) if Path(architects_path).exists() else {"clusters": []}
     arch_by_id = {a["canonical_arch_id"]: a for a in arch_data.get("clusters", [])}
+    arch_source_to_id = _arch_source_index(arch_data)
 
     d1 = _load_jsonl_by_cid(d1_path)
     e1 = _load_jsonl_by_cid(e1_path)
@@ -192,7 +256,7 @@ def build(
             if ident.get("name"):
                 coverage["with_identity_name"] += 1
 
-            arch_ids = cluster.get("canonical_arch_ids") or []
+            arch_ids = _architect_ids_for_cluster(cluster, conns, arch_source_to_id)
             arch_names = [
                 (arch_by_id.get(a) or {}).get("canonical_name")
                 for a in arch_ids

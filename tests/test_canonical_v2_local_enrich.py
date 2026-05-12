@@ -1,0 +1,143 @@
+import json
+import subprocess
+
+from tools import canonical_v2_local_enrich as local_enrich
+from tools import dispatch_enrich_batch as dispatch
+
+
+def _codex_json_response(payload, input_tokens=1000, output_tokens=200):
+    return "\n".join(
+        [
+            json.dumps({"type": "thread.started", "thread_id": "test"}),
+            json.dumps({"type": "turn.started"}),
+            json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": json.dumps(payload)}}),
+            json.dumps(
+                {
+                    "type": "turn.completed",
+                    "usage": {
+                        "input_tokens": input_tokens,
+                        "cached_input_tokens": 50,
+                        "output_tokens": output_tokens,
+                    },
+                }
+            ),
+        ]
+    )
+
+
+def test_run_d1_batch_uses_single_codex_exec_and_parses_rows():
+    calls = []
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        payload = [
+            {
+                "cid": "bld_1",
+                "program": "Housing",
+                "style": "Contemporary",
+                "color_tone": "Neutral",
+                "atmosphere": "Serene",
+                "material_visual": ["concrete"],
+                "visual_description": "A compact residential building uses concrete surfaces and restrained massing in a calm urban setting.",
+            }
+        ]
+        return subprocess.CompletedProcess(cmd, 0, stdout=_codex_json_response(payload), stderr="")
+
+    result = local_enrich.run_d1_batch(
+        [{"cid": "bld_1", "descriptions": []}],
+        model_meta=dispatch.ModelMeta(model="gpt-5.5", reasoning="low", fast="fast"),
+        timeout_seconds=30,
+        runner=fake_runner,
+    )
+
+    assert result.rows is not None
+    assert result.rows[0]["cid"] == "bld_1"
+    cmd, kwargs = calls[0]
+    assert cmd[:4] == ["codex", "exec", "--json", "--skip-git-repo-check"]
+    assert cmd.count("--") == 1
+    assert kwargs["check"] is False
+
+
+def test_run_e2_vision_batch_downloads_candidates_and_validates_urls(tmp_path):
+    downloaded = []
+    calls = []
+
+    def fake_downloader(url):
+        downloaded.append(url)
+        path = tmp_path / f"image_{len(downloaded)}.jpg"
+        path.write_bytes(b"fake")
+        return path, True
+
+    def fake_runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        image_args = [cmd[idx + 1] for idx, value in enumerate(cmd) if value == "-i"]
+        assert len(image_args) == 2
+        payload = [
+            {
+                "cid": "bld_1",
+                "covers_by_type": {
+                    "exterior": "https://img.test/exterior.jpg",
+                    "interior": "https://img.test/interior.jpg",
+                    "drawing": None,
+                    "aerial": None,
+                    "detail": None,
+                },
+            }
+        ]
+        return subprocess.CompletedProcess(cmd, 0, stdout=_codex_json_response(payload), stderr="")
+
+    batch = [
+        {
+            "cid": "bld_1",
+            "candidates": [
+                {"url": "https://img.test/exterior.jpg", "cluster_id": "0"},
+                {"url": "https://img.test/interior.jpg", "cluster_id": "1"},
+            ],
+        }
+    ]
+
+    result = local_enrich.run_e2_vision_batch(
+        batch,
+        model_meta=dispatch.ModelMeta(model="gpt-5.5", reasoning="low", fast="fast"),
+        timeout_seconds=30,
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert downloaded == ["https://img.test/exterior.jpg", "https://img.test/interior.jpg"]
+    assert result.rows is not None
+    assert result.rows[0]["covers_by_type"]["exterior"] == "https://img.test/exterior.jpg"
+    assert calls[0][0].count("-i") == 2
+
+
+def test_run_e2_vision_batch_rejects_url_not_in_candidates(tmp_path):
+    def fake_downloader(url):
+        path = tmp_path / "image.jpg"
+        path.write_bytes(b"fake")
+        return path, True
+
+    def fake_runner(cmd, **kwargs):
+        payload = [
+            {
+                "cid": "bld_1",
+                "covers_by_type": {
+                    "exterior": "https://img.test/not-a-candidate.jpg",
+                    "interior": None,
+                    "drawing": None,
+                    "aerial": None,
+                    "detail": None,
+                },
+            }
+        ]
+        return subprocess.CompletedProcess(cmd, 0, stdout=_codex_json_response(payload), stderr="")
+
+    result = local_enrich.run_e2_vision_batch(
+        [{"cid": "bld_1", "candidates": [{"url": "https://img.test/exterior.jpg"}]}],
+        model_meta=dispatch.ModelMeta(model="gpt-5.5", reasoning="low", fast="fast"),
+        timeout_seconds=30,
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert result.rows is None
+    assert "not in candidates" in result.failure_reason
