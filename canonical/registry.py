@@ -185,3 +185,51 @@ class BuildingRegistry(_Registry):
     id_prefix = "bld"
     def __init__(self, path: str = BUILDINGS_PATH) -> None:
         super().__init__(path)
+
+    def match_or_create(
+        self,
+        *,
+        names: set[str],
+        source_refs: dict[str, list[str]],
+    ) -> tuple[str, str]:
+        """Building variant: SKIP the name-only fallback.
+
+        Building names are not unique identifiers (think "House H", "Tower",
+        "Pavilion"). The matcher in canonical/match_buildings_sequential.py
+        is responsible for cross-source merging using arch_id + country +
+        year + phash. This registry should only:
+          1. match by source_id (exact provenance match)
+          2. else create a new entry (no name-only short-circuit)
+
+        Without this override, the base _Registry.match_or_create would merge
+        any two source rows whose normalized name matches, ignoring
+        architect / location / year / phash discriminators. That caused the
+        "House H" / "Z HOUSE" / generic-name over-merge bug where 5 distinct
+        buildings across 4 countries by 5 different architects ended up in
+        a single canonical_bld_id cluster.
+
+        ArchitectRegistry keeps the name-fallback because architect names
+        ARE the natural key (Foster, BIG, etc are unique strings).
+        """
+        # 1. Source-id overlap (only reliable signal for buildings)
+        for src, ids in source_refs.items():
+            for sid in ids:
+                cid = self._source_index.get((src, str(sid)))
+                if cid:
+                    return self.follow(cid), "matched_by_source"
+        # 2. New (no name-only fallback for buildings)
+        cid = self._next_id()
+        today = date.today().isoformat()
+        self.data[cid] = {
+            "names":          sorted(names),
+            "source_refs":    {src: list(ids) for src, ids in source_refs.items()},
+            "first_seen":     today,
+            "last_seen":      today,
+            "redirected_to":  None,
+        }
+        for n in names:
+            self._name_index[_normalize_name(n)] = cid
+        for src, ids in source_refs.items():
+            for sid in ids:
+                self._source_index[(src, str(sid))] = cid
+        return cid, "new"
