@@ -30,6 +30,7 @@ from tools.canonical_v2_upload_validator import (
 
 
 DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_generic_merge_audit.json"
+DEFAULT_E1 = ROOT / "data/canonical/e1_clusters.jsonl"
 SOURCE_DBS = {
     "divisare": ROOT / "data/crawl/divisare.db",
     "architizer": ROOT / "data/crawl/architizer.db",
@@ -210,6 +211,54 @@ def _iter_source_members(row: dict[str, Any], source_lookup: SourceLookup) -> tu
     return members, missing
 
 
+def _load_cross_source_image_support(path: Path | None) -> dict[str, int]:
+    if path is None or not path.exists():
+        return {}
+    support: dict[str, int] = {}
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            cid = str(row.get("cid") or "")
+            if not cid:
+                continue
+            clusters: dict[str, set[str]] = {}
+            for image in row.get("all_images") or []:
+                if not isinstance(image, dict):
+                    continue
+                cluster_id = str(image.get("phash_cluster_id"))
+                source = str(image.get("source") or "")
+                if source:
+                    clusters.setdefault(cluster_id, set()).add(source)
+            support[cid] = sum(1 for sources in clusters.values() if len(sources) > 1)
+    return support
+
+
+def _load_waivers(path: Path | None) -> dict[str, str]:
+    if path is None or not path.exists():
+        return {}
+    data = json.load(path.open())
+    if isinstance(data, dict):
+        rows = data.get("waivers") or data.get("rows") or []
+    elif isinstance(data, list):
+        rows = data
+    else:
+        rows = []
+    out: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        cid = str(row.get("canonical_bld_id") or row.get("cid") or "")
+        if cid:
+            out[cid] = str(row.get("reason") or "manual waiver")
+    return out
+
+
 def _audit_row(row: dict[str, Any], source_lookup: SourceLookup) -> tuple[dict[str, Any] | None, int]:
     if (row.get("n_sources") or 1) < 2:
         return None, 0
@@ -278,12 +327,16 @@ def audit_rows(
     source_lookup: SourceLookup,
     *,
     max_findings: int = 100,
+    cross_source_image_support: dict[str, int] | None = None,
+    waivers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     flag_counts: Counter[str] = Counter()
     findings: list[dict[str, Any]] = []
     rows_examined = 0
     multi_source_rows = 0
     source_meta_missing = 0
+    image_support = cross_source_image_support or {}
+    waiver_map = waivers or {}
 
     for row in rows:
         rows_examined += 1
@@ -293,6 +346,18 @@ def audit_rows(
         source_meta_missing += missing
         if not finding:
             continue
+        cid = str(finding.get("canonical_bld_id") or "")
+        hard_flags = set(finding["flags"]) & {"country_conflict", "year_span_conflict", "code_name_conflict"}
+        if finding["review_required"] and hard_flags == {"country_conflict"}:
+            cross_image_count = image_support.get(cid, 0)
+            if cross_image_count > 0:
+                finding["review_required"] = False
+                finding["resolution"] = "image_supported_country_noise_or_alias"
+                finding["cross_source_image_clusters"] = cross_image_count
+            elif cid in waiver_map:
+                finding["review_required"] = False
+                finding["resolution"] = "waived_country_noise_or_alias"
+                finding["waiver_reason"] = waiver_map[cid]
         for flag in finding["flags"]:
             flag_counts[flag] += 1
         findings.append(finding)
@@ -316,6 +381,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--max-findings", type=int, default=500)
+    parser.add_argument("--e1", type=Path, default=None)
+    parser.add_argument("--waivers", type=Path, default=None)
     args = parser.parse_args()
 
     lookup = SqliteSourceLookup()
@@ -324,11 +391,21 @@ def main() -> int:
             iter_buildings(args.input, limit=args.limit),
             lookup,
             max_findings=args.max_findings,
+            cross_source_image_support=_load_cross_source_image_support(args.e1),
+            waivers=_load_waivers(args.waivers),
         )
     finally:
         lookup.close()
 
-    report.update({"input": str(args.input), "limit": args.limit, "writes": "none; read-only audit"})
+    report.update(
+        {
+            "input": str(args.input),
+            "limit": args.limit,
+            "e1": str(args.e1) if args.e1 else None,
+            "waivers": str(args.waivers) if args.waivers else None,
+            "writes": "none; read-only audit",
+        }
+    )
     args.report.parent.mkdir(parents=True, exist_ok=True)
     with args.report.open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)

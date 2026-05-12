@@ -104,3 +104,89 @@ def test_audit_normalizes_country_aliases_before_blocking():
 
     assert report["status"] == "PASS"
     assert report["review_required"] == 0
+
+
+def test_audit_downgrades_country_conflict_with_cross_source_image_support():
+    source_lookup = {
+        ("divisare", "1"): {
+            "name": "Creek House",
+            "city": "Coast",
+            "country": "Sweden",
+            "year": 2013,
+            "architects": "Studio A",
+        },
+        ("archello", "2"): {
+            "name": "Creek House",
+            "city": None,
+            "country": "South coast of Sweden",
+            "year": 2013,
+            "architects": "Studio A",
+        },
+    }
+
+    report = audit.audit_rows(
+        [_row(canonical_bld_id="bld_img", name="Creek House")],
+        source_lookup,
+        cross_source_image_support={"bld_img": 1},
+    )
+
+    assert report["status"] == "PASS"
+    assert report["review_required"] == 0
+    assert report["findings"][0]["resolution"] == "image_supported_country_noise_or_alias"
+
+
+def test_audit_does_not_downgrade_code_or_year_conflicts_with_image_support():
+    source_lookup = {
+        ("divisare", "1"): {
+            "name": "House A",
+            "city": "Stockholm",
+            "country": "Sweden",
+            "year": 2004,
+            "architects": "Studio A",
+        },
+        ("archello", "2"): {
+            "name": "House B",
+            "city": "Bangkok",
+            "country": "Thailand",
+            "year": 2023,
+            "architects": "Studio B",
+        },
+    }
+
+    report = audit.audit_rows(
+        [_row(canonical_bld_id="bld_bad")],
+        source_lookup,
+        cross_source_image_support={"bld_bad": 1},
+    )
+
+    assert report["status"] == "BLOCK"
+    assert report["review_required"] == 1
+
+
+def test_audit_downgrades_country_conflict_with_manual_waiver():
+    source_lookup = {
+        ("divisare", "1"): {
+            "name": "M House",
+            "city": "Guernsey",
+            "country": "United Kingdom",
+            "year": 2012,
+            "architects": "Studio A",
+        },
+        ("archello", "2"): {
+            "name": "M House",
+            "city": None,
+            "country": "Guernsey",
+            "year": 2012,
+            "architects": "Studio A",
+        },
+    }
+
+    report = audit.audit_rows(
+        [_row(canonical_bld_id="bld_waive", name="M House")],
+        source_lookup,
+        waivers={"bld_waive": "same architect/year; Guernsey country field alias"},
+    )
+
+    assert report["status"] == "PASS"
+    assert report["review_required"] == 0
+    assert report["findings"][0]["resolution"] == "waived_country_noise_or_alias"
