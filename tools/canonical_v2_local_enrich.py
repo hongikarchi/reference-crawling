@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -253,44 +254,79 @@ def run_stage(
     for batch in _chunked(rows, batch_size):
         if max_batches is not None and summary["batches"] >= max_batches:
             break
-        started = time.monotonic()
-        if stage == "d1":
-            result = run_d1_batch(batch, model_meta=model_meta, timeout_seconds=timeout_seconds)
-        elif stage == "d2":
-            result = dispatch.run_d2_vision_batch(batch, model_meta=model_meta, timeout_seconds=timeout_seconds)
-        elif stage == "e2":
-            result = run_e2_vision_batch(batch, model_meta=model_meta, timeout_seconds=timeout_seconds)
-        else:
-            raise ValueError(f"unknown stage: {stage}")
+        remaining_batch = list(batch)
 
-        expected = [str(row["cid"]) for row in batch]
         summary["batches"] += 1
-        metric = {
-            "stage": stage,
-            "cids": expected,
-            "success": result.rows is not None,
-            "failure_reason": result.failure_reason,
-            "wallclock_s": round(time.monotonic() - started, 3),
-            "tokens": None,
-        }
-        usage = dispatch.parse_token_usage(result.raw)
-        if usage:
-            metric["tokens"] = {"total": usage.total, "input": usage.input, "output": usage.output}
-        _append_jsonl(metrics_path, [metric])
+        while remaining_batch:
+            expected = [str(row["cid"]) for row in remaining_batch]
+            attempts = 2 if stage == "d2" else 1
+            normalized = []
+            error = None
+            result: dispatch.PollResult | None = None
+            for attempt in range(1, attempts + 1):
+                started = time.monotonic()
+                retry_note = error if attempt > 1 else None
+                if stage == "d1":
+                    result = run_d1_batch(remaining_batch, model_meta=model_meta, timeout_seconds=timeout_seconds)
+                elif stage == "d2":
+                    result = dispatch.run_d2_vision_batch(
+                        remaining_batch,
+                        model_meta=model_meta,
+                        timeout_seconds=timeout_seconds,
+                        retry_note=retry_note,
+                    )
+                elif stage == "e2":
+                    result = run_e2_vision_batch(remaining_batch, model_meta=model_meta, timeout_seconds=timeout_seconds)
+                else:
+                    raise ValueError(f"unknown stage: {stage}")
 
-        if result.rows is None:
-            summary["failures"] += len(batch)
-            dispatch.log_failure(failure_path, cids=expected, reason=result.failure_reason or "unknown", raw=result.raw)
-            break
+                normalized = []
+                error = result.failure_reason
+                if result.rows is not None:
+                    normalized, error = dispatch.validate_batch(stage, expected, result.rows)
 
-        normalized, error = dispatch.validate_batch(stage, expected, result.rows)
-        if error:
-            summary["failures"] += len(batch)
-            dispatch.log_failure(failure_path, cids=expected, reason=error, raw=result.raw)
-            break
-        _append_jsonl(output_path, normalized)
-        summary["written"] += len(normalized)
+                metric = {
+                    "stage": stage,
+                    "cids": expected,
+                    "attempt": attempt,
+                    "success": result.rows is not None and error is None,
+                    "failure_reason": error,
+                    "wallclock_s": round(time.monotonic() - started, 3),
+                    "tokens": None,
+                }
+                usage = dispatch.parse_token_usage(result.raw)
+                if usage:
+                    metric["tokens"] = {"total": usage.total, "input": usage.input, "output": usage.output}
+                _append_jsonl(metrics_path, [metric])
+
+                if error is None:
+                    break
+
+            if error is None:
+                _append_jsonl(output_path, normalized)
+                summary["written"] += len(normalized)
+                break
+
+            bad_cid = _download_failed_cid(error)
+            if stage == "d2" and bad_cid and bad_cid in expected:
+                raw = result.raw if result is not None else ""
+                dispatch.log_failure(failure_path, cids=[bad_cid], reason=error, raw=raw)
+                summary["failures"] += 1
+                remaining_batch = [row for row in remaining_batch if str(row["cid"]) != bad_cid]
+                continue
+
+            summary["failures"] += len(remaining_batch)
+            raw = result.raw if result is not None else ""
+            dispatch.log_failure(failure_path, cids=expected, reason=error, raw=raw)
+            return summary
     return summary
+
+
+def _download_failed_cid(reason: str | None) -> str | None:
+    if not reason or "download_failed:" not in reason or "all cover candidates failed" not in reason:
+        return None
+    match = re.search(r"cid=([A-Za-z0-9_-]+)", reason)
+    return match.group(1) if match else None
 
 
 def main() -> int:
