@@ -108,10 +108,15 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "all_images": row.get("all_images") or [],
         "best_image_per_cluster": row.get("best_image_per_cluster") or {},
         "source_refs": row.get("source_refs") or {},
+        "source_urls": row.get("source_urls") or {},
         "identity_source": row.get("identity_source"),
         "confidence_tier": row.get("confidence_tier"),
         "n_sources": row.get("n_sources"),
         "cover_image_url_default": row.get("cover_image_url_default"),
+        "display_cover_url": row.get("display_cover_url"),
+        "is_publishable": row.get("is_publishable"),
+        "publishability_reasons": row.get("publishability_reasons") or [],
+        "needs_image_derived_backfill": bool(row.get("needs_image_derived_backfill")),
         "embedding": row.get("embedding"),
     }
 
@@ -141,6 +146,20 @@ def _source_refs_are_valid(value: Any) -> bool:
     return True
 
 
+def _source_urls_are_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or not value:
+        return False
+    for source, urls in value.items():
+        if not isinstance(source, str) or not source:
+            return False
+        if not isinstance(urls, list) or not urls:
+            return False
+        for url in urls:
+            if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+                return False
+    return True
+
+
 def _compact_sample(mapped: dict[str, Any]) -> dict[str, Any]:
     return {
         "canonical_bld_id": mapped["canonical_bld_id"],
@@ -150,8 +169,12 @@ def _compact_sample(mapped: dict[str, Any]) -> dict[str, Any]:
         "architect_names": mapped["architect_names"][:3],
         "n_sources": mapped["n_sources"],
         "source_refs": mapped["source_refs"],
+        "source_urls": mapped["source_urls"],
         "covers_present": sorted(k for k, v in mapped["covers_by_type"].items() if v),
         "all_images_count": len(mapped["all_images"]),
+        "display_cover_url": mapped["display_cover_url"],
+        "is_publishable": mapped["is_publishable"],
+        "publishability_reasons": mapped["publishability_reasons"],
         "embedding_dim": len(mapped["embedding"]) if isinstance(mapped["embedding"], list) else None,
     }
 
@@ -164,11 +187,14 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
     by_name: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     samples: list[dict[str, Any]] = []
     total = 0
+    publishable_rows = 0
+    nonpublishable_rows = 0
 
     for raw in rows:
         total += 1
         mapped = map_row(raw)
         cid = mapped.get("canonical_bld_id")
+        is_publishable = mapped.get("is_publishable")
 
         if len(samples) < sample_limit:
             samples.append(_compact_sample(mapped))
@@ -194,13 +220,26 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
             failures["bad_covers_by_type"] += 1
         if not _source_refs_are_valid(mapped.get("source_refs")):
             failures["bad_source_refs"] += 1
+        if not _source_urls_are_valid(mapped.get("source_urls")):
+            failures["bad_source_urls"] += 1
         if not _embedding_is_valid(mapped.get("embedding")):
             failures["bad_embedding"] += 1
+        if not isinstance(is_publishable, bool):
+            failures["bad_publishable_flag"] += 1
+        elif is_publishable:
+            publishable_rows += 1
+            if not mapped.get("all_images") or not mapped.get("display_cover_url"):
+                failures["publishable_missing_image"] += 1
+        else:
+            nonpublishable_rows += 1
+            warnings["nonpublishable_rows"] += 1
 
         if not mapped.get("all_images"):
             warnings["empty_all_images"] += 1
         if not mapped.get("cover_image_url_default"):
             warnings["missing_cover_image_url_default"] += 1
+        if not mapped.get("display_cover_url"):
+            warnings["missing_display_cover_url"] += 1
         if not mapped.get("location_country"):
             warnings["missing_location_country"] += 1
         if not mapped.get("location_city"):
@@ -209,6 +248,8 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
             warnings["missing_project_year"] += 1
         if not mapped.get("architect_canonical_ids"):
             warnings["missing_architect_canonical_ids"] += 1
+        if mapped.get("needs_image_derived_backfill"):
+            warnings["needs_image_derived_backfill"] += 1
         if is_genericish_name(str(mapped.get("name") or "")):
             warnings["genericish_name_rows"] += 1
 
@@ -247,6 +288,8 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
     return {
         "status": "FAIL" if failures else "PASS",
         "total_rows": total,
+        "publishable_rows": publishable_rows,
+        "nonpublishable_rows": nonpublishable_rows,
         "unique_pk": len(seen),
         "failures": dict(failures),
         "warnings": dict(warnings),

@@ -28,6 +28,7 @@ from typing import Any, Optional
 
 CANONICAL_V5     = "data/canonical/canonical_buildings_4source.json"
 ARCHITECTS_PATH  = "data/canonical/architects_canonical.json"
+METALOCUS_FINAL  = "data/enrich/4_buildings_final.json"
 D1_RESULTS       = "data/canonical/d1_results.jsonl"
 E1_CLUSTERS      = "data/canonical/e1_clusters.jsonl"
 E2_IMAGE_TYPES   = "data/canonical/e2_image_types.jsonl"
@@ -42,6 +43,26 @@ SOURCE_DBS = {
 }
 
 SOURCE_PRIORITY = ("divisare", "architizer", "archello", "metalocus")
+_METALOCUS_FINAL_CACHE_PATH: Optional[str] = None
+_METALOCUS_FINAL_CACHE: dict[str, dict[str, Any]] | None = None
+
+COUNTRY_ALIASES = {
+    "korea, republic of": "South Korea",
+    "republic of korea": "South Korea",
+    "south korea": "South Korea",
+    "u.s.a.": "United States",
+    "usa": "United States",
+    "us": "United States",
+    "united states of america": "United States",
+    "united states": "United States",
+    "uk": "United Kingdom",
+    "u.k.": "United Kingdom",
+    "great britain": "United Kingdom",
+    "united kingdom": "United Kingdom",
+    "viet nam": "Vietnam",
+    "russian federation": "Russia",
+    "czech republic": "Czechia",
+}
 
 
 def _load_jsonl_by_cid(path: str) -> dict[str, dict]:
@@ -85,6 +106,94 @@ def _parse_id_list(value: Any) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
+def _clean_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_country(value: Any) -> Optional[str]:
+    text = _clean_text(value)
+    if not text:
+        return None
+    key = " ".join(text.replace("\u00a0", " ").split()).casefold()
+    return COUNTRY_ALIASES.get(key, text)
+
+
+def _parse_year(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        year = value
+    elif isinstance(value, float):
+        year = int(value)
+    else:
+        import re
+
+        match = re.search(r"\b(18|19|20|21)\d{2}\b", str(value))
+        if not match:
+            return None
+        year = int(match.group(0))
+    if 1800 <= year <= 2199:
+        return year
+    return None
+
+
+def _build_source_url(src: str, sid: str, meta: dict[str, Any]) -> Optional[str]:
+    if meta.get("source_url"):
+        return str(meta["source_url"])
+    slug = _clean_text(meta.get("slug"))
+    if src == "divisare" and slug:
+        return f"https://divisare.com/projects/{sid}-{slug}"
+    if src == "architizer" and slug:
+        return f"https://architizer.com/projects/{slug}/"
+    if src == "archello" and slug:
+        return f"https://archello.com/project/{slug}"
+    if src == "metalocus" and slug:
+        return f"https://www.metalocus.es/en/news/{slug}"
+    return None
+
+
+def _metalocus_final_index() -> dict[str, dict[str, Any]]:
+    global _METALOCUS_FINAL_CACHE_PATH, _METALOCUS_FINAL_CACHE
+    if _METALOCUS_FINAL_CACHE is not None and _METALOCUS_FINAL_CACHE_PATH == METALOCUS_FINAL:
+        return _METALOCUS_FINAL_CACHE
+    path = Path(METALOCUS_FINAL)
+    if not path.exists():
+        _METALOCUS_FINAL_CACHE_PATH = METALOCUS_FINAL
+        _METALOCUS_FINAL_CACHE = {}
+        return _METALOCUS_FINAL_CACHE
+    data = json.load(path.open(encoding="utf-8"))
+    out: dict[str, dict[str, Any]] = {}
+    if isinstance(data, list):
+        for row in data:
+            if isinstance(row, dict) and row.get("building_id"):
+                out[str(row["building_id"])] = row
+    _METALOCUS_FINAL_CACHE_PATH = METALOCUS_FINAL
+    _METALOCUS_FINAL_CACHE = out
+    return out
+
+
+def _fetch_metalocus_final_meta(sid: str) -> Optional[dict[str, Any]]:
+    raw = _metalocus_final_index().get(str(sid))
+    if not raw:
+        return None
+    meta = {
+        "name": _clean_text(raw.get("name_en") or raw.get("project_name")),
+        "city": _clean_text(raw.get("city")),
+        "country": _normalize_country(raw.get("location_country")),
+        "year": _parse_year(raw.get("year")),
+        "architects": _clean_text(raw.get("architect")),
+        "cover": None,
+        "architect_source_ids": [],
+        "slug": _clean_text(raw.get("slug")),
+        "source_url": _clean_text(raw.get("url") or raw.get("source_url")),
+    }
+    meta["source_url"] = _build_source_url("metalocus", str(sid), meta)
+    return meta
+
+
 def _arch_source_index(arch_data: dict) -> dict[tuple[str, str], str]:
     out: dict[tuple[str, str], str] = {}
     for cluster in arch_data.get("clusters", []):
@@ -113,23 +222,23 @@ def _fetch_meta(src: str, sid: str, conn: sqlite3.Connection) -> Optional[dict]:
         "divisare":
             "SELECT name, location_city AS city, location_country AS country, "
             "project_year AS year, architect_names AS architects, cover_image_url AS cover "
-            ", architect_ids AS architect_source_ids "
+            ", architect_ids AS architect_source_ids, slug, NULL AS source_url "
             "FROM divisare_projects WHERE id=?",
         "architizer":
             "SELECT name, location_city AS city, location_country AS country, "
             "completion_year AS year, firm_name AS architects, cover_image_url AS cover "
-            ", firm_slug AS architect_source_ids "
+            ", firm_slug AS architect_source_ids, slug, NULL AS source_url "
             "FROM architizer_projects WHERE id=?",
         "archello":
             "SELECT name, location_city AS city, location_country AS country, "
             "project_year AS year, architect_name AS architects, cover_image_url AS cover "
-            ", architect_brand_id AS architect_source_ids "
+            ", architect_brand_id AS architect_source_ids, slug, NULL AS source_url "
             "FROM archello_projects WHERE id=?",
         "metalocus":
-            "SELECT title AS name, NULL AS city, NULL AS country, NULL AS year, "
-            "NULL AS architects, cover_image_url AS cover "
-            ", NULL AS architect_source_ids "
-            "FROM buildings WHERE id=?",
+            "SELECT b.title AS name, b.city AS city, b.country AS country, "
+            "b.year AS year, b.architects AS architects, b.cover_image_url AS cover, "
+            "NULL AS architect_source_ids, a.slug AS slug, a.url AS source_url "
+            "FROM buildings b LEFT JOIN articles a ON a.id = b.article_id WHERE b.id=?",
     }
     q = queries.get(src)
     if not q:
@@ -139,9 +248,17 @@ def _fetch_meta(src: str, sid: str, conn: sqlite3.Connection) -> Optional[dict]:
     except sqlite3.Error:
         return None
     if not row:
+        if src == "metalocus":
+            return _fetch_metalocus_final_meta(str(sid))
         return None
     meta = dict(row)
     meta["architect_source_ids"] = _parse_id_list(meta.get("architect_source_ids"))
+    meta["city"] = _clean_text(meta.get("city"))
+    meta["country"] = _normalize_country(meta.get("country"))
+    meta["year"] = _parse_year(meta.get("year"))
+    meta["architects"] = _clean_text(meta.get("architects"))
+    meta["cover"] = _clean_text(meta.get("cover"))
+    meta["source_url"] = _build_source_url(src, str(sid), meta)
     return meta
 
 
@@ -171,19 +288,26 @@ def _identity_fields(cluster: dict, conns: dict[str, sqlite3.Connection]) -> dic
         ids = refs.get(src) or []
         if not ids or src not in conns:
             continue
-        meta = _fetch_meta(src, ids[0], conns[src])
-        if not meta:
-            continue
-        out["name"] = out["name"] or meta.get("name")
-        out["location_city"] = out["location_city"] or meta.get("city")
-        out["location_country"] = out["location_country"] or meta.get("country")
-        out["project_year"] = out["project_year"] or meta.get("year")
-        out["architects_text"] = out["architects_text"] or meta.get("architects")
-        out["cover_image_url_default"] = (
-            out["cover_image_url_default"] or meta.get("cover")
-        )
-        if out["identity_source"] is None:
-            out["identity_source"] = src
+        for source_id in ids:
+            meta = _fetch_meta(src, str(source_id), conns[src])
+            if not meta:
+                continue
+            out["name"] = out["name"] or meta.get("name")
+            out["location_city"] = out["location_city"] or meta.get("city")
+            out["location_country"] = out["location_country"] or meta.get("country")
+            out["project_year"] = out["project_year"] or meta.get("year")
+            out["architects_text"] = out["architects_text"] or meta.get("architects")
+            out["cover_image_url_default"] = (
+                out["cover_image_url_default"] or meta.get("cover")
+            )
+            if out["identity_source"] is None:
+                out["identity_source"] = src
+            if all(v is not None for v in (
+                out["name"], out["location_city"], out["location_country"],
+                out["project_year"], out["architects_text"],
+                out["cover_image_url_default"],
+            )):
+                break
         if all(v is not None for v in (
             out["name"], out["location_city"], out["location_country"],
             out["project_year"], out["architects_text"],
@@ -191,6 +315,68 @@ def _identity_fields(cluster: dict, conns: dict[str, sqlite3.Connection]) -> dic
         )):
             break
     return out
+
+
+def _source_urls_for_cluster(
+    cluster: dict,
+    conns: dict[str, sqlite3.Connection],
+) -> dict[str, list[str]]:
+    refs = cluster.get("source_refs") or {}
+    out: dict[str, list[str]] = {}
+    seen: set[tuple[str, str]] = set()
+    for src in SOURCE_PRIORITY:
+        ids = refs.get(src) or []
+        if not ids or src not in conns:
+            continue
+        for source_id in ids:
+            meta = _fetch_meta(src, str(source_id), conns[src])
+            if not meta or not meta.get("source_url"):
+                continue
+            key = (src, str(meta["source_url"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.setdefault(src, []).append(str(meta["source_url"]))
+    return out
+
+
+def _display_cover_url(
+    *,
+    covers_by_type: dict[str, Any],
+    cover_image_url_default: Any,
+    all_images: list[dict[str, Any]],
+) -> Optional[str]:
+    if isinstance(covers_by_type, dict):
+        exterior = _clean_text(covers_by_type.get("exterior"))
+        if exterior:
+            return exterior
+    default = _clean_text(cover_image_url_default)
+    if default:
+        return default
+    for image in all_images:
+        if isinstance(image, dict):
+            url = _clean_text(image.get("url"))
+            if url:
+                return url
+    if isinstance(covers_by_type, dict):
+        for value in covers_by_type.values():
+            url = _clean_text(value)
+            if url:
+                return url
+    return None
+
+
+def _publishability_reasons(
+    *,
+    all_images: list[dict[str, Any]],
+    display_cover_url: Optional[str],
+) -> list[str]:
+    reasons: list[str] = []
+    if not all_images:
+        reasons.append("missing_all_images")
+    if not display_cover_url:
+        reasons.append("missing_display_cover_url")
+    return reasons
 
 
 def _architect_ids_for_cluster(
@@ -244,6 +430,11 @@ def build(
         "total":   len(clusters),
         "with_d1": 0, "with_e1": 0, "with_e2": 0, "with_d2": 0,
         "with_identity_name": 0,
+        "with_source_urls": 0,
+        "with_display_cover_url": 0,
+        "publishable": 0,
+        "nonpublishable": 0,
+        "needs_image_derived_backfill": 0,
         "by_tier": {"T1": 0, "T2": 0, "T3": 0},
     }
     try:
@@ -262,6 +453,9 @@ def build(
                 for a in arch_ids
             ]
             arch_names = [n for n in arch_names if n]
+            source_urls = _source_urls_for_cluster(cluster, conns)
+            if source_urls:
+                coverage["with_source_urls"] += 1
 
             d1_row = d1.get(cid) or {}
             e1_row = e1.get(cid) or {}
@@ -274,6 +468,34 @@ def build(
 
             tier = _confidence_tier(cluster.get("n_sources"))
             coverage["by_tier"][tier] += 1
+            all_images = e1_row.get("all_images") or []
+            covers_by_type = e2_row.get("covers_by_type") or {}
+            image_derived = {
+                "style":              d2_row.get("style_image"),
+                "color_tone":         d2_row.get("color_tone_image"),
+                "material_visual":    d2_row.get("material_visual_image"),
+                "visual_description": d2_row.get("visual_description_image"),
+            } if d2_row else {}
+            display_cover_url = _display_cover_url(
+                covers_by_type=covers_by_type,
+                cover_image_url_default=ident.get("cover_image_url_default"),
+                all_images=all_images,
+            )
+            publishability_reasons = _publishability_reasons(
+                all_images=all_images,
+                display_cover_url=display_cover_url,
+            )
+            needs_image_derived_backfill = bool(
+                display_cover_url and not (image_derived or {}).get("style")
+            )
+            if display_cover_url:
+                coverage["with_display_cover_url"] += 1
+            if publishability_reasons:
+                coverage["nonpublishable"] += 1
+            else:
+                coverage["publishable"] += 1
+            if needs_image_derived_backfill:
+                coverage["needs_image_derived_backfill"] += 1
 
             row = {
                 "canonical_bld_id":       cid,
@@ -287,6 +509,7 @@ def build(
                 "project_year":           ident.get("project_year"),
                 "n_sources":              cluster.get("n_sources"),
                 "source_refs":            cluster.get("source_refs") or {},
+                "source_urls":            source_urls,
                 "identity_source":        ident.get("identity_source"),
                 "confidence_tier":        tier,
                 # text enrichment (D-1)
@@ -297,18 +520,17 @@ def build(
                 "material_visual":        d1_row.get("material_visual"),
                 "visual_description":     d1_row.get("visual_description"),
                 # image cluster (E-1)
-                "all_images":             e1_row.get("all_images") or [],
+                "all_images":             all_images,
                 "best_image_per_cluster": e1_row.get("best_image_per_cluster") or {},
                 # image type covers (E-2)
-                "covers_by_type":         e2_row.get("covers_by_type") or {},
+                "covers_by_type":         covers_by_type,
                 # vision enrichment (D-2)
-                "image_derived": {
-                    "style":              d2_row.get("style_image"),
-                    "color_tone":         d2_row.get("color_tone_image"),
-                    "material_visual":    d2_row.get("material_visual_image"),
-                    "visual_description": d2_row.get("visual_description_image"),
-                } if d2_row else {},
+                "image_derived":          image_derived,
                 "cover_image_url_default": ident.get("cover_image_url_default"),
+                "display_cover_url":      display_cover_url,
+                "is_publishable":         not publishability_reasons,
+                "publishability_reasons": publishability_reasons,
+                "needs_image_derived_backfill": needs_image_derived_backfill,
             }
             out_rows.append(row)
     finally:

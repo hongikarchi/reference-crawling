@@ -1,4 +1,5 @@
 from tools import canonical_v2_generic_merge_audit as audit
+import json
 
 
 def _row(**overrides):
@@ -190,3 +191,38 @@ def test_audit_downgrades_country_conflict_with_manual_waiver():
     assert report["status"] == "PASS"
     assert report["review_required"] == 0
     assert report["findings"][0]["resolution"] == "waived_country_noise_or_alias"
+
+
+def test_sqlite_lookup_resolves_metalocus_enriched_building_ids(tmp_path, monkeypatch):
+    metalocus_final = tmp_path / "metalocus_final.json"
+    metalocus_final.write_text(
+        json.dumps(
+            [
+                {
+                    "building_id": "B03293",
+                    "name_en": "Vers une Industrie Légère",
+                    "city": "Barro",
+                    "location_country": "Spain",
+                    "year": 2018,
+                    "architect": "Gramática Arquitectónica",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(audit, "SOURCE_DBS", {"metalocus": tmp_path / "missing.db"})
+    monkeypatch.setattr(audit, "METALOCUS_FINAL", metalocus_final)
+
+    lookup = audit.SqliteSourceLookup()
+    try:
+        meta = lookup.get(("metalocus", "B03293"))
+    finally:
+        lookup.close()
+
+    assert meta == {
+        "name": "Vers une Industrie Légère",
+        "city": "Barro",
+        "country": "Spain",
+        "year": 2018,
+        "architects": "Gramática Arquitectónica",
+    }

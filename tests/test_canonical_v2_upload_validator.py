@@ -35,7 +35,14 @@ def _sample_row(**overrides):
         },
         "image_derived": {"style": "Contemporary"},
         "cover_image_url_default": "https://example.test/1.jpg",
+        "display_cover_url": "https://example.test/1.jpg",
+        "is_publishable": True,
+        "publishability_reasons": [],
         "embedding": [0.01] * 384,
+        "source_urls": {
+            "divisare": ["https://divisare.com/projects/1-house-k"],
+            "archello": ["https://archello.com/project/house-k"],
+        },
     }
     row.update(overrides)
     return row
@@ -48,7 +55,13 @@ def test_map_row_preserves_v2_identity_and_json_fields():
     assert mapped["name"] == "House K"
     assert mapped["architect_canonical_ids"] == ["arch_000001"]
     assert mapped["source_refs"] == {"divisare": ["1"], "archello": ["2"]}
+    assert mapped["source_urls"] == {
+        "divisare": ["https://divisare.com/projects/1-house-k"],
+        "archello": ["https://archello.com/project/house-k"],
+    }
     assert mapped["covers_by_type"]["exterior"] == "https://example.test/1.jpg"
+    assert mapped["display_cover_url"] == "https://example.test/1.jpg"
+    assert mapped["is_publishable"] is True
     assert mapped["embedding"] == [0.01] * 384
     json.dumps(mapped)
 
@@ -79,3 +92,45 @@ def test_validate_rows_tracks_duplicate_names_without_failing():
     assert report["status"] == "PASS"
     assert report["warnings"]["duplicate_name_groups"] == 1
     assert report["duplicate_name_samples"][0]["name"] == "house k"
+
+
+def test_validate_rows_requires_source_urls():
+    report = validator.validate_rows([_sample_row(source_urls={})])
+
+    assert report["status"] == "FAIL"
+    assert report["failures"]["bad_source_urls"] == 1
+
+
+def test_validate_rows_blocks_publishable_rows_without_display_image():
+    report = validator.validate_rows(
+        [
+            _sample_row(
+                all_images=[],
+                display_cover_url=None,
+                cover_image_url_default=None,
+                is_publishable=True,
+            )
+        ]
+    )
+
+    assert report["status"] == "FAIL"
+    assert report["failures"]["publishable_missing_image"] == 1
+
+
+def test_validate_rows_allows_nonpublishable_rows_but_counts_them():
+    report = validator.validate_rows(
+        [
+            _sample_row(
+                all_images=[],
+                display_cover_url=None,
+                cover_image_url_default=None,
+                is_publishable=False,
+                publishability_reasons=["missing_all_images", "missing_display_cover_url"],
+            )
+        ]
+    )
+
+    assert report["status"] == "PASS"
+    assert report["publishable_rows"] == 0
+    assert report["nonpublishable_rows"] == 1
+    assert report["warnings"]["nonpublishable_rows"] == 1

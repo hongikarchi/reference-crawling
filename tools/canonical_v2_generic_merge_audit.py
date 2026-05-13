@@ -31,6 +31,7 @@ from tools.canonical_v2_upload_validator import (
 
 DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_generic_merge_audit.json"
 DEFAULT_E1 = ROOT / "data/canonical/e1_clusters.jsonl"
+METALOCUS_FINAL = ROOT / "data/enrich/4_buildings_final.json"
 SOURCE_DBS = {
     "divisare": ROOT / "data/crawl/divisare.db",
     "architizer": ROOT / "data/crawl/architizer.db",
@@ -76,6 +77,8 @@ COUNTRY_ALIASES = {
     "uk": "united kingdom",
     "usa": "united states",
 }
+_METALOCUS_FINAL_CACHE_PATH: Path | None = None
+_METALOCUS_FINAL_CACHE: dict[str, dict[str, Any]] | None = None
 
 
 class SourceLookup(Protocol):
@@ -99,6 +102,38 @@ def _year(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _metalocus_final_index() -> dict[str, dict[str, Any]]:
+    global _METALOCUS_FINAL_CACHE_PATH, _METALOCUS_FINAL_CACHE
+    if _METALOCUS_FINAL_CACHE is not None and _METALOCUS_FINAL_CACHE_PATH == METALOCUS_FINAL:
+        return _METALOCUS_FINAL_CACHE
+    if not METALOCUS_FINAL.exists():
+        _METALOCUS_FINAL_CACHE_PATH = METALOCUS_FINAL
+        _METALOCUS_FINAL_CACHE = {}
+        return _METALOCUS_FINAL_CACHE
+    data = json.load(METALOCUS_FINAL.open(encoding="utf-8"))
+    out: dict[str, dict[str, Any]] = {}
+    if isinstance(data, list):
+        for row in data:
+            if isinstance(row, dict) and row.get("building_id"):
+                out[str(row["building_id"])] = row
+    _METALOCUS_FINAL_CACHE_PATH = METALOCUS_FINAL
+    _METALOCUS_FINAL_CACHE = out
+    return out
+
+
+def _metalocus_final_meta(source_id: str) -> dict[str, Any] | None:
+    raw = _metalocus_final_index().get(str(source_id))
+    if not raw:
+        return None
+    return {
+        "name": raw.get("name_en") or raw.get("project_name"),
+        "city": raw.get("city"),
+        "country": raw.get("location_country"),
+        "year": _year(raw.get("year")),
+        "architects": raw.get("architect"),
+    }
 
 
 def _tokens(name: str) -> list[str]:
@@ -165,8 +200,9 @@ class SqliteSourceLookup:
         source, source_id = key
         conn = self._conns.get(source)
         if conn is None:
-            self._cache[key] = None
-            return None
+            meta = _metalocus_final_meta(source_id) if source == "metalocus" else None
+            self._cache[key] = meta
+            return meta
         queries = {
             "divisare": (
                 "SELECT name, location_city AS city, location_country AS country, "
@@ -193,6 +229,8 @@ class SqliteSourceLookup:
         except (KeyError, sqlite3.Error):
             row = None
         meta = dict(row) if row else None
+        if meta is None and source == "metalocus":
+            meta = _metalocus_final_meta(source_id)
         self._cache[key] = meta
         return meta
 

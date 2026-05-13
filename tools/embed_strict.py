@@ -7,6 +7,7 @@ Writes data/canonical/canonical_buildings_strict_embedded.json
 """
 import json
 import sys
+import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,20 +35,27 @@ def make_embedding_text(b: dict) -> str:
 
 
 def main():
-    if not INPUT.exists():
-        print(f"ERROR: {INPUT} not found", file=sys.stderr)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--input", type=Path, default=INPUT)
+    parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument(
+        "--model",
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    )
+    args = parser.parse_args()
+
+    if not args.input.exists():
+        print(f"ERROR: {args.input} not found", file=sys.stderr)
         sys.exit(1)
-    print(f"loading {INPUT}")
-    with INPUT.open() as f:
+    print(f"loading {args.input}")
+    with args.input.open() as f:
         data = json.load(f)
     buildings = data["buildings"]
     print(f"  {len(buildings)} buildings")
 
     print("loading sentence-transformers model...")
     from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(
-        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    )
+    model = SentenceTransformer(args.model)
 
     texts = [make_embedding_text(b) for b in buildings]
     print(f"encoding {len(texts)} buildings...")
@@ -57,9 +65,9 @@ def main():
     for b, emb in zip(buildings, embeddings):
         b["embedding"] = emb.tolist()
 
-    print(f"writing {OUTPUT}")
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT.open("w") as f:
+    print(f"writing {args.output}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open("w") as f:
         json.dump(data, f, ensure_ascii=False)
 
     no_emb = sum(1 for b in buildings if not b.get("embedding"))
