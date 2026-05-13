@@ -58,13 +58,19 @@ def _project_h1(soup: BeautifulSoup) -> Optional[str]:
     return None
 
 
+def _section_label_matches(text: str, label) -> bool:
+    labels = label if isinstance(label, (tuple, list, set)) else (label,)
+    normalized = text.strip().lower()
+    return any(normalized == str(item).strip().lower() for item in labels)
+
+
 def _section_value(sidebar, label: str) -> Optional[str]:
     """In div.sidebar, find a div.content whose .section == label, return next-sibling text."""
     if sidebar is None:
         return None
     for content in sidebar.find_all("div", class_="content"):
         section = content.find("div", class_="section")
-        if section and section.get_text(strip=True).lower() == label.lower():
+        if section and _section_label_matches(section.get_text(strip=True), label):
             value_div = section.find_next_sibling("div")
             if value_div is not None:
                 return value_div.get_text(" ", strip=True)
@@ -77,7 +83,7 @@ def _section_value_links(sidebar, label: str) -> list[tuple[str, str]]:
         return []
     for content in sidebar.find_all("div", class_="content"):
         section = content.find("div", class_="section")
-        if section and section.get_text(strip=True).lower() == label.lower():
+        if section and _section_label_matches(section.get_text(strip=True), label):
             value_div = section.find_next_sibling("div")
             if value_div:
                 return [(a.get("href"), a.get_text(strip=True))
@@ -105,8 +111,9 @@ def parse_project_page(html: str, url: str) -> dict:
     desc_el = project_div.find("div", class_="description") if project_div else None
     description = desc_el.get_text(" ", strip=True) if desc_el else None
 
-    # Designer (architect) — link in sidebar
-    architect_links = _section_value_links(sidebar, "Designer")
+    # Designer (architect) — link in sidebar. Divisare uses both singular
+    # and plural labels depending on the page.
+    architect_links = _section_value_links(sidebar, ("Designer", "Designers"))
     architect_ids: list[int] = []
     architect_names: list[str] = []
     for href, text in architect_links:
