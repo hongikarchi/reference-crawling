@@ -40,11 +40,46 @@ DEFAULT_FAILURES = {
     "d2": REFRESH_DIR / "d2_failures.local.jsonl",
 }
 DEFAULT_METRICS = REFRESH_DIR / "local_enrich_metrics.jsonl"
+OPS_JOB_CARD_THRESHOLD_CIDS = 100
+OPS_JOBS_DIR = ROOT / ".claude" / "ops" / "jobs"
 
 
 def _load_affected(path: Path = DEFAULT_AFFECTED) -> set[str]:
     data = json.load(path.open())
     return {str(cid) for cid in data.get("affected_cids") or [] if str(cid)}
+
+
+def _validate_ops_job_card(
+    job_card: Path | None,
+    *,
+    pending_count: int,
+    dry_run: bool,
+    jobs_dir: Path = OPS_JOBS_DIR,
+) -> Path | None:
+    if dry_run or pending_count <= OPS_JOB_CARD_THRESHOLD_CIDS:
+        return None
+    if job_card is None:
+        raise ValueError(
+            f"large run has {pending_count} pending cids; pass --ops-job-card "
+            "pointing to .claude/ops/jobs/<job>.md"
+        )
+
+    path = job_card if job_card.is_absolute() else ROOT / job_card
+    resolved = path.resolve(strict=False)
+    jobs_root = jobs_dir.resolve(strict=False)
+    try:
+        resolved.relative_to(jobs_root)
+    except ValueError as exc:
+        raise ValueError(f"--ops-job-card must live under {jobs_root}") from exc
+    if not resolved.is_file():
+        raise ValueError(f"--ops-job-card does not exist: {resolved}")
+
+    text = resolved.read_text(encoding="utf-8")
+    required = ("owner:", "stage:", "## Smoke Ladder", "## Abort Conditions")
+    missing = [marker for marker in required if marker not in text]
+    if missing:
+        raise ValueError(f"--ops-job-card missing required markers: {missing}")
+    return resolved
 
 
 def _append_jsonl(path: Path, rows: Sequence[dict[str, Any]]) -> None:
@@ -345,6 +380,7 @@ def main() -> int:
     parser.add_argument("--reasoning", default="low")
     parser.add_argument("--service-tier", default="fast")
     parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--ops-job-card", type=Path, default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -364,6 +400,7 @@ def main() -> int:
         "pending": len(rows),
         "batch_size": args.batch_size,
         "output": str(output_path),
+        "ops_job_card": str(args.ops_job_card) if args.ops_job_card else None,
         "mode": "dry-run" if args.dry_run else "run",
         "cost_math": (
             f"{len(rows)} cids / batch {args.batch_size}; codex exec calls ~= "
@@ -374,6 +411,12 @@ def main() -> int:
     if args.dry_run:
         print(json.dumps({**estimate, "sample_cids": [row["cid"] for row in rows[:10]]}, indent=2, ensure_ascii=False))
         return 0
+
+    try:
+        _validate_ops_job_card(args.ops_job_card, pending_count=len(rows), dry_run=args.dry_run)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     summary = run_stage(
         args.stage,

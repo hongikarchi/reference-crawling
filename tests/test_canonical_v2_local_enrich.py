@@ -141,3 +141,48 @@ def test_run_e2_vision_batch_rejects_url_not_in_candidates(tmp_path):
 
     assert result.rows is None
     assert "not in candidates" in result.failure_reason
+
+
+def test_large_run_requires_ops_job_card(tmp_path):
+    try:
+        local_enrich._validate_ops_job_card(
+            None,
+            pending_count=101,
+            dry_run=False,
+            jobs_dir=tmp_path,
+        )
+    except ValueError as exc:
+        assert "--ops-job-card" in str(exc)
+    else:
+        raise AssertionError("large run without job card should fail")
+
+
+def test_ops_job_card_must_live_under_ops_jobs(tmp_path):
+    outside = tmp_path / "outside.md"
+    outside.write_text("owner: ENRICHER\nstage: D-2\n## Smoke Ladder\n## Abort Conditions\n", encoding="utf-8")
+
+    try:
+        local_enrich._validate_ops_job_card(
+            outside,
+            pending_count=101,
+            dry_run=False,
+            jobs_dir=tmp_path / "jobs",
+        )
+    except ValueError as exc:
+        assert "must live under" in str(exc)
+    else:
+        raise AssertionError("outside job card should fail")
+
+
+def test_valid_ops_job_card_allows_large_run(tmp_path):
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    card = jobs / "d2.md"
+    card.write_text("owner: ENRICHER\nstage: D-2\n## Smoke Ladder\n## Abort Conditions\n", encoding="utf-8")
+
+    assert local_enrich._validate_ops_job_card(
+        card,
+        pending_count=101,
+        dry_run=False,
+        jobs_dir=jobs,
+    ) == card.resolve()
