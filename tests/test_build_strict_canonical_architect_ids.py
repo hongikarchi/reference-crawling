@@ -292,6 +292,118 @@ def test_build_adds_source_urls_normalized_country_and_publishability(tmp_path, 
     assert row["publishability_reasons"] == []
 
 
+def test_build_marks_service_breaking_defects_nonpublishable(tmp_path, monkeypatch):
+    divisare, architizer, archello, metalocus = _make_source_dbs(tmp_path)
+    monkeypatch.setattr(
+        build_strict_canonical,
+        "SOURCE_DBS",
+        {
+            "divisare": str(divisare),
+            "architizer": str(architizer),
+            "archello": str(archello),
+            "metalocus": str(metalocus),
+        },
+    )
+
+    canonical = tmp_path / "canonical.json"
+    architects = tmp_path / "architects.json"
+    d1 = tmp_path / "d1.jsonl"
+    e1 = tmp_path / "e1.jsonl"
+    e2 = tmp_path / "e2.jsonl"
+    d2 = tmp_path / "d2.jsonl"
+    output = tmp_path / "strict.json"
+
+    _write_json(
+        canonical,
+        {
+            "clusters": [
+                {
+                    "canonical_bld_id": "bld_no_image",
+                    "canonical_name": "House A",
+                    "n_sources": 1,
+                    "source_refs": {"divisare": ["1"]},
+                },
+                {
+                    "canonical_bld_id": "bld_no_source",
+                    "canonical_name": "Orphan",
+                    "n_sources": 1,
+                    "source_refs": {},
+                },
+                {
+                    "canonical_bld_id": "bld_no_cover",
+                    "canonical_name": "No Cover",
+                    "n_sources": 1,
+                    "source_refs": {},
+                },
+            ]
+        },
+    )
+    _write_json(architects, {"clusters": []})
+    _write_jsonl(d1, [{"cid": "bld_no_image"}, {"cid": "bld_no_source"}, {"cid": "bld_no_cover"}])
+    _write_jsonl(
+        e1,
+        [
+            {"cid": "bld_no_image", "all_images": [], "best_image_per_cluster": {}},
+            {
+                "cid": "bld_no_source",
+                "all_images": [{"url": "https://img.test/orphan.jpg"}],
+                "best_image_per_cluster": {},
+            },
+            {"cid": "bld_no_cover", "all_images": [], "best_image_per_cluster": {}},
+        ],
+    )
+    _write_jsonl(
+        e2,
+        [
+            {
+                "cid": "bld_no_image",
+                "covers_by_type": {"exterior": None, "interior": None, "drawing": None, "aerial": None, "detail": None},
+            },
+            {
+                "cid": "bld_no_source",
+                "covers_by_type": {
+                    "exterior": "https://img.test/orphan.jpg",
+                    "interior": None,
+                    "drawing": None,
+                    "aerial": None,
+                    "detail": None,
+                },
+            },
+            {
+                "cid": "bld_no_cover",
+                "covers_by_type": {"exterior": None, "interior": None, "drawing": None, "aerial": None, "detail": None},
+            },
+        ],
+    )
+    _write_jsonl(d2, [])
+
+    build_strict_canonical.build(
+        canonical_path=str(canonical),
+        output_path=str(output),
+        architects_path=str(architects),
+        d1_path=str(d1),
+        e1_path=str(e1),
+        e2_path=str(e2),
+        d2_path=str(d2),
+    )
+
+    rows = {row["canonical_bld_id"]: row for row in json.loads(output.read_text(encoding="utf-8"))["buildings"]}
+    assert rows["bld_no_image"]["is_publishable"] is False
+    assert rows["bld_no_image"]["publishability_reasons"] == ["missing_all_images"]
+    assert rows["bld_no_image"]["needs_image_derived_backfill"] is False
+    assert rows["bld_no_source"]["is_publishable"] is False
+    assert rows["bld_no_source"]["publishability_reasons"] == ["missing_source_refs", "missing_source_urls"]
+    assert rows["bld_no_source"]["needs_image_derived_backfill"] is False
+    assert rows["bld_no_cover"]["is_publishable"] is False
+    assert rows["bld_no_cover"]["publishability_reasons"] == [
+        "missing_source_refs",
+        "missing_source_urls",
+        "missing_all_images",
+        "missing_display_cover_url",
+    ]
+    assert rows["bld_no_cover"]["needs_image_derived_backfill"] is False
+
+
 def test_build_scans_later_source_ids_for_missing_identity_fields(tmp_path, monkeypatch):
     divisare, architizer, archello, metalocus = _make_source_dbs(tmp_path)
     monkeypatch.setattr(

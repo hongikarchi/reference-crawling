@@ -109,6 +109,22 @@ def test_d2_and_e2_batch_builders_from_e1_jsonl_with_resume(tmp_path):
             "cid": "bld_pending",
             "cover_image_url": "https://img.test/cover.jpg",
             "cover": {"kind": "cover", "image_order": 0, "w": 800, "h": 600},
+            "cover_candidates": [
+                {
+                    "url": "https://img.test/cover.jpg",
+                    "kind": "cover",
+                    "image_order": 0,
+                    "w": 800,
+                    "h": 600,
+                },
+                {
+                    "url": "https://img.test/gallery.jpg",
+                    "kind": "gallery",
+                    "image_order": 1,
+                    "w": 2000,
+                    "h": 1000,
+                },
+            ],
         }
     ]
     assert e2_rows == [
@@ -346,9 +362,77 @@ def test_run_d2_vision_batch_download_failure_records_url_and_exc():
     assert result.rows is None
     assert result.timed_out is False
     assert result.failure_reason == (
-        "download_failed: cid=bld_1 url=https://img.test/1.jpg RuntimeError: network unreachable"
+        "download_failed: cid=bld_1 all cover candidates failed: "
+        "https://img.test/1.jpg RuntimeError: network unreachable"
     )
     assert result.raw == result.failure_reason
+
+
+def test_run_d2_vision_batch_tries_fallback_cover_candidate(tmp_path):
+    image_paths = []
+    downloaded_urls = []
+
+    def fake_downloader(url):
+        downloaded_urls.append(url)
+        if url == "https://img.test/broken.jpg":
+            raise RuntimeError("404")
+        image_path = tmp_path / "fallback.jpg"
+        image_path.write_bytes(b"fake image")
+        image_paths.append(image_path)
+        return image_path, True
+
+    def fake_runner(cmd, **kwargs):
+        assert str(image_paths[0]) in cmd
+        response = json.dumps(
+            [
+                {
+                    "cid": "bld_1",
+                    "style_image": "Contemporary",
+                    "color_tone_image": "Neutral",
+                    "material_visual_image": ["glass"],
+                    "visual_description_image": (
+                        "A contemporary building is shown through a clean fallback exterior image "
+                        "with neutral tones, glass surfaces, and simple massing."
+                    ),
+                }
+            ]
+        )
+        stdout = "\n".join(
+            [
+                json.dumps({"type": "thread.started", "thread_id": "test"}),
+                json.dumps({"type": "turn.started"}),
+                json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": response}}),
+                json.dumps(
+                    {
+                        "type": "turn.completed",
+                        "usage": {"input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 20},
+                    }
+                ),
+            ]
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    result = dispatch_enrich_batch.run_d2_vision_batch(
+        [
+            {
+                "cid": "bld_1",
+                "cover_image_url": "https://img.test/broken.jpg",
+                "cover": {"kind": "cover"},
+                "cover_candidates": [
+                    {"url": "https://img.test/broken.jpg", "kind": "cover"},
+                    {"url": "https://img.test/fallback.jpg", "kind": "gallery"},
+                ],
+            }
+        ],
+        model_meta=dispatch_enrich_batch.ModelMeta(model="gpt-5.5", reasoning="medium", fast="fast"),
+        runner=fake_runner,
+        downloader=fake_downloader,
+    )
+
+    assert downloaded_urls == ["https://img.test/broken.jpg", "https://img.test/fallback.jpg"]
+    assert result.rows is not None
+    assert result.rows[0]["cid"] == "bld_1"
+    assert all(not path.exists() for path in image_paths)
 
 
 def test_run_d2_vision_batch_codex_exec_failure_records_returncode_stderr(tmp_path):

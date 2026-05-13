@@ -20,7 +20,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 from core.vocab import ATMOSPHERE, COLOR_TONE, MATERIAL_VISUAL_HINTS, PROGRAM, STYLE
 from tools import d1_enrich_codex
-from tools.d2_cover_vision import _load_e1_best_covers
+from tools.d2_cover_vision import _best_cover_sort_key
 from tools.e1_phash_dedup import DEFAULT_OUTPUT_PATH as DEFAULT_E1_PATH
 from tools.e2_vision_5type import _iter_jsonl
 from tools.image_dedup_5type import IMAGE_TYPES, PROJECT_ROOT
@@ -116,21 +116,46 @@ def build_d2_records(
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
     done = done_cids or set()
-    covers = _load_e1_best_covers(e1_path)
+    cover_candidates = _load_e1_cover_candidates(e1_path)
     rows = [
         {
             "cid": cid,
-            "cover_image_url": image.get("url"),
-            "cover": {
-                key: image.get(key)
-                for key in ("source", "source_id", "kind", "image_order", "w", "h", "bytes")
-                if key in image
-            },
+            "cover_image_url": candidates[0].get("url"),
+            "cover": _image_meta(candidates[0]),
+            "cover_candidates": [
+                {"url": image.get("url"), **_image_meta(image)}
+                for image in candidates[:5]
+                if image.get("url")
+            ],
         }
-        for cid, image in sorted(covers.items())
-        if cid not in done and image.get("url")
+        for cid, candidates in sorted(cover_candidates.items())
+        if cid not in done and candidates and candidates[0].get("url")
     ]
     return rows[:limit] if limit is not None else rows
+
+
+def _image_meta(image: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: image.get(key)
+        for key in ("source", "source_id", "kind", "image_order", "w", "h", "bytes")
+        if key in image
+    }
+
+
+def _load_e1_cover_candidates(path: Path) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in _iter_jsonl(path):
+        cid = row.get("cid")
+        if not cid:
+            continue
+        images = [
+            image
+            for image in row.get("all_images") or []
+            if isinstance(image, dict) and image.get("url")
+        ]
+        if images:
+            out[str(cid)] = sorted(images, key=_best_cover_sort_key)
+    return out
 
 
 def build_e2_records(
@@ -478,25 +503,47 @@ def run_d2_vision_batch(
 ) -> PollResult:
     image_paths: list[Path] = []
     delete_paths: list[Path] = []
+    selected_batch: list[dict[str, Any]] = []
     try:
         for row in batch:
-            url = str(row.get("cover_image_url") or "")
-            if not url:
-                reason = f"download_failed: cid={row.get('cid')} url={url} missing cover_image_url"
+            candidate_urls: list[tuple[str, dict[str, Any]]] = []
+            primary_url = str(row.get("cover_image_url") or "")
+            if primary_url:
+                candidate_urls.append((primary_url, row.get("cover") or {}))
+            for candidate in row.get("cover_candidates") or []:
+                url = str(candidate.get("url") or "")
+                if url and url not in {existing for existing, _ in candidate_urls}:
+                    candidate_urls.append((url, candidate))
+            if not candidate_urls:
+                reason = f"download_failed: cid={row.get('cid')} missing cover_image_url"
                 return PollResult(rows=None, raw=reason, failure_reason=reason)
-            try:
-                image_path, should_delete = downloader(url)
-            except Exception as exc:
+            errors: list[str] = []
+            selected_url: str | None = None
+            selected_meta: dict[str, Any] = {}
+            for url, meta in candidate_urls:
+                try:
+                    image_path, should_delete = downloader(url)
+                except Exception as exc:
+                    errors.append(f"{url} {exc.__class__.__name__}: {exc}")
+                    continue
+                selected_url = url
+                selected_meta = meta
+                image_paths.append(image_path)
+                if should_delete:
+                    delete_paths.append(image_path)
+                break
+            if not selected_url:
                 reason = (
-                    f"download_failed: cid={row.get('cid')} url={url} "
-                    f"{exc.__class__.__name__}: {exc}"
+                    f"download_failed: cid={row.get('cid')} all cover candidates failed: "
+                    + " | ".join(errors)
                 )
                 return PollResult(rows=None, raw=reason, failure_reason=reason)
-            image_paths.append(image_path)
-            if should_delete:
-                delete_paths.append(image_path)
+            selected_row = dict(row)
+            selected_row["cover_image_url"] = selected_url
+            selected_row["cover"] = selected_meta
+            selected_batch.append(selected_row)
 
-        prompt = compose_d2_vision_prompt(batch, retry_note=retry_note)
+        prompt = compose_d2_vision_prompt(selected_batch, retry_note=retry_note)
         cmd = ["codex", "exec", "--json", "--skip-git-repo-check", *_codex_exec_model_args(model_meta)]
         for image_path in image_paths:
             cmd.extend(["-i", str(image_path)])

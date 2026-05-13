@@ -389,10 +389,19 @@ def _display_cover_url(
 
 def _publishability_reasons(
     *,
+    name: Any,
+    source_refs: dict[str, Any],
+    source_urls: dict[str, Any],
     all_images: list[dict[str, Any]],
     display_cover_url: Optional[str],
 ) -> list[str]:
     reasons: list[str] = []
+    if not _clean_text(name):
+        reasons.append("missing_name")
+    if not source_refs:
+        reasons.append("missing_source_refs")
+    if not source_urls:
+        reasons.append("missing_source_urls")
     if not all_images:
         reasons.append("missing_all_images")
     if not display_cover_url:
@@ -503,11 +512,15 @@ def build(
                 all_images=all_images,
             )
             publishability_reasons = _publishability_reasons(
+                name=ident.get("name"),
+                source_refs=cluster.get("source_refs") or {},
+                source_urls=source_urls,
                 all_images=all_images,
                 display_cover_url=display_cover_url,
             )
+            is_publishable = not publishability_reasons
             needs_image_derived_backfill = bool(
-                display_cover_url and not (image_derived or {}).get("style")
+                is_publishable and display_cover_url and not (image_derived or {}).get("style")
             )
             if display_cover_url:
                 coverage["with_display_cover_url"] += 1
@@ -549,7 +562,7 @@ def build(
                 "image_derived":          image_derived,
                 "cover_image_url_default": ident.get("cover_image_url_default"),
                 "display_cover_url":      display_cover_url,
-                "is_publishable":         not publishability_reasons,
+                "is_publishable":         is_publishable,
                 "publishability_reasons": publishability_reasons,
                 "needs_image_derived_backfill": needs_image_derived_backfill,
             }
