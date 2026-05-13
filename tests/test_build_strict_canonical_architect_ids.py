@@ -205,6 +205,7 @@ def test_build_resolves_architect_canonical_ids_from_source_refs(tmp_path, monke
     row = json.loads(output.read_text(encoding="utf-8"))["buildings"][0]
     assert row["architect_canonical_ids"] == ["arch_a", "arch_b", "arch_c"]
     assert row["architect_names"] == ["Studio A", "Studio B", "Studio C"]
+    assert row["architects_text"] == "Studio A"
 
 
 def test_build_adds_source_urls_normalized_country_and_publishability(tmp_path, monkeypatch):

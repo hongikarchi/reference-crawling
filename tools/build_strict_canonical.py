@@ -106,6 +106,23 @@ def _parse_id_list(value: Any) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
+def _parse_text_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value).strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+    if isinstance(parsed, list):
+        return [str(v).strip() for v in parsed if str(v).strip()]
+    return [text]
+
+
 def _clean_text(value: Any) -> Optional[str]:
     if value is None:
         return None
@@ -256,7 +273,11 @@ def _fetch_meta(src: str, sid: str, conn: sqlite3.Connection) -> Optional[dict]:
     meta["city"] = _clean_text(meta.get("city"))
     meta["country"] = _normalize_country(meta.get("country"))
     meta["year"] = _parse_year(meta.get("year"))
-    meta["architects"] = _clean_text(meta.get("architects"))
+    if src == "divisare":
+        names = _parse_text_list(meta.get("architects"))
+        meta["architects"] = ", ".join(names) if names else None
+    else:
+        meta["architects"] = _clean_text(meta.get("architects"))
     meta["cover"] = _clean_text(meta.get("cover"))
     meta["source_url"] = _build_source_url(src, str(sid), meta)
     return meta

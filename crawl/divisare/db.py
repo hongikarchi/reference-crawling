@@ -267,7 +267,20 @@ def upsert_project(data: dict) -> None:
             "tag_slugs", "cover_image_url", "gallery_urls", "credits"]
     payload = {k: payload.get(k) for k in cols}
     placeholders = ", ".join(":" + c for c in cols)
-    update_clause = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "id")
+    update_parts = []
+    for c in cols:
+        if c == "id":
+            continue
+        if c in {"architect_ids", "architect_names"}:
+            update_parts.append(
+                f"{c}=CASE "
+                f"WHEN excluded.{c} IS NULL OR excluded.{c} = '' OR excluded.{c} = '[]' "
+                f"THEN divisare_projects.{c} "
+                f"ELSE excluded.{c} END"
+            )
+        else:
+            update_parts.append(f"{c}=excluded.{c}")
+    update_clause = ", ".join(update_parts)
     sql = (f"INSERT INTO divisare_projects ({', '.join(cols)}, fetched_at) "
            f"VALUES ({placeholders}, CURRENT_TIMESTAMP) "
            f"ON CONFLICT(id) DO UPDATE SET {update_clause}, fetched_at=CURRENT_TIMESTAMP")
