@@ -186,3 +186,39 @@ def test_valid_ops_job_card_allows_large_run(tmp_path):
         dry_run=False,
         jobs_dir=jobs,
     ) == card.resolve()
+
+
+def test_run_stage_aborts_transient_d2_download_failure_without_skipping_cids(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_d2_batch(batch, **kwargs):
+        calls.append([row["cid"] for row in batch])
+        return dispatch.PollResult(
+            rows=None,
+            raw="network down",
+            failure_reason=(
+                "download_failed: cid=bld_1 all cover candidates failed: "
+                "ConnectionError: Failed to establish a new connection: "
+                "[Errno 8] nodename nor servname provided, or not known"
+            ),
+        )
+
+    monkeypatch.setattr(dispatch, "run_d2_vision_batch", fake_d2_batch)
+
+    summary = local_enrich.run_stage(
+        "d2",
+        rows=[{"cid": "bld_1"}, {"cid": "bld_2"}],
+        output_path=tmp_path / "out.jsonl",
+        failure_path=tmp_path / "failures.jsonl",
+        metrics_path=tmp_path / "metrics.jsonl",
+        batch_size=2,
+        model_meta=dispatch.ModelMeta(model="gpt-5.5", reasoning="low", fast="fast"),
+        timeout_seconds=30,
+    )
+
+    assert calls == [["bld_1", "bld_2"]]
+    assert summary["written"] == 0
+    assert summary["failures"] == 2
+
+    failures = [json.loads(line) for line in (tmp_path / "failures.jsonl").read_text().splitlines()]
+    assert [row["cid"] for row in failures] == ["bld_1", "bld_2"]

@@ -334,6 +334,9 @@ def run_stage(
                     metric["tokens"] = {"total": usage.total, "input": usage.input, "output": usage.output}
                 _append_jsonl(metrics_path, [metric])
 
+                if error is not None and stage == "d2" and _transient_download_failure(error):
+                    break
+
                 if error is None:
                     break
 
@@ -341,6 +344,12 @@ def run_stage(
                 _append_jsonl(output_path, normalized)
                 summary["written"] += len(normalized)
                 break
+
+            if stage == "d2" and _transient_download_failure(error):
+                summary["failures"] += len(remaining_batch)
+                raw = result.raw if result is not None else ""
+                dispatch.log_failure(failure_path, cids=expected, reason=error, raw=raw)
+                return summary
 
             bad_cid = _download_failed_cid(error)
             if stage == "d2" and bad_cid and bad_cid in expected:
@@ -362,6 +371,22 @@ def _download_failed_cid(reason: str | None) -> str | None:
         return None
     match = re.search(r"cid=([A-Za-z0-9_-]+)", reason)
     return match.group(1) if match else None
+
+
+def _transient_download_failure(reason: str | None) -> bool:
+    if not reason or "download_failed:" not in reason:
+        return False
+    transient_markers = (
+        "NameResolutionError",
+        "nodename nor servname",
+        "Failed to establish a new connection",
+        "Network is unreachable",
+        "Temporary failure",
+        "Connection timed out",
+        "Read timed out",
+        "timeout",
+    )
+    return any(marker in reason for marker in transient_markers)
 
 
 def main() -> int:

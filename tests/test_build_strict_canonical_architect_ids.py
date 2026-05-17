@@ -292,6 +292,68 @@ def test_build_adds_source_urls_normalized_country_and_publishability(tmp_path, 
     assert row["publishability_reasons"] == []
 
 
+def test_build_marks_image_unavailable_manifest_nonpublishable(tmp_path, monkeypatch):
+    divisare, architizer, archello, metalocus = _make_source_dbs(tmp_path)
+    monkeypatch.setattr(
+        build_strict_canonical,
+        "SOURCE_DBS",
+        {
+            "divisare": str(divisare),
+            "architizer": str(architizer),
+            "archello": str(archello),
+            "metalocus": str(metalocus),
+        },
+    )
+
+    canonical = tmp_path / "canonical.json"
+    architects = tmp_path / "architects.json"
+    d1 = tmp_path / "d1.jsonl"
+    e1 = tmp_path / "e1.jsonl"
+    e2 = tmp_path / "e2.jsonl"
+    d2 = tmp_path / "d2.jsonl"
+    image_unavailable = tmp_path / "image_unavailable.json"
+    output = tmp_path / "strict.json"
+
+    _write_json(
+        canonical,
+        {
+            "clusters": [
+                {
+                    "canonical_bld_id": "bld_m",
+                    "canonical_name": "Metal House",
+                    "n_sources": 1,
+                    "source_refs": {"metalocus": ["4"]},
+                }
+            ]
+        },
+    )
+    _write_json(architects, {"clusters": []})
+    _write_jsonl(d1, [{"cid": "bld_m"}])
+    _write_jsonl(
+        e1,
+        [{"cid": "bld_m", "all_images": [{"url": "https://img.test/m.jpg"}], "best_image_per_cluster": {}}],
+    )
+    _write_jsonl(e2, [{"cid": "bld_m", "covers_by_type": {"exterior": "https://img.test/m.jpg"}}])
+    _write_jsonl(d2, [])
+    _write_json(image_unavailable, {"affected_cids": ["bld_m"]})
+
+    build_strict_canonical.build(
+        canonical_path=str(canonical),
+        output_path=str(output),
+        architects_path=str(architects),
+        d1_path=str(d1),
+        e1_path=str(e1),
+        e2_path=str(e2),
+        d2_path=str(d2),
+        image_unavailable_path=str(image_unavailable),
+    )
+
+    row = json.loads(output.read_text(encoding="utf-8"))["buildings"][0]
+    assert row["is_publishable"] is False
+    assert row["publishability_reasons"] == ["image_unavailable"]
+    assert row["needs_image_derived_backfill"] is False
+
+
 def test_build_marks_service_breaking_defects_nonpublishable(tmp_path, monkeypatch):
     divisare, architizer, archello, metalocus = _make_source_dbs(tmp_path)
     monkeypatch.setattr(

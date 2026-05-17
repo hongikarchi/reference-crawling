@@ -34,6 +34,7 @@ E1_CLUSTERS      = "data/canonical/e1_clusters.jsonl"
 E2_IMAGE_TYPES   = "data/canonical/e2_image_types.jsonl"
 D2_RESULTS       = "data/canonical/d2_results.jsonl"
 OUTPUT_PATH      = "data/canonical/canonical_buildings_strict.json"
+IMAGE_UNAVAILABLE_PATH = ""
 
 SOURCE_DBS = {
     "divisare":   "data/crawl/divisare.db",
@@ -83,6 +84,25 @@ def _load_jsonl_by_cid(path: str) -> dict[str, dict]:
             if cid:
                 out[cid] = d
     return out
+
+
+def _load_cid_manifest(path: str | None) -> set[str]:
+    if not path:
+        return set()
+    p = Path(path)
+    if not p.exists():
+        return set()
+    try:
+        data = json.load(p.open(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return set()
+    if isinstance(data, dict):
+        values = data.get("affected_cids") or data.get("cids") or []
+    elif isinstance(data, list):
+        values = data
+    else:
+        values = []
+    return {str(cid) for cid in values if str(cid)}
 
 
 def _parse_id_list(value: Any) -> list[str]:
@@ -441,6 +461,7 @@ def build(
     e1_path: str = E1_CLUSTERS,
     e2_path: str = E2_IMAGE_TYPES,
     d2_path: str = D2_RESULTS,
+    image_unavailable_path: str | None = IMAGE_UNAVAILABLE_PATH,
 ) -> dict:
     canonical = json.load(open(canonical_path))
     clusters = canonical.get("clusters") or canonical.get("buildings") or []
@@ -453,6 +474,7 @@ def build(
     e1 = _load_jsonl_by_cid(e1_path)
     e2 = _load_jsonl_by_cid(e2_path)
     d2 = _load_jsonl_by_cid(d2_path)
+    image_unavailable_cids = _load_cid_manifest(image_unavailable_path)
 
     conns = _open_dbs()
     out_rows: list[dict] = []
@@ -518,6 +540,8 @@ def build(
                 all_images=all_images,
                 display_cover_url=display_cover_url,
             )
+            if cid in image_unavailable_cids and "image_unavailable" not in publishability_reasons:
+                publishability_reasons.append("image_unavailable")
             is_publishable = not publishability_reasons
             needs_image_derived_backfill = bool(
                 is_publishable and display_cover_url and not (image_derived or {}).get("style")
@@ -592,6 +616,7 @@ def main() -> int:
     ap.add_argument("--e1", default=E1_CLUSTERS)
     ap.add_argument("--e2", default=E2_IMAGE_TYPES)
     ap.add_argument("--d2", default=D2_RESULTS)
+    ap.add_argument("--image-unavailable", default=IMAGE_UNAVAILABLE_PATH)
     args = ap.parse_args()
 
     summary = build(
@@ -602,6 +627,7 @@ def main() -> int:
         e1_path=args.e1,
         e2_path=args.e2,
         d2_path=args.d2,
+        image_unavailable_path=args.image_unavailable,
     )
     print(json.dumps(summary, indent=2))
     print(f"wrote {args.output}")
