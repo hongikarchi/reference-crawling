@@ -161,6 +161,10 @@ def classify_location_city(
 
 
 def classify_project_year(item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    # NOTE (audit 2026-05): year_candidates are regex-grabbed from description
+    # prose and context-blind — "1812" in "1812 sqm" becomes a candidate and,
+    # if it is the only one, is promoted to project_year below. This pass is
+    # dormant; if revived, gate on the number actually denoting a year.
     years = [int(year) for year in item.get("evidence", {}).get("year_candidates") or []]
     if len(years) != 1:
         return "keep_review", {**item, "decision_reason": "multiple_description_year_candidates"}

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -158,22 +159,38 @@ def _normalize_country(value: Any) -> Optional[str]:
     return COUNTRY_ALIASES.get(key, text)
 
 
+# A value is accepted as a project year only when the whole string IS a year
+# (optionally circa-prefixed), a 4-digit year range, or a date. A 4-digit
+# number embedded in prose ("1800 homes", "1812 sqm") is rejected -> None: a
+# NULL year is honest, a prose-grabbed wrong year is a silent error (audit
+# 2026-05). Metalocus feeds free-text here; the other three sources already
+# pass structured year values.
+_YEAR_TOKEN = r"(?:18|19|20|21)\d{2}"
+_YEAR_BARE  = re.compile(rf"^\s*(?:(?:c|ca|circa)\.?\s*)?({_YEAR_TOKEN})\s*$", re.IGNORECASE)
+_YEAR_RANGE = re.compile(rf"^\s*({_YEAR_TOKEN})\s*[-–/]\s*({_YEAR_TOKEN})\s*$")
+_YEAR_ISO   = re.compile(rf"^\s*({_YEAR_TOKEN})[-/.]\d{{1,2}}(?:[-/.]\d{{1,2}})?\s*$")
+_YEAR_DMY   = re.compile(rf"^\s*\d{{1,2}}[-/.]\d{{1,2}}[-/.]({_YEAR_TOKEN})\s*$")
+
+
 def _parse_year(value: Any) -> Optional[int]:
     if value is None:
         return None
-    if isinstance(value, int):
-        year = value
-    elif isinstance(value, float):
+    if isinstance(value, (int, float)):
         year = int(value)
-    else:
-        import re
-
-        match = re.search(r"\b(18|19|20|21)\d{2}\b", str(value))
-        if not match:
-            return None
-        year = int(match.group(0))
-    if 1800 <= year <= 2199:
-        return year
+        return year if 1800 <= year <= 2199 else None
+    text = str(value)
+    m = _YEAR_BARE.match(text)
+    if m:
+        return int(m.group(1))
+    m = _YEAR_RANGE.match(text)
+    if m:
+        return max(int(m.group(1)), int(m.group(2)))
+    m = _YEAR_ISO.match(text)
+    if m:
+        return int(m.group(1))
+    m = _YEAR_DMY.match(text)
+    if m:
+        return int(m.group(1))
     return None
 
 

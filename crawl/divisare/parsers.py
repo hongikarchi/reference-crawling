@@ -519,6 +519,13 @@ def parse_author_built_projects_rich(html: str) -> list[dict]:
         name = parts[0] if parts else None
         location_text = parts[1] if len(parts) > 1 else ""
 
+        # When the name cell is empty, get_text() omits the missing node and
+        # the "City - Country" location shifts into parts[0]; the real
+        # location slot (parts[1]) is then absent or a non-location marker.
+        # Drop the leaked location rather than store it as the building name.
+        if name and " - " in name and " - " not in location_text:
+            name = None
+
         co_architects: list[str] = []
         photographer: str | None = None
         i = 2

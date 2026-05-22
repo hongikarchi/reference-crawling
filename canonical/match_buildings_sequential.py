@@ -323,8 +323,11 @@ def _classify_pass1(item: dict, top: dict, strict: float, loose: float) -> str:
     # Auto-accept: all strong signals aligned
     if arch_match and year_match and strict >= AUTO_ACCEPT_NAME_SIM:
         return "auto_accept"
-    # Strong same-name even without exact year (within tolerance) — auto if very high
-    if arch_match and strict >= 95.0:
+    # Strong same-name even without exact year (within tolerance) — auto only
+    # if the names also share a distinctive (non-generic) token, so two
+    # generically-named projects by one architect cannot silently auto-merge.
+    if (arch_match and strict >= 95.0
+            and _name_tokens(item["name_core"]) & _name_tokens(top["name_core"])):
         return "auto_accept"
     # Tiebreak floor
     if loose >= TIEBREAK_FLOOR and (arch_match or
@@ -376,6 +379,7 @@ def phase_match_against_pool(
     *, label: str, allow_new: bool, tiebreak_queue: list,
 ) -> dict[str, int]:
     counts: Counter = Counter()
+    dropped: list[dict] = []
     n = 0
     for item in items:
         n += 1
@@ -450,10 +454,29 @@ def phase_match_against_pool(
             pool.add(item, cid)
             counts["new_orphan"] += 1
         else:
+            # match-or-drop: no candidate accepted and allow_new is False, so
+            # this source row is discarded — record it for an audit trail.
             counts[verdict] += 1
+            dropped.append({
+                "source": item["source"],
+                "id": item["id"],
+                "name": item.get("name"),
+                "verdict": verdict,
+                "nearest_cid": top["cid"],
+                "strict": round(strict, 1),
+                "loose": round(loose, 1),
+            })
 
         if n % 5000 == 0:
             print(f"  [{label}] progress: {n} {dict(counts)}", flush=True)
+
+    if dropped:
+        drop_path = f"data/reports/match_drops_{label}.json"
+        os.makedirs(os.path.dirname(drop_path), exist_ok=True)
+        with open(drop_path, "w", encoding="utf-8") as f:
+            json.dump(dropped, f, indent=2, ensure_ascii=False)
+        print(f"  [{label}] {len(dropped)} dropped items logged -> {drop_path}",
+              flush=True)
     return dict(counts)
 
 

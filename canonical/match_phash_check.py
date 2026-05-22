@@ -151,8 +151,14 @@ def has_phash_overlap(
     b_n = len(b_phashes)
     overlap = _overlap_count(a_phashes, b_phashes, threshold)
     phash_blocks = a_n >= 2 and b_n >= 2 and overlap == 0
+    # 3+ images on each side with zero visual overlap is strong enough that a
+    # name/year agreement must not cancel the BLOCK; the text tiebreak stays
+    # available only for the thin 2-image case where absence of overlap is weak.
+    strong_phash_block = a_n >= 3 and b_n >= 3 and overlap == 0
     verdict = "PASS"
-    if phash_blocks:
+    if strong_phash_block:
+        verdict = "BLOCK"
+    elif phash_blocks:
         text_blocks = _text_confirms_block(
             name_a=name_a,
             name_b=name_b,
