@@ -18,6 +18,11 @@ from typing import Any, Iterable, Iterator
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core import vocab  # noqa: E402
+
 DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.resume10_complete.json"
 DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_upload_dry_run.resume10_complete.json"
 EXPECTED_IMAGE_TYPES = {"exterior", "interior", "drawing", "aerial", "detail"}
@@ -117,6 +122,11 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "is_publishable": row.get("is_publishable"),
         "publishability_reasons": row.get("publishability_reasons") or [],
         "needs_image_derived_backfill": bool(row.get("needs_image_derived_backfill")),
+        "typology_primary": row.get("typology_primary"),
+        "typology_primary_source": row.get("typology_primary_source"),
+        "typology_tags": row.get("typology_tags") or [],
+        "architectural_elements": row.get("architectural_elements") or [],
+        "source_categories": row.get("source_categories") or {},
         "embedding": row.get("embedding"),
     }
 
@@ -224,6 +234,16 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
             failures["bad_source_urls"] += 1
         if not _embedding_is_valid(mapped.get("embedding")):
             failures["bad_embedding"] += 1
+        if any(t not in vocab.TYPOLOGY for t in mapped.get("typology_tags") or []):
+            failures["bad_typology_tags"] += 1
+        if any(e not in vocab.ARCHITECTURAL_ELEMENT
+               for e in mapped.get("architectural_elements") or []):
+            failures["bad_architectural_elements"] += 1
+        typ_primary = mapped.get("typology_primary")
+        if typ_primary is not None and typ_primary not in vocab.TYPOLOGY:
+            failures["bad_typology_primary"] += 1
+        if not isinstance(mapped.get("source_categories"), dict):
+            failures["bad_source_categories"] += 1
         if not isinstance(is_publishable, bool):
             failures["bad_publishable_flag"] += 1
         elif is_publishable:

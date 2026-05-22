@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
     is_publishable                BOOLEAN     NOT NULL DEFAULT FALSE,
     publishability_reasons        TEXT[]      NOT NULL DEFAULT '{{}}',
     needs_image_derived_backfill  BOOLEAN     NOT NULL DEFAULT FALSE,
+    typology_primary              TEXT,
+    typology_primary_source       TEXT,
+    typology_tags                 TEXT[]      NOT NULL DEFAULT '{{}}',
+    architectural_elements        TEXT[]      NOT NULL DEFAULT '{{}}',
+    source_categories             JSONB       NOT NULL DEFAULT '{{}}'::jsonb,
     embedding                     VECTOR(384) NOT NULL,
     created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -100,12 +105,30 @@ CREATE INDEX IF NOT EXISTS idx_{TABLE}_embedding_hnsw
     ON {TABLE} USING hnsw (embedding vector_cosine_ops);
 """
 
+# Runs after SCHEMA_SQL — additive migration for a live table. New-column
+# indexes live here (not in SCHEMA_SQL) because the columns must exist before
+# CREATE INDEX; on a fresh table SCHEMA_SQL already created the columns and
+# these IF NOT EXISTS statements are no-ops.
 SCHEMA_EVOLUTION_SQL = f"""
 ALTER TABLE {TABLE}
     ADD COLUMN IF NOT EXISTS cover_image_cdn_url TEXT,
     ADD COLUMN IF NOT EXISTS cover_blurhash TEXT,
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ADD COLUMN IF NOT EXISTS typology_primary TEXT,
+    ADD COLUMN IF NOT EXISTS typology_primary_source TEXT,
+    ADD COLUMN IF NOT EXISTS typology_tags TEXT[] NOT NULL DEFAULT '{{}}',
+    ADD COLUMN IF NOT EXISTS architectural_elements TEXT[] NOT NULL DEFAULT '{{}}',
+    ADD COLUMN IF NOT EXISTS source_categories JSONB NOT NULL DEFAULT '{{}}'::jsonb;
+
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_typology_primary
+    ON {TABLE} (typology_primary);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_typology_tags
+    ON {TABLE} USING GIN (typology_tags);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_arch_elements
+    ON {TABLE} USING GIN (architectural_elements);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_source_categories
+    ON {TABLE} USING GIN (source_categories);
 """
 
 COLUMNS = (
@@ -138,6 +161,11 @@ COLUMNS = (
     "is_publishable",
     "publishability_reasons",
     "needs_image_derived_backfill",
+    "typology_primary",
+    "typology_primary_source",
+    "typology_tags",
+    "architectural_elements",
+    "source_categories",
     "embedding",
 )
 
@@ -173,6 +201,11 @@ ON CONFLICT (canonical_bld_id) DO UPDATE SET
     is_publishable               = EXCLUDED.is_publishable,
     publishability_reasons       = EXCLUDED.publishability_reasons,
     needs_image_derived_backfill = EXCLUDED.needs_image_derived_backfill,
+    typology_primary             = EXCLUDED.typology_primary,
+    typology_primary_source      = EXCLUDED.typology_primary_source,
+    typology_tags                = EXCLUDED.typology_tags,
+    architectural_elements       = EXCLUDED.architectural_elements,
+    source_categories            = EXCLUDED.source_categories,
     embedding                    = EXCLUDED.embedding,
     updated_at                   = NOW();
 """
@@ -249,6 +282,11 @@ def _row_tuple(mapped: dict[str, Any]) -> tuple[Any, ...]:
         mapped["is_publishable"],
         mapped["publishability_reasons"],
         mapped["needs_image_derived_backfill"],
+        mapped["typology_primary"],
+        mapped["typology_primary_source"],
+        mapped["typology_tags"],
+        mapped["architectural_elements"],
+        psycopg2.extras.Json(mapped["source_categories"]),
         _vec_literal(mapped["embedding"]),
     )
 
@@ -421,6 +459,8 @@ def main() -> int:
 
     if args.emit_sql:
         print(SCHEMA_SQL.strip())
+        print("\n-- additive migration (runs after SCHEMA_SQL on every load) --")
+        print(SCHEMA_EVOLUTION_SQL.strip())
         return 0
 
     if args.check_env:
