@@ -296,6 +296,14 @@ def _write_report(path: Path, report: dict[str, Any]) -> None:
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 
 
+def _read_removed_ids(path: Path | None) -> list[str]:
+    """Extract removed_canonical_ids from a C10 recovery report; [] if no path."""
+    if path is None:
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [str(x) for x in (data.get("removed_canonical_ids") or [])]
+
+
 def _preflight(input_path: Path, limit: int | None) -> dict[str, Any]:
     return validate_rows(iter_buildings(input_path, limit=limit))
 
@@ -306,14 +314,24 @@ def _load_rows(
     limit: int | None,
     batch_size: int,
     dry_run: bool,
+    removed_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     conn = _connect()
     total = 0
     failed = 0
+    deleted = 0
     try:
         with conn.cursor() as cur:
             cur.execute(SCHEMA_SQL)
             cur.execute(SCHEMA_EVOLUTION_SQL)
+            # DELETE merged-away ids before the upsert — DELETE-first so a
+            # stray id is reinstated by the upsert rather than lost.
+            if removed_ids:
+                cur.execute(
+                    f"DELETE FROM {TABLE} WHERE canonical_bld_id = ANY(%s)",
+                    (list(removed_ids),),
+                )
+                deleted = cur.rowcount
             batch: list[tuple[Any, ...]] = []
             for raw in iter_buildings(input_path, limit=limit):
                 try:
@@ -362,6 +380,7 @@ def _load_rows(
             "mode": "dry-run-upsert" if dry_run else "upsert",
             "input": str(input_path),
             "limit": limit,
+            "rows_deleted": deleted,
             "rows_loaded_in_transaction": total,
             "row_mapping_failures": failed,
             "counts_seen_in_transaction": counts,
@@ -455,7 +474,11 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=200)
     parser.add_argument("--confirm-db-write", action="store_true")
+    parser.add_argument("--removed-ids", type=Path, default=None,
+                        help="C10 recovery report JSON; its removed_canonical_ids "
+                             "are DELETEd from the table before upsert")
     args = parser.parse_args()
+    removed_ids = _read_removed_ids(args.removed_ids)
 
     if args.emit_sql:
         print(SCHEMA_SQL.strip())
@@ -501,6 +524,7 @@ def main() -> int:
             limit=args.limit,
             batch_size=args.batch_size,
             dry_run=True,
+            removed_ids=removed_ids,
         )
     else:
         report = _load_rows(
@@ -508,6 +532,7 @@ def main() -> int:
             limit=args.limit,
             batch_size=args.batch_size,
             dry_run=False,
+            removed_ids=removed_ids,
         )
 
     _write_report(args.report, report)

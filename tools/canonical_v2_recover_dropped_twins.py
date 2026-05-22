@@ -7,16 +7,16 @@ applies its missed-twin pairs to the C9 canonical artifact:
   one_or_both_dropped : a source building absent from every canonical row is
                         attached (as a source_ref) to its surviving twin row.
   different_canonical : two canonical rows that are the same building merge —
-                        survivor = lowest bld_id; losers are hidden
-                        (is_publishable=false, reason 'merged_duplicate') and
-                        their source_refs + NULL-only enrichment fold into the
-                        survivor. Connected merge pairs union-find into one
-                        component, so chains resolve to a single survivor.
+                        survivor = lowest bld_id; the survivor absorbs the
+                        losers' source_refs + NULL-only enrichment, and the
+                        loser rows are removed from the artifact. Connected
+                        merge pairs union-find into one component, so chains
+                        resolve to a single survivor.
 
-No row is added or removed — the row count is invariant, so the eventual Neon
-upsert needs no DELETE; merged-away rows remain as hidden stubs. Streaming,
-strict artifact only (embeddings are regenerated downstream after taxonomy).
-Read-only w.r.t. Neon.
+Removed loser ids are written to the report as `removed_canonical_ids`; the
+Neon upsert DELETEs them (DELETE-then-UPSERT, one transaction) so a source_ref
+is never duplicated across two rows. Streaming, strict artifact only
+(embeddings are regenerated downstream). Read-only w.r.t. Neon.
 """
 from __future__ import annotations
 
@@ -199,16 +199,12 @@ def main() -> int:
         for row in iter_buildings(C9):
             n_in += 1
             cid = row.get("canonical_bld_id")
+            if cid in loser_cids:
+                counts["merge_loser_removed"] += 1
+                continue  # merged into survivor — loser row removed
             if cid in survivor_patch:
                 row = survivor_patch[cid]
                 counts["merge_survivor"] += 1
-            elif cid in loser_cids:
-                reasons = list(row.get("publishability_reasons") or [])
-                if "merged_duplicate" not in reasons:
-                    reasons.append("merged_duplicate")
-                row["publishability_reasons"] = reasons
-                row["is_publishable"] = False
-                counts["merge_loser_hidden"] += 1
             if cid in attach_only:
                 sr = dict(row.get("source_refs") or {})
                 for s, did in attach_only[cid]:
@@ -225,28 +221,33 @@ def main() -> int:
         for c in conflicts:
             f.write(json.dumps(c, ensure_ascii=False) + "\n")
 
+    removed_ids = sorted(loser_cids)
+    ok = n_out == n_in - len(removed_ids)
     report = {
         "generated": datetime.now(timezone.utc).isoformat(),
         "base": str(C9.relative_to(ROOT)),
         "output": str(OUT.relative_to(ROOT)),
         "rows_in": n_in,
         "rows_out": n_out,
-        "row_count_invariant_ok": n_in == n_out,
+        "rows_removed": len(removed_ids),
+        "row_count_ok": ok,
         "attach_pairs_seen": len(attach_raw),
         "dropped_buildings_attached": len(dropped_targets),
         "attach_target_rows": len(attach_plan),
         "merge_components": len(comp_members),
-        "merge_losers_hidden": len(loser_cids),
+        "merge_losers_removed": len(removed_ids),
         "conflicts": len(conflicts),
         "unrecoverable_both_dropped": unrecoverable,
         "counts": dict(counts),
+        "removed_canonical_ids": removed_ids,
     }
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    status = "PASS" if n_in == n_out else "FAIL"
+    status = "PASS" if ok else "FAIL"
     print(f"C10 recovery [{status}] -> {OUT.relative_to(ROOT)}")
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if n_in == n_out else 1
+    print(json.dumps({k: v for k, v in report.items()
+                      if k != "removed_canonical_ids"}, ensure_ascii=False, indent=2))
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
