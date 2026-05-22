@@ -74,16 +74,24 @@ CREATE TABLE canonical_v2_buildings (
   is_publishable                BOOLEAN     NOT NULL DEFAULT FALSE,
   publishability_reasons        TEXT[]      NOT NULL DEFAULT '{}',
   needs_image_derived_backfill  BOOLEAN     NOT NULL DEFAULT FALSE,
+  typology_primary              TEXT,                                -- fine-grained use
+  typology_primary_source       TEXT,                                -- source_tags|name|program
+  typology_tags                 TEXT[]      NOT NULL DEFAULT '{}',
+  architectural_elements        TEXT[]      NOT NULL DEFAULT '{}',
+  source_categories             JSONB       NOT NULL DEFAULT '{}',    -- raw source taxonomy
   embedding                     VECTOR(384) NOT NULL,
   created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-Indexes: B-tree on country/city/year/program/style/tier/is_publishable; GIN on
-`architect_canonical_ids` and `source_refs`; HNSW (`vector_cosine_ops`) on
-`embedding`. Embedding model: `paraphrase-multilingual-MiniLM-L12-v2`, 384-dim.
-The authoritative DDL is `data/reports/canonical_v2_neon_schema.sql`.
+Indexes: B-tree on country/city/year/program/style/tier/is_publishable and
+`typology_primary`; GIN on `architect_canonical_ids`, `source_refs`,
+`typology_tags`, `architectural_elements`, `source_categories`; HNSW
+(`vector_cosine_ops`) on `embedding`. Embedding model:
+`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim. `python3
+tools/canonical_v2_neon_loader.py --emit-sql` prints the authoritative DDL
+plus the additive migration (`SCHEMA_EVOLUTION_SQL`).
 
 ## 3. Controlled vocabularies
 
@@ -102,6 +110,15 @@ without explicit user approval.
 - **material_visual** (suggested, not strict): concrete, glass, timber, brick,
   stone, steel, corten, aluminum, copper, plaster, tile, marble, rammed earth,
   bamboo, polycarbonate, fabric
+- **typology** (35): fine-grained building use — House, Apartment, Housing,
+  Student Housing, Care Home, Office, Retail, Restaurant, Hotel, Shopping
+  Centre, Museum, Gallery, Library, Theatre, Concert Hall, School, University,
+  Kindergarten, Hospital, Civic Building, Bank, Religious Building, Sports
+  Centre, Stadium, Pavilion, Airport, Train Station, Car Park, Industrial,
+  Warehouse, Winery, Park, Bridge, Memorial, Mixed Use
+- **architectural_element** (14): Stair, Facade, Roof, Courtyard, Entrance,
+  Corridor, Atrium, Terrace, Balcony, Garden, Fireplace, Column, Canopy,
+  Skylight
 
 The top-level `style/color_tone/atmosphere` columns are vocab-clean. The
 `image_derived` JSONB sub-object (D-2) is NOT — ~24% out-of-vocab; see the audit.
@@ -112,7 +129,10 @@ Canonical artifacts are **immutable stage snapshots** — never mutated in place
 A "completeness Cn" pass reviews a small evidence-backed set of location/year
 backfills, writes a new `completeness_cN` artifact + an affected-rows file,
 runs QC, then upserts only the affected rows to Neon. Lineage to date:
-`resume10_complete` → C3 → C4 → C6 → C7 → **C8 (current release)**.
+`resume10_complete` → C3 → C4 → C6 → C7 → **C8 (current Neon release)** → C9
+(post-audit data corrections) → C10 (matcher-recall recovery — drops 107 merge
+duplicates) → **C11 (fine-grained taxonomy; 39,669 rows, built + QC-clean,
+Neon upsert pending user approval)**.
 Artifacts live under `data/canonical/country_conflict_refresh/`.
 
 ## 5. Tool inventory (`tools/`)
@@ -121,6 +141,9 @@ Artifacts live under `data/canonical/country_conflict_refresh/`.
   `canonical_v2_upload_validator.py`, `canonical_v2_neon_loader.py`
 - **Completeness:** `canonical_v2_gap_inventory.py`,
   `canonical_v2_apply_completeness_*.py`, `canonical_v2_crawler_gap_audit.py`
+- **Taxonomy + recall (C10/C11):** `taxonomy_tag_inventory.py`,
+  `build_typology_crosswalk.py`, `build_completeness_c11_taxonomy.py`,
+  `canonical_v2_matcher_recall_audit.py`, `canonical_v2_recover_dropped_twins.py`
 - **Enrichment:** `d1_enrich_codex.py`, `d2_cover_vision.py`,
   `e1_phash_dedup.py`, `e2_vision_5type.py`, `image_dedup_5type.py`
 - **Audit (2026-05):** `audit_l1_structural.py`, `audit_l4l5.py`,
