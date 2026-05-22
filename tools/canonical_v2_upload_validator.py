@@ -27,6 +27,7 @@ DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildi
 DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_upload_dry_run.resume10_complete.json"
 EXPECTED_IMAGE_TYPES = {"exterior", "interior", "drawing", "aerial", "detail"}
 VALID_TIERS = {"T1", "T2", "T3"}
+PLACEHOLDER_PATTERNS = ("facebook-default-thumb", "img-placeholder")
 
 REQUIRED_TEXT_FIELDS = (
     "canonical_bld_id",
@@ -189,12 +190,29 @@ def _compact_sample(mapped: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _row_has_placeholder(mapped: dict[str, Any]) -> bool:
+    """True if any image field of the row carries a known placeholder URL."""
+    def ph(value: Any) -> bool:
+        url = value.get("url", "") if isinstance(value, dict) else str(value or "")
+        return any(p in url for p in PLACEHOLDER_PATTERNS)
+    if ph(mapped.get("cover_image_url_default")) or ph(mapped.get("display_cover_url")):
+        return True
+    if any(ph(im) for im in mapped.get("all_images") or []):
+        return True
+    if any(ph(v) for v in (mapped.get("covers_by_type") or {}).values()):
+        return True
+    if any(ph(v) for v in (mapped.get("best_image_per_cluster") or {}).values()):
+        return True
+    return False
+
+
 def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> dict[str, Any]:
     failures: Counter[str] = Counter()
     warnings: Counter[str] = Counter()
     seen: set[str] = set()
     duplicate_pks: list[str] = []
     by_name: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    display_covers: defaultdict[str, list[str]] = defaultdict(list)
     samples: list[dict[str, Any]] = []
     total = 0
     publishable_rows = 0
@@ -254,6 +272,13 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
             nonpublishable_rows += 1
             warnings["nonpublishable_rows"] += 1
 
+        if is_publishable:
+            if _row_has_placeholder(mapped):
+                failures["placeholder_in_publishable"] += 1
+            dcu = mapped.get("display_cover_url")
+            if dcu:
+                display_covers[str(dcu)].append(str(cid))
+
         if not mapped.get("all_images"):
             warnings["empty_all_images"] += 1
         if not mapped.get("cover_image_url_default"):
@@ -297,6 +322,10 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
     }
     warnings["duplicate_name_groups"] = len(duplicate_name_groups)
     warnings["generic_duplicate_name_groups"] = len(generic_duplicate_name_groups)
+
+    reused_covers = {u: cids for u, cids in display_covers.items() if len(cids) > 1}
+    if reused_covers:
+        failures["display_cover_url_reused"] = sum(len(c) for c in reused_covers.values())
 
     duplicate_name_samples = [
         {"name": name, "count": len(group), "rows": group[:8]}

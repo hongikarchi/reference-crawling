@@ -116,9 +116,12 @@ def _strip_placeholders(row: dict) -> tuple[bool, bool]:
     imgs = row.get("all_images") or []
     cbt = row.get("covers_by_type")
     cbt = cbt if isinstance(cbt, dict) else {}
+    bipc = row.get("best_image_per_cluster")
+    bipc = bipc if isinstance(bipc, dict) else {}
     has_ph = (
         any(_is_placeholder(_img_url(im)) for im in imgs)
         or any(_is_placeholder(v) for v in cbt.values())
+        or any(_is_placeholder(_img_url(v)) for v in bipc.values())
         or _is_placeholder(row.get("cover_image_url_default"))
         or _is_placeholder(row.get("display_cover_url"))
     )
@@ -129,6 +132,8 @@ def _strip_placeholders(row: dict) -> tuple[bool, bool]:
     row["all_images"] = kept
     cbt = {k: (None if _is_placeholder(v) else v) for k, v in cbt.items()}
     row["covers_by_type"] = cbt
+    row["best_image_per_cluster"] = {k: v for k, v in bipc.items()
+                                     if not _is_placeholder(_img_url(v))}
     if _is_placeholder(row.get("cover_image_url_default")):
         row["cover_image_url_default"] = None
     new_dcu = _display_cover_url(
