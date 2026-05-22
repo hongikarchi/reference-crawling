@@ -24,6 +24,8 @@ def make_embedding_text(b: dict) -> str:
         b.get("location_country") or "",
         str(b.get("project_year") or ""),
         b.get("program") or "",
+        b.get("typology_primary") or "",
+        " ".join(b.get("typology_tags") or []),
         b.get("style") or "",
         b.get("color_tone") or "",
         b.get("atmosphere") or "",
