@@ -53,6 +53,31 @@ ATMOSPHERE = frozenset({
     "Monumental", "Intimate", "Futuristic", "Rustic", "Contemplative",
 })
 
+# Fine-grained building use type (v2 taxonomy restoration, 2026-05). Populates
+# one `typology_primary` per building plus multi-valued `typology_tags`.
+# Distilled from source-native taxonomy (divisare tag_slugs, architizer /
+# archello categories); canonical/typology_crosswalk.json maps source tags
+# onto these values.
+TYPOLOGY = frozenset({
+    "House", "Apartment", "Housing", "Student Housing", "Care Home",
+    "Office", "Retail", "Restaurant", "Hotel", "Shopping Centre",
+    "Museum", "Gallery", "Library", "Theatre", "Concert Hall",
+    "School", "University", "Kindergarten",
+    "Hospital", "Civic Building", "Bank", "Religious Building",
+    "Sports Centre", "Stadium", "Pavilion",
+    "Airport", "Train Station", "Car Park",
+    "Industrial", "Warehouse", "Winery",
+    "Park", "Bridge", "Memorial", "Mixed Use",
+})
+
+# Architectural features / spatial elements — distinct from building use.
+# Multi-valued `architectural_elements`.
+ARCHITECTURAL_ELEMENT = frozenset({
+    "Stair", "Facade", "Roof", "Courtyard", "Entrance", "Corridor",
+    "Atrium", "Terrace", "Balcony", "Garden", "Fireplace", "Column",
+    "Canopy", "Skylight",
+})
+
 # material_visual is suggested, not strict. Kept here for prompt-side hints.
 MATERIAL_VISUAL_HINTS = (
     "concrete", "glass", "timber", "brick", "stone", "steel", "corten",
@@ -65,6 +90,8 @@ _VALID_SETS = {
     "style": STYLE,
     "color_tone": COLOR_TONE,
     "atmosphere": ATMOSPHERE,
+    "typology": TYPOLOGY,
+    "architectural_element": ARCHITECTURAL_ELEMENT,
 }
 
 # ---------------------------------------------------------------------------
