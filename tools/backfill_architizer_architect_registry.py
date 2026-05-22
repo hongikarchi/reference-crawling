@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
 from canonical.match_architects_sequential import export_clusters
 from canonical.registry import ArchitectRegistry, _normalize_name
 
-DEFAULT_STRICT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict.patched.json"
+DEFAULT_STRICT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict.resume10_complete.json"
 DEFAULT_ARCHITECTS = ROOT / "data/canonical/architects_canonical.json"
 DEFAULT_REGISTRY = ROOT / "data/id_registry_architects.json"
 DEFAULT_ARCHITIZER_DB = ROOT / "data/crawl/architizer.db"

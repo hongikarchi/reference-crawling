@@ -18,8 +18,8 @@ from typing import Any, Iterable, Iterator
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_INPUT = ROOT / "data/canonical/canonical_buildings_strict_embedded.json"
-DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_upload_dry_run.json"
+DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.resume10_complete.json"
+DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_upload_dry_run.resume10_complete.json"
 EXPECTED_IMAGE_TYPES = {"exterior", "interior", "drawing", "aerial", "detail"}
 VALID_TIERS = {"T1", "T2", "T3"}
 

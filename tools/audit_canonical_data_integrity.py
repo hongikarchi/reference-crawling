@@ -22,8 +22,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_STRICT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict.patched.json"
-DEFAULT_EMBEDDED = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.patched.json"
+DEFAULT_STRICT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict.resume10_complete.json"
+DEFAULT_EMBEDDED = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.resume10_complete.json"
 DEFAULT_ARCHITECTS = ROOT / "data/canonical/architects_canonical.json"
 DEFAULT_REPORT = ROOT / "data/reports/canonical_data_integrity_audit.json"
 METALOCUS_FINAL = ROOT / "data/enrich/4_buildings_final.json"

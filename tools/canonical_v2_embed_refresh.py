@@ -22,11 +22,11 @@ if str(ROOT) not in sys.path:
 from tools.embed_strict import make_embedding_text  # noqa: E402
 
 
-REFRESH_DIR = ROOT / "data/canonical/code_name_split_refresh"
-DEFAULT_INPUT = REFRESH_DIR / "canonical_buildings_strict.patched.json"
-DEFAULT_BASE = ROOT / "data/canonical/canonical_buildings_strict_embedded.json"
-DEFAULT_AFFECTED = REFRESH_DIR / "affected_cids.json"
-DEFAULT_OUTPUT = REFRESH_DIR / "canonical_buildings_strict_embedded.patched.json"
+REFRESH_DIR = ROOT / "data/canonical/country_conflict_refresh"
+DEFAULT_INPUT = REFRESH_DIR / "canonical_buildings_strict.resume10_complete.json"
+DEFAULT_BASE = REFRESH_DIR / "canonical_buildings_strict_embedded.resume10_complete.json"
+DEFAULT_AFFECTED = REFRESH_DIR / "d2_image_backfill_resume10_embed_affected.json"
+DEFAULT_OUTPUT = REFRESH_DIR / "canonical_buildings_strict_embedded.refresh.json"
 
 
 def _load_json(path: Path) -> Any:
