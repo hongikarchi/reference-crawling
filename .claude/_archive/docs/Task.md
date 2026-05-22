@@ -319,3 +319,175 @@ MATCH-PAUSED: e2_vision_5type — too many Vision calls (60 cluster/row × 38K r
 MATCH-DONE: hybrid_precommit_v1
 ENRICH-DONE: dispatch_enrich_batch_v1
 ENRICH-DONE: looks_idle_fix v1
+ENRICH-DONE: d1_batch_20260509-201823 bld_023354..bld_023365 rows=10
+ENRICH-DONE: d1_batch_20260509-202638 bld_023366..bld_023401 rows=30
+ENRICH-NEEDS-CLARIFICATION: dispatch /tmp/dispatch-enricher-20260509-210502.md contains no executable plan, acceptance criteria, handoff format, or Input JSON
+ENRICH-DONE: d1_batch_20260509-210954 bld_023402..bld_023438 rows=30
+ENRICH-DONE: d1_batch_20260509-211340 bld_023440..bld_023483 rows=30
+ENRICH-NEEDS-CLARIFICATION: D-1 resume loop dispatch missing Rule 1 smoke results, Rule 2 quota status, Rule 3 codex investigation reference, Rule 4 cost math, and ENRICH-COST-APPROVED handoff
+ENRICH-DONE: d1_loop_122346 bld_023485..bld_023532 rows=30
+ENRICH-DONE: d1_loop_122514 bld_023533..bld_023569 rows=30
+ENRICH-DONE: d1_loop_122514 bld_023570..bld_023606 rows=30
+ENRICH-DONE: d1_loop_122514 bld_023607..bld_023643 rows=30
+ENRICH-DONE: d1_loop_122514 bld_023645..bld_023682 rows=30
+ENRICH-DONE: d1_loop_122514 bld_023684..bld_023726 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023727..bld_023764 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023765..bld_023806 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023807..bld_023850 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023851..bld_023889 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023890..bld_023929 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023930..bld_023975 rows=30
+ENRICH-DONE: d1_loop_122515 bld_023976..bld_024011 rows=30
+ENRICH-DONE: d1_loop_122515 bld_024012..bld_024048 rows=30
+ENRICH-DONE: d1_loop_122515 bld_024049..bld_024092 rows=30
+ENRICH-DONE: d1_loop_122515 bld_024095..bld_024138 rows=30
+ENRICH-DONE: d1_loop_122515 bld_024139..bld_024180 rows=30
+ENRICH-DONE: d1_loop_122515 bld_024181..bld_024222 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024223..bld_024257 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024258..bld_024292 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024293..bld_024332 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024333..bld_024368 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024369..bld_024405 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024406..bld_024445 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024449..bld_024491 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024492..bld_024532 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024533..bld_024573 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024574..bld_024608 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024609..bld_024649 rows=30
+ENRICH-DONE: d1_loop_122516 bld_024651..bld_024689 rows=30
+ENRICH-DONE: d1_loop_122517 bld_024690..bld_024727 rows=30
+ENRICH-DONE: d1_loop_122517 bld_024728..bld_024763 rows=30
+ENRICH-DONE: d1_loop_122517 bld_024764..bld_024804 rows=30
+ENRICH-DONE: d1_loop_122517 bld_024805..bld_024847 rows=30
+ENRICH-DONE: d1_loop_122517 bld_024849..bld_029258 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029260..bld_029297 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029298..bld_029336 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029337..bld_029378 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029379..bld_029420 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029423..bld_029459 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029460..bld_029506 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029507..bld_029551 rows=30
+ENRICH-DONE: d1_loop_122517 bld_029552..bld_029601 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029602..bld_029644 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029645..bld_029677 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029678..bld_029720 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029721..bld_029761 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029762..bld_029796 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029797..bld_029828 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029829..bld_029863 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029864..bld_029897 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029898..bld_029929 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029930..bld_029970 rows=30
+ENRICH-DONE: d1_loop_122518 bld_029971..bld_030004 rows=30
+ENRICH-DONE: d1_loop_122518 bld_030005..bld_030038 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030039..bld_030075 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030076..bld_030112 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030114..bld_030145 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030146..bld_030182 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030183..bld_030213 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030214..bld_030245 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030246..bld_030280 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030281..bld_030314 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030316..bld_030353 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030354..bld_030391 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030392..bld_030442 rows=30
+ENRICH-DONE: d1_loop_122519 bld_030443..bld_030482 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030483..bld_030532 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030533..bld_030568 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030569..bld_030602 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030603..bld_030638 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030639..bld_030676 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030677..bld_030721 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030723..bld_030764 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030765..bld_030811 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030815..bld_030854 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030855..bld_030894 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030895..bld_030936 rows=30
+ENRICH-DONE: d1_loop_122520 bld_030937..bld_030978 rows=30
+ENRICH-DONE: d1_loop_122521 bld_030979..bld_031023 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031024..bld_031057 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031058..bld_031094 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031095..bld_031130 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031131..bld_031164 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031165..bld_031198 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031199..bld_031236 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031237..bld_031270 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031272..bld_031304 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031305..bld_031343 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031344..bld_031376 rows=30
+ENRICH-DONE: d1_loop_122521 bld_031377..bld_031409 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031410..bld_031443 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031444..bld_031487 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031488..bld_031523 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031524..bld_031557 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031558..bld_031600 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031602..bld_031646 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031647..bld_031687 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031689..bld_031723 rows=30
+ENRICH-DONE: d1_loop_122522 bld_031724..bld_031761 rows=30
+ENRICH-DONE: surface_dispatch_v1
+ENRICH-DONE: dispatch_metrics_v1
+ENRICH-DONE: d2_vision_path_v1
+ENRICH-DONE: d1_failure_analysis_v1
+ENRICH-DONE: d1_dispatch_resilience_v1
+ENRICH-NEEDS-CLARIFICATION: d2_self_smoke_v1 reason=response did not contain a valid JSON array
+ENRICH-DONE: d2_failure_analysis_v1
+ENRICH-NEEDS-CLARIFICATION: d2_self_smoke_v2 reason=download_failed
+ENRICH-NEEDS-CLARIFICATION: d1_resume_v2 nohup_pid=2520 exited_no_log_no_rows log=/Users/kms_laptop/Documents/archi-tinder/make_db/logs/d1_resume_20260511_011731.log
+ENRICH-NEEDS-CLARIFICATION: d1_resume_v3 reason=pid_exited_immediately_no_log_no_rows pid=44596 log=/Users/kms_laptop/Documents/archi-tinder/make_db/logs/d1_resume_20260511_013852.log
+ENRICH-DONE: codex_bg_diag_v1
+MATCH-DONE: code_name_split_repair v1 rows=39775 created=16 source_refs_lost=0 source_refs_duplicated=0
+ENRICH-DONE: code_name_split_refresh v1 d1=30 e1=30 e2=30 d2=30 embeddings=30
+REVIEW-BLOCK: country_conflict_triage v1 review_required=68 noise_likely=35 semantic_review=33
+MATCH-DONE: country_conflict_split v1 bld_018178 created=1 source_refs_lost=0 source_refs_duplicated=0
+ENRICH-DONE: country_conflict_refresh v1 d1=2 e1=2 e2=2 d2=2 embeddings=2
+REVIEW-BLOCK: country_conflict_triage v2 review_required=67 image_supported=64 semantic_review_no_image_link=3
+REVIEW-PASS: generic_merge_audit_final v1 review_required=0 country_conflict_flags=67 evidence_supported_or_waived=true
+CRAWL-DONE: dispatch-test-short v1
+ENRICH-NEEDS-CLARIFICATION: d2_image_backfill_resume5 quota_stop weekly=5% rows_new=5080 unique_backfill_cids=7979 bad_json=0 run=.claude/ops/runs/20260513_233321-d2-image-backfill-resume5-quota-stop.md
+ENRICH-DONE: d2_image_backfill_quota_stop_partial rows=7979/23008 remaining=15029 strict_qc=WARN upload_validator=PASS integrity=COMPLETE publishable_missing_image_or_cover=0
+ENRICH-NEEDS-CLARIFICATION: d2_resume6 blocked usage_limit_and_disk rows=1769 cumulative_d2=9748 retry_usage_limit=40 image_unavailable=1 run=.claude/ops/runs/20260514_000139-d2-image-backfill-resume6.md
+ENRICH-NEEDS-CLARIFICATION: d2_resume7 blocked usage_limit rows=370 cumulative_d2=10118 remaining_d2=12890 retry_usage_limit=40 run=.claude/ops/runs/20260514_d2-image-backfill-resume7.md
+ENRICH-NEEDS-CLARIFICATION: d2_resume8 blocked usage_limit rows=3680 cumulative_d2=13798 remaining_d2=9209 retry_usage_limit=10 run=.claude/ops/runs/20260514_d2-image-backfill-resume8.md
+ENRICH-NEEDS-CLARIFICATION: d2_resume9 stopped_network rows=2345 cumulative_d2=16143 remaining_d2=6864 retry_network=4375 guard=transient_download_abort run=.claude/ops/runs/20260516_d2-image-backfill-resume9.md
+ENRICH-DONE: d2_resume10_complete rows=6864 cumulative_d2=23007 image_unavailable=1 remaining_d2=0 strict_qc=PASS upload_validator=PASS generic_merge_audit=PASS integrity=COMPLETE publishable=39736 nonpublishable=40 run=.claude/ops/runs/20260516_d2-image-backfill-resume10.md
+OPS-DONE: post_d2_recovery_defaults v1 final_artifact=resume10_complete live_upload=blocked_user_gate cleanup_delete=blocked_user_gate job=.claude/ops/jobs/20260517_post_d2_recovery_defaults.md
+OPS-DONE: post_d2_disk_cleanup v1 deleted_superseded_strict_artifacts est_reclaimed=5.1GiB final_artifact=resume10_complete live_upload=blocked_user_gate job=.claude/ops/jobs/20260517_post_d2_disk_cleanup.md
+OPS-DONE: upload_readiness_packet_resume10 v1 strict_qc=PASS upload_validator=PASS generic_merge_audit=PASS integrity=COMPLETE review_packet=.claude/ops/reviews/20260517_upload_readiness_resume10.md live_upload=blocked_user_gate
+OPS-DONE: canonical_v2_neon_loader_prepared v1 tool=tools/canonical_v2_neon_loader.py schema=data/reports/canonical_v2_neon_schema.sql input=resume10_complete live_write_requires=--confirm-db-write job=.claude/ops/jobs/20260517_canonical_v2_neon_loader.md
+OPS-DONE: canonical_v2_neon_loader_smoke_fix v1 root_cause=existing_table_missing_created_at fix=additive_schema_evolution live_write=none dry_run_rolled_back
+OPS-DONE: canonical_v2_neon_loader_n10_dry_run PASS rows=10 table_count_seen=39776 writes=rolled_back report=data/reports/canonical_v2_neon_loader_dry_run_n10.json
+OPS-DONE: canonical_v2_neon_loader_inspect_fix v1 root_cause=datetime_report_serialization live_write=none
+OPS-DONE: canonical_v2_neon_table_inspect v1 rows=39776 unique_pk=39776 publishable=39737 nonpublishable=39 needs_image_derived_backfill=23008 status=STALE_PRE_RESUME10 report=data/reports/canonical_v2_neon_table_inspect.json
+OPS-DONE: canonical_v2_neon_loader_n100_fix v1 root_cause=tuple_count_report_conversion live_write=none dry_run_rolled_back
+OPS-DONE: canonical_v2_neon_loader_n100_dry_run PASS rows=100 unique_pk=39776 needs_image_derived_backfill_seen=22913 writes=rolled_back report=data/reports/canonical_v2_neon_loader_dry_run_n100.json
+OPS-DONE: canonical_v2_neon_upsert_full PASS rows=39776 unique_pk=39776 publishable=39736 nonpublishable=40 missing_embedding=0 needs_image_derived_backfill=0 writes=committed report=data/reports/canonical_v2_neon_loader_upsert_full.json
+OPS-DONE: canonical_v2_completeness_c1_c2_started read_only=true job=.claude/ops/jobs/20260517_canonical_v2_completeness_c1_c2.md
+OPS-DONE: canonical_v2_completeness_c1_c2 PASS rows=39776 high_confidence_candidates=0 review_needed=217 year_text=136 location_full=81 writes=reports_only job=.claude/ops/jobs/20260517_canonical_v2_completeness_c1_c2.md
+OPS-DONE: canonical_v2_completeness_c25_started read_only=true job=.claude/ops/jobs/20260517_canonical_v2_completeness_c25.md
+OPS-DONE: canonical_v2_completeness_c25 PASS review_items=217 safe_after_policy=91 keep_review=126 safe_project_year=91 safe_location_city=0 writes=reports_only job=.claude/ops/jobs/20260517_canonical_v2_completeness_c25.md
+OPS-DONE: canonical_v2_completeness_c26_llm_location_started read_only=true approved_by_user=true job=.claude/ops/jobs/20260518_canonical_v2_completeness_c26_llm_location.md
+OPS-DONE: canonical_v2_completeness_c26_llm_location PASS location_items=81 classified=81 apply_city=38 country_only_blocked=38 writes=reports_only report=data/reports/canonical_v2_llm_location_adjudication.json
+OPS-DONE: canonical_v2_completeness_c3_started apply_scope=project_year91_location_city38 two_phase=true job=.claude/ops/jobs/20260518_canonical_v2_completeness_c3_apply.md
+OPS-DONE: canonical_v2_completeness_c3 PASS affected_cids=129 project_year=91 location_city=38 strict_qc=PASS upload_validator=PASS review_needed_after=88 neon_rows_upserted=129 writes=committed job=.claude/ops/jobs/20260518_canonical_v2_completeness_c3_apply.md
+OPS-DONE: canonical_v2_remaining_candidate_verification_started read_only=true remaining=88 job=.claude/ops/jobs/20260518_canonical_v2_remaining_candidate_verification.md
+OPS-DONE: canonical_v2_remaining_candidate_verification PASS remaining=88 project_year_apply_candidates=15 project_year_keep=30 location_keep_city_null=38 location_manual=5 writes=reports_only report=data/reports/canonical_v2_remaining_review_verdict.json
+OPS-DONE: canonical_v2_completeness_c4_started apply_scope=project_year15 two_phase=true job=.claude/ops/jobs/20260518_canonical_v2_completeness_c4_apply.md
+OPS-DONE: canonical_v2_completeness_c4 PASS affected_cids=15 project_year=15 strict_qc=PASS upload_validator=PASS review_needed_after=73 neon_rows_upserted=15 writes=committed job=.claude/ops/jobs/20260518_canonical_v2_completeness_c4_apply.md
+OPS-DONE: canonical_v2_crawler_gap_audit_c5_started read_only=true job=.claude/ops/jobs/20260518_canonical_v2_crawler_gap_audit_c5.md
+OPS-DONE: canonical_v2_crawler_gap_audit_c5_complete status=PASS structured_candidates=0 city_raw=2 year_completion_signal=7 no_local_country=1967 no_local_city=2010 no_local_year=1273 review=.claude/ops/reviews/20260518_crawler_gap_audit_c5.md
+OPS-DONE: canonical_v2_c5_local_candidate_verdict_complete status=PASS candidates=9 apply=1 keep_null=8 apply_candidate=bld_038824.project_year:1989 report=data/reports/canonical_v2_c5_local_candidate_verdict.md
+OPS-DONE: canonical_v2_c6_web_search_smoke_complete status=PASS n=10 likely_safe=3 partial=3 unresolved=2 conflict=1 keep_null=1 report=data/reports/canonical_v2_c6_web_search_smoke.md
+OPS-DONE: canonical_v2_c6_candidate_queue_complete status=PASS rows_missing_any=2163 c5_local_apply_ready=1 c6_seed_apply_review=3 policy_null_review=177 web_search_location=769 web_search_location_year=1065 web_search_year=148 n100=100 report=data/reports/canonical_v2_c6_candidate_queue.md
+OPS-DONE: canonical_v2_c6_n100_web_search_smoke_complete status=PASS n=100 apply_after_exact_source_review=34 partial=20 conflict_manual=4 policy_null_or_manual_null=9 unresolved=33 report=data/reports/canonical_v2_c6_n100_web_search_smoke.md
+OPS-DONE: canonical_v2_c6_source_ranked_apply_queue_complete status=PASS local_apply_ready=1 c6_seed=3 c6_n100_candidates=34 combined_pool=38 ready_direct=1 requires_exact_source_review=37 report=data/reports/canonical_v2_c6_source_ranked_apply_queue.md
+OPS-DONE: canonical_v2_c6_narrow_apply_prep_complete status=PASS direct_apply=1 candidate=bld_038824.project_year:1989 web_candidates_blocked=37 live_mutation=blocked_user_gate report=data/reports/canonical_v2_c6_narrow_apply_prep.md
+OPS-DONE: canonical_v2_c6_apply_complete status=PASS affected_cids=1 project_year=1 strict_qc=PASS upload_validator=PASS review_needed_after=72 neon_rows_upserted=1 writes=committed job=.claude/ops/jobs/20260522_canonical_v2_c6_apply.md
+OPS-DONE: canonical_v2_c6_source_ranked_apply_queue_correction status=PASS reason=seed_candidates_overlap_n100 combined_with_overlap=38 unique_pool=35
+OPS-DONE: canonical_v2_c6_source_ranked_apply_queue_correction2 status=PASS unique_requires_exact_source_review=34 c6_prep_blocked_web_candidates=34
+OPS-DONE: canonical_v2_c6_exact_source_review_complete status=PASS reviewed=34 safe_rows=33 manual_only=1 field_updates=73 country=29 city=26 project_year=18 report=data/reports/canonical_v2_c6_exact_source_review.md
+OPS-DONE: canonical_v2_c7_local_apply_complete status=PASS affected_cids=33 country=29 city=26 project_year=4 strict_qc=PASS upload_validator=PASS review_needed_after=72 neon=pending_approval job=.claude/ops/jobs/20260522_canonical_v2_c7_local_apply.md
+OPS-DONE: canonical_v2_c7_neon_upsert_complete status=PASS mode=upsert rows_loaded=33 total_rows=39776 unique_pk=39776 writes=committed report=data/reports/canonical_v2_neon_loader_upsert_completeness_c7_affected.json
+OPS-DONE: canonical_v2_c8_local_final_pin_complete status=PASS reviewed=72 affected_cids=27 country=8 city=18 project_year=8 strict_qc=PASS upload_validator=PASS review_needed_after=48 high_confidence=0 neon=pending_approval manifest=data/reports/canonical_v2_release_manifest.completeness_c8.json report=data/reports/canonical_v2_final_quality_report.completeness_c8.md
+OPS-DONE: canonical_v2_c8_neon_upsert_complete status=PASS mode=upsert rows_loaded=27 total_rows=39776 unique_pk=39776 writes=committed report=data/reports/canonical_v2_neon_loader_upsert_completeness_c8_affected.json
+OPS-DONE: codex_to_claude_handoff_packet_complete status=PASS data_audit_rows=39776 unique_ids=39776 cleanup_files=1426 cleanup_size=15.4GiB large_files=23 deletion=none neon_write=none handoff=data/reports/codex_to_claude_handoff_20260522.md

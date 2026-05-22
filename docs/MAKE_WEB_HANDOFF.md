@@ -165,6 +165,5 @@ Schema:
 
 ## Contact / Questions
 
-For schema questions or merge-policy concerns, reference the design
-plan at `~/.claude/plans/stage-b-buildings.md` or the goal doc at
-`.claude/Goal.md`.
+For schema questions or merge-policy concerns, see the project
+`README.md` and `docs/REFERENCE.md`.
