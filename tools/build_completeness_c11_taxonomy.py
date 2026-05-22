@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Build the completeness_c11 artifact — fine-grained taxonomy backfill.
+"""Build the completeness_c12 artifact — taxonomy backfill + placeholder strip.
 
-Reads the C10 recovery artifact and, for every canonical row, reverse-joins
-`source_refs` to the crawl DBs to recover the source-native taxonomy that
-`build_strict_canonical.py` dropped. Fills four new fields:
+Supersedes the defective C11 (Codex data-QA: hospitality->Hospital crosswalk
+bug, placeholder cover images, feature-tag-dominated typology_primary). Reads
+the C10 recovery artifact and, per canonical row:
 
-  source_categories      {source: [raw tag, ...]}   raw, lossless
-  typology_tags          [TYPOLOGY term, ...]        crosswalk-mapped union
-  typology_primary       one TYPOLOGY term           most-tagged, priority tie-break
-  architectural_elements [ELEMENT term, ...]         crosswalk-mapped union
+  1. Strips placeholder image URLs (facebook-default-thumb / img-placeholder)
+     from all_images / covers_by_type / cover_image_url_default /
+     display_cover_url; re-derives the display cover. A row left with no real
+     image becomes non-publishable (publishability_reasons += image_unavailable).
+  2. Reverse-joins source_refs to the crawl DBs, maps source tags through the
+     typology crosswalk, and fills source_categories / typology_tags /
+     typology_primary / typology_primary_source / architectural_elements.
+     Context typologies (Park / Pavilion / Mixed Use / Memorial) never bury a
+     specific typology when picking typology_primary.
 
-Every row gains the four fields (>= empty), so the whole artifact is the
-upsert payload — there is no affected-only subset. Streaming, strict artifact
-only (embeddings are regenerated downstream). Read-only w.r.t. Neon.
+Streaming, strict artifact only (embeddings regenerated downstream).
+Read-only w.r.t. Neon.
 """
 from __future__ import annotations
 
@@ -29,14 +33,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core import vocab  # noqa: E402
+from tools.build_strict_canonical import _display_cover_url  # noqa: E402
 from tools.canonical_v2_upload_validator import iter_buildings  # noqa: E402
 
 CCR = ROOT / "data/canonical/country_conflict_refresh"
 C10 = CCR / "canonical_buildings_strict.completeness_c10_recovery.json"
 CROSSWALK = ROOT / "canonical/typology_crosswalk.json"
 CRAWL = ROOT / "data" / "crawl"
-OUT = CCR / "canonical_buildings_strict.completeness_c11_taxonomy.json"
-REPORT = ROOT / "data/reports/canonical_v2_completeness_c11_apply_report.json"
+OUT = CCR / "canonical_buildings_strict.completeness_c12_taxonomy.json"
+REPORT = ROOT / "data/reports/canonical_v2_completeness_c12_apply_report.json"
+
+# placeholder image URL fragments — extend here when a new one is found
+_PLACEHOLDER_PATTERNS = ("facebook-default-thumb", "img-placeholder")
 
 # typology_primary tie-break: most-tagged term wins; ties resolve to the most
 # informative type (generic residential terms last).
@@ -53,24 +61,34 @@ _TYPOLOGY_PRIORITY = [
 ]
 _PRIO_IDX = {t: i for i, t in enumerate(_TYPOLOGY_PRIORITY)}
 
+# context / catch-all typologies — a specific typology outranks these in
+# typology_primary even with fewer tags, so landscape feature-tags cannot bury
+# a building's real use (e.g. a transit terminal with a planted roof).
+_CONTEXT_TYPOLOGIES = {"Park", "Pavilion", "Mixed Use", "Memorial"}
+
 # Fallback chain for rows whose source tags yield no typology: an unambiguous
-# institution word in the name, then a program value that maps cleanly to one
-# typology. Provenance is recorded in typology_primary_source.
+# institution word in the name, then a program value that maps to one typology.
+# Regexes are word-bounded so "hospital" never matches "hospitality".
 _NAME_RULES = [
-    (re.compile(r"kindergarten|\bnurser|pre-?school", re.I), "Kindergarten"),
-    (re.compile(r"universit|\bcollege\b", re.I), "University"),
-    (re.compile(r"\bschool\b", re.I), "School"),
-    (re.compile(r"\blibrar|bibliote|mediathe|bibliothek", re.I), "Library"),
-    (re.compile(r"\bmuseum|\bmuseo\b|mus[ée]e|muzeum", re.I), "Museum"),
-    (re.compile(r"\bgaller|galer[íi]a|galerie", re.I), "Gallery"),
-    (re.compile(r"cathedral|basilica|\bchurch|\bchapel|mosque|synagogue|"
-                r"\btemple\b|monaster|convent", re.I), "Religious Building"),
-    (re.compile(r"\bhospital|\bclinic", re.I), "Hospital"),
-    (re.compile(r"\bstadium\b|\barena\b", re.I), "Stadium"),
-    (re.compile(r"\bairport\b", re.I), "Airport"),
-    (re.compile(r"train station|railway station", re.I), "Train Station"),
-    (re.compile(r"town hall|city hall", re.I), "Civic Building"),
-    (re.compile(r"\bwinery\b|vineyard|bodega", re.I), "Winery"),
+    (re.compile(r"\bkindergartens?\b|\bnurser(?:y|ies)\b|\bpre-?schools?\b", re.I),
+     "Kindergarten"),
+    (re.compile(r"\buniversit\w*\b|\buniversidad\b|\bcollege\b", re.I), "University"),
+    (re.compile(r"\bschools?\b", re.I), "School"),
+    (re.compile(r"\blibrar(?:y|ies)\b|\bbiblio\w*\b|\bm[ée]diath\w*\b", re.I),
+     "Library"),
+    (re.compile(r"\bmuseums?\b|\bmuseo\b|\bmus[ée]e\b|\bmuzeum\b", re.I), "Museum"),
+    (re.compile(r"\bgaller(?:y|ies)\b|\bgaler[íi]a\b|\bgalerie\b|\bgalleria\b", re.I),
+     "Gallery"),
+    (re.compile(r"\bcathedrals?\b|\bbasilicas?\b|\bchurch(?:es)?\b|\bchapels?\b|"
+                r"\bmosques?\b|\bsynagogues?\b|\btemples?\b|\bmonaster\w*\b|"
+                r"\bconvents?\b", re.I), "Religious Building"),
+    (re.compile(r"\bhospitals?\b|\bclinics?\b", re.I), "Hospital"),
+    (re.compile(r"\bstadiums?\b|\barenas?\b", re.I), "Stadium"),
+    (re.compile(r"\bairports?\b", re.I), "Airport"),
+    (re.compile(r"\btrain station\b|\brailway station\b|\bterminals?\b", re.I),
+     "Train Station"),
+    (re.compile(r"\btown hall\b|\bcity hall\b", re.I), "Civic Building"),
+    (re.compile(r"\bwiner(?:y|ies)\b|\bvineyards?\b|\bbodegas?\b", re.I), "Winery"),
 ]
 # program -> typology, only where the program value maps to exactly one type
 _PROGRAM_FALLBACK = {
@@ -78,6 +96,55 @@ _PROGRAM_FALLBACK = {
     "Sports": "Sports Centre", "Healthcare": "Hospital", "Mixed Use": "Mixed Use",
     "Landscape": "Park", "Housing": "Housing",
 }
+
+
+def _is_placeholder(url) -> bool:
+    u = str(url or "")
+    return any(p in u for p in _PLACEHOLDER_PATTERNS)
+
+
+def _img_url(image):
+    return image.get("url") if isinstance(image, dict) else image
+
+
+def _strip_placeholders(row: dict) -> tuple[bool, bool]:
+    """Remove placeholder image URLs and re-derive the display cover.
+
+    Returns (stripped, lost_last_image). `lost_last_image` is True when the
+    strip left the row with no real image — it is then marked non-publishable.
+    """
+    imgs = row.get("all_images") or []
+    cbt = row.get("covers_by_type")
+    cbt = cbt if isinstance(cbt, dict) else {}
+    has_ph = (
+        any(_is_placeholder(_img_url(im)) for im in imgs)
+        or any(_is_placeholder(v) for v in cbt.values())
+        or _is_placeholder(row.get("cover_image_url_default"))
+        or _is_placeholder(row.get("display_cover_url"))
+    )
+    if not has_ph:
+        return False, False
+
+    kept = [im for im in imgs if not _is_placeholder(_img_url(im))]
+    row["all_images"] = kept
+    cbt = {k: (None if _is_placeholder(v) else v) for k, v in cbt.items()}
+    row["covers_by_type"] = cbt
+    if _is_placeholder(row.get("cover_image_url_default")):
+        row["cover_image_url_default"] = None
+    new_dcu = _display_cover_url(
+        covers_by_type=cbt,
+        cover_image_url_default=row.get("cover_image_url_default"),
+        all_images=kept,
+    )
+    row["display_cover_url"] = new_dcu
+    if not new_dcu:
+        reasons = list(row.get("publishability_reasons") or [])
+        if "image_unavailable" not in reasons:
+            reasons.append("image_unavailable")
+        row["publishability_reasons"] = reasons
+        row["is_publishable"] = False
+        return True, True
+    return True, False
 
 
 def _name_fallback(name):
@@ -129,9 +196,14 @@ def _load_source_tags() -> dict:
 
 
 def _pick_primary(counter: Counter):
+    """Most-tagged typology; a specific type always outranks a context type
+    (Park/Pavilion/Mixed Use/Memorial) regardless of tag count, so a building
+    with landscape feature-tags plus one specific tag resolves to the specific."""
     if not counter:
         return None
-    return max(counter, key=lambda t: (counter[t], -_PRIO_IDX.get(t, 999)))
+    specifics = {t: c for t, c in counter.items() if t not in _CONTEXT_TYPOLOGIES}
+    pool = specifics or counter
+    return max(pool, key=lambda t: (pool[t], -_PRIO_IDX.get(t, 999)))
 
 
 def main() -> int:
@@ -151,6 +223,12 @@ def main() -> int:
     f.write('{"buildings":[')
     try:
         for row in iter_buildings(C10):
+            stripped, lost = _strip_placeholders(row)
+            if stripped:
+                counts["placeholder_stripped"] += 1
+            if lost:
+                counts["placeholder_now_unpublishable"] += 1
+
             refs = row.get("source_refs") or {}
             src_cats: dict = {}
             typ_counter: Counter = Counter()
@@ -219,7 +297,7 @@ def main() -> int:
     }
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"C11 taxonomy backfill -> {OUT.relative_to(ROOT)}")
+    print(f"C12 taxonomy backfill -> {OUT.relative_to(ROOT)}")
     print(json.dumps({"rows_total": n_in, "counts": dict(counts),
                       "primary_source": dict(prov_dist)},
                      ensure_ascii=False, indent=2))
