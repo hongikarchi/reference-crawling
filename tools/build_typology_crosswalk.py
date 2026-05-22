@@ -31,20 +31,20 @@ OUT = ROOT / "canonical/typology_crosswalk.json"
 REPORT = ROOT / "data/reports/typology_crosswalk_coverage.json"
 
 # (vocab term, [keyword, ...]). A keyword matches a tag when every space-
-# separated word in it is the prefix of some token of the normalized tag, so
-# "city hall" matches "City Halls" but not "hallway", and "house" matches
-# "houses" but never "warehouse" / "housing".
+# separated word in it appears as a WHOLE token of the normalized tag (regular
+# plurals handled) — exact, not prefix, so "hospital" matches "hospital" /
+# "hospitals" but never "hospitality". Keywords are full words, not stems.
 RULES: list[tuple[str, list[str]]] = [
     # --- architectural elements ---
     ("Stair", ["stair"]),
     ("Facade", ["facade", "cladding", "curtain wall"]),
-    ("Roof", ["roof"]),
+    ("Roof", ["roof", "rooftop"]),
     ("Courtyard", ["courtyard", "patio"]),
     ("Entrance", ["entrance", "lobby", "foyer", "vestibule"]),
     ("Corridor", ["corridor", "hallway", "passage"]),
     ("Atrium", ["atrium", "atria"]),
     ("Terrace", ["terrace"]),
-    ("Balcony", ["balcon", "loggia"]),
+    ("Balcony", ["balcony", "loggia"]),
     ("Garden", ["garden"]),
     ("Fireplace", ["fireplace", "hearth"]),
     ("Column", ["column", "colonnade"]),
@@ -53,37 +53,41 @@ RULES: list[tuple[str, list[str]]] = [
     # --- typology ---
     ("Kindergarten", ["kindergarten", "preschool", "nursery", "daycare", "creche"]),
     ("School", ["school", "classroom"]),
-    ("University", ["universit", "college", "campus"]),
-    ("Library", ["librar", "mediathe"]),
+    ("University", ["university", "college", "campus"]),
+    ("Library", ["library", "mediatheque"]),
     ("Museum", ["museum"]),
-    ("Gallery", ["galler", "exhibition"]),
+    ("Gallery", ["gallery", "exhibition"]),
     ("Concert Hall", ["concert", "philharmonic"]),
-    ("Theatre", ["theatre", "theater", "cinema", "auditorium", "playhouse"]),
+    ("Theatre", ["theatre", "theater", "cinema", "auditorium", "playhouse",
+                 "opera", "performing arts"]),
     ("Hospital", ["hospital", "clinic", "healthcare", "infirmary", "polyclinic"]),
     ("Care Home", ["care home", "nursing home", "hospice", "retirement", "elderly"]),
     ("Religious Building", ["church", "chapel", "cathedral", "mosque", "synagogue",
-                            "temple", "shrine", "monaster", "basilica", "religious",
+                            "temple", "shrine", "monastery", "basilica", "religious",
                             "convent"]),
-    ("Hotel", ["hotel", "hostel", "resort", "motel"]),
-    ("Restaurant", ["restaurant", "cafe", "bistro", "canteen", "brasserie", "bars",
+    ("Hotel", ["hotel", "hostel", "resort", "motel", "hospitality"]),
+    ("Restaurant", ["restaurant", "cafe", "bistro", "canteen", "brasserie", "bar",
                     "dining"]),
-    ("Retail", ["shop", "stores", "retail", "showroom", "boutique", "kiosk", "market"]),
+    ("Retail", ["shop", "store", "retail", "showroom", "boutique", "kiosk", "market"]),
     ("Shopping Centre", ["shopping", "mall"]),
-    ("Office", ["office", "headquarter", "coworking", "co-working", "workspace"]),
+    ("Office", ["office", "headquarter", "coworking", "co working", "workspace",
+                "research center"]),
     ("Bank", ["bank"]),
     ("Civic Building", ["civic", "town hall", "city hall", "courthouse",
                         "court house", "administrative", "government", "embassy",
-                        "parliament", "police", "fire station", "post office"]),
+                        "parliament", "police", "fire station", "post office",
+                        "cultural center", "visitor center", "social center",
+                        "community center"]),
     ("Sports Centre", ["sport", "gym", "swimming", "fitness", "athletic"]),
     ("Stadium", ["stadium", "arena"]),
     ("Pavilion", ["pavilion"]),
     ("Airport", ["airport"]),
     ("Train Station", ["train station", "railway", "metro station", "bus station",
-                       "transit"]),
+                       "bus stop", "transit"]),
     ("Car Park", ["car park", "parking", "garage"]),
-    ("Industrial", ["industrial", "factor", "manufactur", "workshop"]),
+    ("Industrial", ["industrial", "factory", "manufacturing", "workshop"]),
     ("Warehouse", ["warehouse", "storage", "depot", "logistic"]),
-    ("Winery", ["winer", "wine cellar", "brewery", "distiller", "vineyard"]),
+    ("Winery", ["winery", "wine cellar", "brewery", "distillery", "vineyard"]),
     ("House", ["house", "home", "villa", "dwelling", "cottage", "cabin",
                "bungalow", "chalet"]),
     ("Apartment", ["apartment", "flat", "condo", "multifamily", "multi family",
@@ -91,8 +95,8 @@ RULES: list[tuple[str, list[str]]] = [
     ("Housing", ["housing", "residential", "tenement"]),
     ("Student Housing", ["student housing", "dormitory", "halls of residence"]),
     ("Park", ["park", "landscape", "plaza", "playground", "promenade",
-              "waterfront", "public space"]),
-    ("Memorial", ["memorial", "monument", "cemeter", "crematorium", "mausoleum"]),
+              "waterfront", "public space", "square"]),
+    ("Memorial", ["memorial", "monument", "cemetery", "crematorium", "mausoleum"]),
     ("Bridge", ["bridge", "viaduct", "footbridge"]),
     ("Mixed Use", ["mixed use", "multi use"]),
 ]
@@ -111,19 +115,30 @@ SUPPRESS: dict[str, list[str]] = {
 
 
 def _tokens(slug: str) -> list[str]:
-    return re.sub(r"[-_/]+", " ", str(slug).strip().lower()).split()
+    text = re.sub(r"[-_/]+", " ", str(slug).strip().lower())
+    return text.replace("centre", "center").split()
 
 
-def _kw_match(tokens: list[str], keyword: str) -> bool:
-    return all(any(tok.startswith(w) for tok in tokens) for w in keyword.split())
+def _word_forms(word: str) -> set[str]:
+    """A keyword word plus its regular English plural forms."""
+    forms = {word, word + "s", word + "es"}
+    if word.endswith("y") and len(word) > 2 and word[-2] not in "aeiou":
+        forms.add(word[:-1] + "ies")
+    return forms
+
+
+def _kw_match(token_set: set[str], keyword: str) -> bool:
+    """True when every word of the keyword (or a regular plural of it) is a
+    whole token — exact, not prefix, so 'hospital' never matches 'hospitality'."""
+    return all(_word_forms(w) & token_set for w in keyword.split())
 
 
 def map_tag(slug: str) -> list[str]:
-    tokens = _tokens(slug)
-    if not tokens:
+    token_set = set(_tokens(slug))
+    if not token_set:
         return []
     matched = {term for term, kws in RULES
-               if any(_kw_match(tokens, kw) for kw in kws)}
+               if any(_kw_match(token_set, kw) for kw in kws)}
     for trigger, drop in SUPPRESS.items():
         if trigger in matched:
             matched -= set(drop)

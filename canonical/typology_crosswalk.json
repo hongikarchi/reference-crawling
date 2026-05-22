@@ -93,7 +93,9 @@
     "sloping-roofs": [
       "Roof"
     ],
-    "cultural-centers": [],
+    "cultural-centers": [
+      "Civic Building"
+    ],
     "headquarters": [
       "Office"
     ],
@@ -191,7 +193,9 @@
     "ceilings": [],
     "french-interiors": [],
     "portuguese-interiors": [],
-    "squares-and-streets": [],
+    "squares-and-streets": [
+      "Park"
+    ],
     "wooden-houses": [
       "House"
     ],
@@ -259,7 +263,9 @@
     "woodland-houses": [
       "House"
     ],
-    "canopies": [],
+    "canopies": [
+      "Canopy"
+    ],
     "kindergartens-and-pre-schools": [
       "Kindergarten"
     ],
@@ -384,7 +390,9 @@
     ],
     "dialogues-with-history": [],
     "barcelona-interiors": [],
-    "lobbies": [],
+    "lobbies": [
+      "Entrance"
+    ],
     "pink": [],
     "mountains-architecture": [],
     "vernacular": [],
@@ -428,12 +436,14 @@
       "Religious Building"
     ],
     "building-high": [],
-    "research-centers": [],
+    "research-centers": [
+      "Office"
+    ],
     "art-galleries": [
       "Gallery"
     ],
     "reused-for-hospitality": [
-      "Hospital"
+      "Hotel"
     ],
     "italian-rural-houses": [
       "House"
@@ -474,7 +484,9 @@
       "Sports Centre"
     ],
     "the-architecture-of-the-corner": [],
-    "visitor-centers": [],
+    "visitor-centers": [
+      "Civic Building"
+    ],
     "curved-roofs": [
       "Roof"
     ],
@@ -522,7 +534,9 @@
     "administrative-centers": [
       "Civic Building"
     ],
-    "italian-bar": [],
+    "italian-bar": [
+      "Restaurant"
+    ],
     "beach-houses": [
       "House"
     ],
@@ -624,9 +638,7 @@
       "Hospital"
     ],
     "below-ground-zero": [],
-    "nervi-factor": [
-      "Industrial"
-    ],
+    "nervi-factor": [],
     "hong-kong-shenzhen": [],
     "terracotta": [],
     "chapels": [
@@ -643,7 +655,9 @@
     "austrian-houses": [
       "House"
     ],
-    "co-working": [],
+    "co-working": [
+      "Office"
+    ],
     "bamboo": [],
     "greek-houses": [
       "House"
@@ -657,7 +671,9 @@
     "plans-of-religious-buildings": [
       "Religious Building"
     ],
-    "plans-of-performing-arts-centers": [],
+    "plans-of-performing-arts-centers": [
+      "Theatre"
+    ],
     "copenhagen": [],
     "construction-details-of-outdoor-spaces": [],
     "beauty-salons": [],
@@ -689,16 +705,16 @@
     "italian-beach-houses": [
       "House"
     ],
-    "piranesi-factor": [
-      "Industrial"
-    ],
+    "piranesi-factor": [],
     "italian-interiors-apulia": [],
     "plans-of-kindergartens": [
       "Kindergarten"
     ],
     "tokyo-interiors": [],
     "tropical-interiors": [],
-    "outdoor-performing-arts-venues": [],
+    "outdoor-performing-arts-venues": [
+      "Theatre"
+    ],
     "plans-of-libraries": [
       "Library"
     ],
@@ -721,7 +737,9 @@
       "Garden"
     ],
     "venezia": [],
-    "plans-of-cultural-centers": [],
+    "plans-of-cultural-centers": [
+      "Civic Building"
+    ],
     "mountain-huts": [],
     "zoos-and-animal-shelters": [],
     "middle-east-houses": [
@@ -773,9 +791,7 @@
     "balkan-houses": [
       "House"
     ],
-    "convention-centers": [
-      "Religious Building"
-    ],
+    "convention-centers": [],
     "stockholm": [],
     "czech-houses": [
       "House"
@@ -887,13 +903,17 @@
     "budapest": [],
     "southeast-asia-interiors": [],
     "rio-de-janeiro": [],
-    "covered-squares": [],
+    "covered-squares": [
+      "Park"
+    ],
     "hangzhou": [],
     "zaragoza": [],
     "cork": [],
     "tourist-routes": [],
     "frankfurt": [],
-    "bus-stops": [],
+    "bus-stops": [
+      "Train Station"
+    ],
     "maritime-facilities": [],
     "bike-stations": [],
     "spanish-interiors-valencia": [],
@@ -1015,7 +1035,9 @@
     "chicago": [],
     "topology-of-neighborhoods": [],
     "gas-stations-rest-areas-and-toll-gates": [],
-    "ideas-for-cultural-centers": [],
+    "ideas-for-cultural-centers": [
+      "Civic Building"
+    ],
     "ideas-for-public-parks": [
       "Park"
     ],
@@ -1073,10 +1095,14 @@
     ],
     "grid-like-interiors": [],
     "insistence-of-nature": [],
-    "ideas-for-performing-arts-buildings": [],
+    "ideas-for-performing-arts-buildings": [
+      "Theatre"
+    ],
     "tbilisi": [],
     "italian-interiors-umbria": [],
-    "ideas-for-streets-squares": [],
+    "ideas-for-streets-squares": [
+      "Park"
+    ],
     "tarragona": [],
     "havana": [],
     "ideas-for-public-interiors": [],
@@ -1094,10 +1120,12 @@
       "Mixed Use"
     ],
     "ideas-for-hospitality": [
-      "Hospital"
+      "Hotel"
     ],
     "bell-italia": [],
-    "ideas-for-performing-arts-spaces": [],
+    "ideas-for-performing-arts-spaces": [
+      "Theatre"
+    ],
     "ideas-for-town-halls": [
       "Civic Building"
     ],
@@ -1134,7 +1162,7 @@
     ],
     "Commercial": [],
     "Hospitality + Sport": [
-      "Hospital",
+      "Hotel",
       "Sports Centre"
     ],
     "Office": [
@@ -1164,7 +1192,9 @@
     "Government + Health": [
       "Civic Building"
     ],
-    "Cultural Center": [],
+    "Cultural Center": [
+      "Civic Building"
+    ],
     "Urban Green Space": [],
     "Pavilion": [
       "Pavilion"
@@ -1203,9 +1233,13 @@
     "Elementary School": [
       "School"
     ],
-    "Bar/Nightclub": [],
+    "Bar/Nightclub": [
+      "Restaurant"
+    ],
     "Medical Facility": [],
-    "Community Center": [],
+    "Community Center": [
+      "Civic Building"
+    ],
     "Shopping Mall": [
       "Shopping Centre"
     ],
@@ -1359,7 +1393,9 @@
     "Showrooms": [
       "Retail"
     ],
-    "Cultural Centres": [],
+    "Cultural Centres": [
+      "Civic Building"
+    ],
     "Primary Schools": [
       "School"
     ],
@@ -1389,14 +1425,18 @@
     "Parks/Gardens": [
       "Park"
     ],
-    "Community Centres": [],
+    "Community Centres": [
+      "Civic Building"
+    ],
     "Factories": [
       "Industrial"
     ],
     "Exhibition Centres": [
       "Gallery"
     ],
-    "Nurseries": [],
+    "Nurseries": [
+      "Kindergarten"
+    ],
     "Shops Showrooms": [
       "Retail"
     ],
@@ -1487,7 +1527,9 @@
     "Swimming Pools": [
       "Sports Centre"
     ],
-    "Visitor Center": [],
+    "Visitor Center": [
+      "Civic Building"
+    ],
     "Cities": [],
     "Chapels": [
       "Religious Building"
@@ -1524,7 +1566,7 @@
       "Civic Building"
     ],
     "Nurseries Primary Schools": [
-      "School"
+      "Kindergarten"
     ],
     "Shops Shopping Centres": [
       "Shopping Centre"
@@ -1575,9 +1617,7 @@
       "Gallery",
       "Museum"
     ],
-    "Villages": [
-      "House"
-    ],
+    "Villages": [],
     "Offices Shopping Centres": [
       "Office",
       "Shopping Centre"
@@ -1625,6 +1665,7 @@
       "Restaurant"
     ],
     "Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall"
     ],
     "Offices Shopping Centres Apartments": [
@@ -1633,6 +1674,7 @@
       "Shopping Centre"
     ],
     "Cultural Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Apartments Housing Social Housing": [
@@ -1658,7 +1700,9 @@
       "Hotel",
       "Office"
     ],
-    "Embassies": [],
+    "Embassies": [
+      "Civic Building"
+    ],
     "Offices Shops Showrooms": [
       "Office",
       "Retail"
@@ -1675,6 +1719,7 @@
       "Restaurant"
     ],
     "Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Offices Workshops": [
@@ -1704,6 +1749,7 @@
       "Civic Building"
     ],
     "Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Offices Research Facilities": [
@@ -1758,13 +1804,16 @@
     "Cemeteries": [
       "Memorial"
     ],
-    "Community Centres Cultural Centres": [],
+    "Community Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Offices Shops Shopping Centres": [
       "Office",
       "Shopping Centre"
     ],
     "Transports": [],
     "Libraries Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Offices Individual Buildings": [
@@ -1772,6 +1821,7 @@
     ],
     "Distribution Centres": [],
     "Cultural Centres Exhibitions Museums": [
+      "Civic Building",
       "Gallery",
       "Museum"
     ],
@@ -1812,6 +1862,7 @@
       "University"
     ],
     "Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Residential Landscape Housing Private Houses": [
@@ -1879,9 +1930,11 @@
       "Office"
     ],
     "Exhibition Centres Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Art Galleries Cultural Centres Museums": [
+      "Civic Building",
       "Gallery",
       "Museum"
     ],
@@ -1917,7 +1970,7 @@
       "Office"
     ],
     "Nurseries Primary Schools Secondary Schools": [
-      "School"
+      "Kindergarten"
     ],
     "Memorials Memorial spaces": [
       "Memorial"
@@ -1930,6 +1983,7 @@
       "Office"
     ],
     "Concert Halls Cultural Centres Theaters": [
+      "Civic Building",
       "Concert Hall",
       "Theatre"
     ],
@@ -1965,6 +2019,7 @@
       "Sports Centre"
     ],
     "Universities Cultural Centres": [
+      "Civic Building",
       "University"
     ],
     "Universities Sports Centres": [
@@ -1977,6 +2032,7 @@
       "Housing"
     ],
     "Art Galleries Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Shops Supermarkets": [
@@ -1996,6 +2052,7 @@
       "Apartment"
     ],
     "Sports Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Offices Hotels Housing": [
@@ -2029,6 +2086,7 @@
       "University"
     ],
     "Offices Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Shops Restaurants Apartments": [
@@ -2084,6 +2142,7 @@
       "Retail"
     ],
     "Community Centres Sports Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Skateparks": [],
@@ -2093,15 +2152,14 @@
     ],
     "Consulates": [],
     "Offices Community Centres": [
+      "Civic Building",
       "Office"
     ],
     "Exhibition Centres Trade Shows Showrooms": [
       "Gallery",
       "Retail"
     ],
-    "Cities Streets Villages": [
-      "House"
-    ],
+    "Cities Streets Villages": [],
     "Prisons": [],
     "Primary Schools Secondary Schools Universities": [
       "School",
@@ -2125,12 +2183,15 @@
     ],
     "Mills": [],
     "Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Rural Private Houses": [
       "House"
     ],
-    "Community Centres Wellness Centres": [],
+    "Community Centres Wellness Centres": [
+      "Civic Building"
+    ],
     "Art Galleries Private Houses": [
       "Gallery",
       "House"
@@ -2165,6 +2226,7 @@
       "Religious Building"
     ],
     "Auditoriums Cultural Centres": [
+      "Civic Building",
       "Theatre"
     ],
     "Housing Senior Housing": [
@@ -2198,6 +2260,7 @@
       "Gallery"
     ],
     "Cultural Centres Exhibitions Pavilions": [
+      "Civic Building",
       "Gallery",
       "Pavilion"
     ],
@@ -2239,7 +2302,8 @@
       "Shopping Centre"
     ],
     "Care Homes Community Centres": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Hotels Apartments Housing": [
       "Apartment",
@@ -2266,7 +2330,9 @@
       "Gallery"
     ],
     "Masterplans Urban Green Spaces": [],
-    "Information Centres Cultural Centres": [],
+    "Information Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Art Galleries Pavilions": [
       "Gallery",
       "Pavilion"
@@ -2403,7 +2469,6 @@
       "University"
     ],
     "Villages Housing": [
-      "House",
       "Housing"
     ],
     "Rurals": [],
@@ -2452,6 +2517,7 @@
       "Hospital"
     ],
     "Hotels Cultural Centres": [
+      "Civic Building",
       "Hotel"
     ],
     "Exhibitions Private Houses": [
@@ -2499,6 +2565,7 @@
       "Theatre"
     ],
     "Cultural Centres Memorials": [
+      "Civic Building",
       "Memorial"
     ],
     "Offices Auditoriums": [
@@ -2538,9 +2605,11 @@
       "Office"
     ],
     "Exhibition Centres Community Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Concert Halls Cultural Centres Exhibitions": [
+      "Civic Building",
       "Concert Hall",
       "Gallery"
     ],
@@ -2569,6 +2638,7 @@
       "Park"
     ],
     "Exhibition Centres Cultural Centres Museums": [
+      "Civic Building",
       "Gallery",
       "Museum"
     ],
@@ -2610,6 +2680,7 @@
       "Office"
     ],
     "Art Galleries Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Gallery"
     ],
@@ -2622,6 +2693,7 @@
       "Retail"
     ],
     "Community Centres Churches": [
+      "Civic Building",
       "Religious Building"
     ],
     "Universities Restaurants": [
@@ -2659,9 +2731,11 @@
       "University"
     ],
     "Community Centres Hospitals": [
+      "Civic Building",
       "Hospital"
     ],
     "Cultural Centres Exhibitions Theaters": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -2692,7 +2766,9 @@
     "Offices Information Centres": [
       "Office"
     ],
-    "Visitor Center Cultural Centres": [],
+    "Visitor Center Cultural Centres": [
+      "Civic Building"
+    ],
     "Rural Hotels": [
       "Hotel"
     ],
@@ -2728,12 +2804,16 @@
       "Housing",
       "Park"
     ],
-    "Community Centres Nurseries": [],
+    "Community Centres Nurseries": [
+      "Civic Building",
+      "Kindergarten"
+    ],
     "Restaurants Housing": [
       "Housing",
       "Restaurant"
     ],
     "Libraries Cultural Centres Museums": [
+      "Civic Building",
       "Library",
       "Museum"
     ],
@@ -2755,6 +2835,7 @@
       "Park"
     ],
     "Workshops Cultural Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Chapels Churches": [
@@ -2765,6 +2846,7 @@
       "Shopping Centre"
     ],
     "Art Galleries Cultural Centres Theaters": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -2835,13 +2917,16 @@
       "Park"
     ],
     "Community Centres Concert Halls": [
+      "Civic Building",
       "Concert Hall"
     ],
     "Shops Pavilions": [
       "Pavilion",
       "Retail"
     ],
-    "Heritages Cultural Centres": [],
+    "Heritages Cultural Centres": [
+      "Civic Building"
+    ],
     "Sound Barriers": [],
     "Offices Theaters": [
       "Office",
@@ -2851,6 +2936,7 @@
       "Park"
     ],
     "Libraries Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Library"
     ],
@@ -2943,6 +3029,7 @@
       "Retail"
     ],
     "Exhibition Centres Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Exhibitions Museums Sculptures": [
@@ -3028,22 +3115,27 @@
       "Hotel"
     ],
     "Art Galleries Cultural Centres Pavilions": [
+      "Civic Building",
       "Gallery",
       "Pavilion"
     ],
     "Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Offices Commercial Landscape Individual Buildings": [
       "Office",
       "Park"
     ],
-    "Cultural Centres Sculptures": [],
+    "Cultural Centres Sculptures": [
+      "Civic Building"
+    ],
     "Restaurants Sports Centres": [
       "Restaurant",
       "Sports Centre"
     ],
     "Community Centres Libraries": [
+      "Civic Building",
       "Library"
     ],
     "Art Galleries Apartments": [
@@ -3106,9 +3198,7 @@
       "Retail"
     ],
     "Tram Stops": [],
-    "Cities Towns Villages": [
-      "House"
-    ],
+    "Cities Towns Villages": [],
     "Offices Shops Hospitals": [
       "Hospital",
       "Office",
@@ -3161,6 +3251,7 @@
       "Housing"
     ],
     "Parks/Gardens Community Centres": [
+      "Civic Building",
       "Park"
     ],
     "Heritages Residential Landscape": [
@@ -3201,7 +3292,8 @@
       "Retail"
     ],
     "Care Homes Nurseries": [
-      "Care Home"
+      "Care Home",
+      "Kindergarten"
     ],
     "Offices Showrooms Workshops": [
       "Industrial",
@@ -3212,6 +3304,7 @@
       "Retail"
     ],
     "Community Centres Sports Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Hotels Sports Centres": [
@@ -3219,6 +3312,7 @@
       "Sports Centre"
     ],
     "Exhibition Centres Auditoriums Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -3261,6 +3355,7 @@
       "Park"
     ],
     "Exhibition Centres Offices Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Office"
     ],
@@ -3354,6 +3449,7 @@
       "School"
     ],
     "Parks/Gardens Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Libraries Exhibitions": [
@@ -3405,6 +3501,7 @@
       "Office"
     ],
     "Offices Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Office"
     ],
@@ -3495,6 +3592,7 @@
       "Shopping Centre"
     ],
     "Primary Schools Secondary Schools Cultural Centres": [
+      "Civic Building",
       "School"
     ],
     "Shops Exhibitions": [
@@ -3519,6 +3617,7 @@
       "Retail"
     ],
     "Offices Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Office"
     ],
@@ -3528,6 +3627,7 @@
     ],
     "Care Homes Community Centres Hospitals": [
       "Care Home",
+      "Civic Building",
       "Hospital"
     ],
     "Cities Towns": [],
@@ -3565,7 +3665,8 @@
       "Theatre"
     ],
     "Cultural Centres Apartments": [
-      "Apartment"
+      "Apartment",
+      "Civic Building"
     ],
     "Shops Shopping Centres Apartments": [
       "Apartment",
@@ -3581,7 +3682,6 @@
     ],
     "Villages Apartments Housing": [
       "Apartment",
-      "House",
       "Housing"
     ],
     "Shops Hotels": [
@@ -3592,6 +3692,7 @@
       "Park"
     ],
     "Shopping Centres Cultural Centres": [
+      "Civic Building",
       "Shopping Centre"
     ],
     "Tunnels Highways": [],
@@ -3600,6 +3701,7 @@
       "University"
     ],
     "Community Centres Universities": [
+      "Civic Building",
       "University"
     ],
     "Universities Wellness Centres": [
@@ -3623,6 +3725,7 @@
       "Sports Centre"
     ],
     "Community Centres Primary Schools Secondary Schools": [
+      "Civic Building",
       "School"
     ],
     "Supermarkets Apartments": [
@@ -3645,6 +3748,7 @@
       "Retail"
     ],
     "Community Centres Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Bars Art Galleries": [
@@ -3663,7 +3767,8 @@
       "Museum"
     ],
     "Community Centres Apartments": [
-      "Apartment"
+      "Apartment",
+      "Civic Building"
     ],
     "Sports Centres Stadiums Concert Halls": [
       "Concert Hall",
@@ -3721,7 +3826,7 @@
     ],
     "Coasts Waterways/Wetlands": [],
     "Nurseries Primary Schools Sports Centres": [
-      "School",
+      "Kindergarten",
       "Sports Centre"
     ],
     "Towns Housing": [
@@ -3752,6 +3857,7 @@
       "University"
     ],
     "Community Centres Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Theme Parks Wellness Centres": [
@@ -3801,6 +3907,7 @@
     ],
     "Offices Nurseries Housing": [
       "Housing",
+      "Kindergarten",
       "Office"
     ],
     "Parks/Gardens Hotels": [
@@ -3831,6 +3938,7 @@
       "Sports Centre"
     ],
     "Community Centres Hotels Restaurants": [
+      "Civic Building",
       "Hotel",
       "Restaurant"
     ],
@@ -3859,6 +3967,7 @@
       "Winery"
     ],
     "Cultural Centres Churches": [
+      "Civic Building",
       "Religious Building"
     ],
     "Housing Nurse Housing Private Houses": [
@@ -3898,6 +4007,7 @@
       "Office"
     ],
     "Cultural Centres Museums Pavilions": [
+      "Civic Building",
       "Museum",
       "Pavilion"
     ],
@@ -3905,7 +4015,6 @@
       "Housing"
     ],
     "Villages Social Housing": [
-      "House",
       "Housing"
     ],
     "Bars Hotels Apartments": [
@@ -3943,19 +4052,20 @@
       "Religious Building"
     ],
     "Libraries Nurseries Primary Schools": [
-      "Library",
-      "School"
+      "Kindergarten",
+      "Library"
     ],
     "Residential Landscape Villages": [
-      "House",
       "Housing",
       "Park"
     ],
     "Offices Cultural Centres Apartments": [
       "Apartment",
+      "Civic Building",
       "Office"
     ],
     "Libraries Cultural Centres Theaters": [
+      "Civic Building",
       "Library",
       "Theatre"
     ],
@@ -3969,11 +4079,10 @@
       "Care Home",
       "Office"
     ],
-    "Streets Towns Villages": [
-      "House"
-    ],
+    "Streets Towns Villages": [],
     "Nurseries Apartments": [
-      "Apartment"
+      "Apartment",
+      "Kindergarten"
     ],
     "Restaurants Sports Centres Wellness Centres": [
       "Restaurant",
@@ -4018,9 +4127,11 @@
       "Office"
     ],
     "Parks Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Nurseries Student Housing": [
+      "Kindergarten",
       "Student Housing"
     ],
     "Secondary Schools Universities Workshops": [
@@ -4063,15 +4174,18 @@
       "Park"
     ],
     "Offices Nurseries": [
+      "Kindergarten",
       "Office"
     ],
     "Community Centres Libraries Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Parks/Gardens Rural": [
       "Park"
     ],
     "Exhibition Centres Workshops Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -4084,6 +4198,7 @@
       "Shopping Centre"
     ],
     "Offices Restaurants Cultural Centres": [
+      "Civic Building",
       "Office",
       "Restaurant"
     ],
@@ -4108,6 +4223,7 @@
       "Restaurant"
     ],
     "Auditoriums Universities Cultural Centres": [
+      "Civic Building",
       "Theatre",
       "University"
     ],
@@ -4142,11 +4258,15 @@
       "Retail"
     ],
     "Restaurants Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Restaurant"
     ],
-    "Wellness Centres Cultural Centres": [],
+    "Wellness Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Community Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Care Homes Housing Social Housing": [
@@ -4179,6 +4299,7 @@
       "Office"
     ],
     "Community Centres Workshops": [
+      "Civic Building",
       "Industrial"
     ],
     "Estates Rurals Streets": [],
@@ -4209,6 +4330,7 @@
       "Retail"
     ],
     "Bars Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Restaurant"
     ],
@@ -4219,6 +4341,7 @@
       "House"
     ],
     "Offices Community Centres Housing": [
+      "Civic Building",
       "Housing",
       "Office"
     ],
@@ -4231,6 +4354,7 @@
       "Restaurant"
     ],
     "Community Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Exhibition Centres Parks/Gardens Parks": [
@@ -4256,6 +4380,7 @@
       "Park"
     ],
     "Community Centres Restaurants": [
+      "Civic Building",
       "Restaurant"
     ],
     "Airports Restaurants": [
@@ -4268,6 +4393,7 @@
       "Park"
     ],
     "Community Centres Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Bridges Promenades": [
@@ -4279,6 +4405,7 @@
       "Student Housing"
     ],
     "Offices Shops Cultural Centres": [
+      "Civic Building",
       "Office",
       "Retail"
     ],
@@ -4289,9 +4416,11 @@
     ],
     "Rural Rurals": [],
     "Exhibition Centres Visitor Center": [
+      "Civic Building",
       "Gallery"
     ],
     "Bars Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Showrooms Museums": [
@@ -4310,6 +4439,7 @@
       "Memorial"
     ],
     "Exhibition Centres Cultural Centres Pavilions": [
+      "Civic Building",
       "Gallery",
       "Pavilion"
     ],
@@ -4321,6 +4451,7 @@
       "Sports Centre"
     ],
     "Restaurants Cultural Centres Theaters": [
+      "Civic Building",
       "Restaurant",
       "Theatre"
     ],
@@ -4362,6 +4493,7 @@
       "Restaurant"
     ],
     "Cultural Centres Museums Sculptures": [
+      "Civic Building",
       "Museum"
     ],
     "Commercial Landscape Watch Towers": [
@@ -4377,6 +4509,7 @@
       "Religious Building"
     ],
     "Community Centres Libraries Workshops": [
+      "Civic Building",
       "Industrial",
       "Library"
     ],
@@ -4399,6 +4532,7 @@
       "Theatre"
     ],
     "Community Centres Sports Centres Swimming Pools": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Exhibition Centres Bars Restaurants": [
@@ -4416,7 +4550,7 @@
     ],
     "Nurseries Primary Schools Workshops": [
       "Industrial",
-      "School"
+      "Kindergarten"
     ],
     "Restaurants Theaters": [
       "Restaurant",
@@ -4430,6 +4564,7 @@
       "Park"
     ],
     "Workshops Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -4502,6 +4637,7 @@
       "Pavilion"
     ],
     "Workshops Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -4510,6 +4646,7 @@
       "Park"
     ],
     "Cultural Centres Museums Theaters": [
+      "Civic Building",
       "Museum",
       "Theatre"
     ],
@@ -4544,6 +4681,7 @@
       "Housing"
     ],
     "Playgrounds Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Auditoriums Libraries Museums": [
@@ -4561,8 +4699,11 @@
       "Retail"
     ],
     "Heritages Cities": [],
-    "Community Centres Information Centres Cultural Centres": [],
+    "Community Centres Information Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Residential Landscape Cultural Centres": [
+      "Civic Building",
       "Housing",
       "Park"
     ],
@@ -4584,6 +4725,7 @@
     ],
     "Offices Nurseries Apartments": [
       "Apartment",
+      "Kindergarten",
       "Office"
     ],
     "Shopping Centres Hotels Housing": [
@@ -4616,7 +4758,9 @@
     "Car Parks Highways": [
       "Car Park"
     ],
-    "Supermarkets Community Centres": [],
+    "Supermarkets Community Centres": [
+      "Civic Building"
+    ],
     "Shops Urban Green Spaces Housing": [
       "Housing",
       "Retail"
@@ -4646,6 +4790,7 @@
       "Office"
     ],
     "Commercial Landscape Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Theme Parks Sculptures": [
@@ -4662,10 +4807,12 @@
       "House"
     ],
     "Cultural Centres Memorials Pavilions": [
+      "Civic Building",
       "Memorial",
       "Pavilion"
     ],
     "Community Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Concert Halls Museums": [
@@ -4703,7 +4850,8 @@
       "Retail"
     ],
     "Nurseries Social Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Memorials Museums Pavilions": [
       "Memorial",
@@ -4719,6 +4867,7 @@
     ],
     "Tunnels Sculptures": [],
     "Cultural Centres Private Houses": [
+      "Civic Building",
       "House"
     ],
     "Zoos Pavilions": [
@@ -4739,6 +4888,7 @@
       "Park"
     ],
     "Rural Workshops Cultural Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Sports Centres Museums": [
@@ -4764,6 +4914,7 @@
       "Office"
     ],
     "Community Centres Primary Schools": [
+      "Civic Building",
       "School"
     ],
     "Offices Shops Parks/Gardens": [
@@ -4772,6 +4923,7 @@
       "Retail"
     ],
     "Auditoriums Libraries Cultural Centres": [
+      "Civic Building",
       "Library",
       "Theatre"
     ],
@@ -4795,7 +4947,8 @@
       "Theatre"
     ],
     "Exhibition Centres Research Facilities": [
-      "Gallery"
+      "Gallery",
+      "Office"
     ],
     "Transports Airports Passenger Terminals": [
       "Airport"
@@ -4849,6 +5002,7 @@
       "Hotel"
     ],
     "Offices Community Centres Workshops": [
+      "Civic Building",
       "Industrial",
       "Office"
     ],
@@ -4870,6 +5024,7 @@
       "Stadium"
     ],
     "Bars Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Parks/Gardens Car Parks": [
@@ -4939,9 +5094,7 @@
     "Coasts Swimming Pools": [
       "Sports Centre"
     ],
-    "Urban Green Spaces Villages": [
-      "House"
-    ],
+    "Urban Green Spaces Villages": [],
     "Offices Universities Private Houses": [
       "House",
       "Office",
@@ -4959,11 +5112,14 @@
       "Retail"
     ],
     "Sports Centres Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Sports Centre"
     ],
     "Urban Green Spaces Waterways/Wetlands": [],
-    "Community Centres Information Centres": [],
+    "Community Centres Information Centres": [
+      "Civic Building"
+    ],
     "Factories Bars Restaurants": [
       "Industrial",
       "Restaurant"
@@ -4981,6 +5137,7 @@
       "Pavilion"
     ],
     "Shops Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant",
       "Retail"
     ],
@@ -5011,6 +5168,7 @@
     ],
     "Community Centres Apartments Housing": [
       "Apartment",
+      "Civic Building",
       "Housing"
     ],
     "Parks Restaurants Swimming Pools": [
@@ -5019,6 +5177,7 @@
       "Sports Centre"
     ],
     "Shops Cultural Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Distribution Centres Shops": [
@@ -5053,7 +5212,8 @@
     ],
     "Nurseries Apartments Housing": [
       "Apartment",
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Offices Workshops Apartments": [
       "Apartment",
@@ -5061,6 +5221,8 @@
       "Office"
     ],
     "Community Centres Libraries Nurseries": [
+      "Civic Building",
+      "Kindergarten",
       "Library"
     ],
     "Factories Workshops": [
@@ -5083,6 +5245,7 @@
       "Park"
     ],
     "Cultural Centres Pavilions Sculptures": [
+      "Civic Building",
       "Pavilion"
     ],
     "Exhibition Centres Apartments": [
@@ -5191,9 +5354,11 @@
       "Sports Centre"
     ],
     "Auditoriums Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Shops Parks/Gardens Community Centres": [
+      "Civic Building",
       "Park",
       "Retail"
     ],
@@ -5233,11 +5398,15 @@
     "Commercial Landscape Townscapes Urban Green Spaces": [
       "Park"
     ],
-    "Nurseries Cultural Centres": [],
+    "Nurseries Cultural Centres": [
+      "Civic Building",
+      "Kindergarten"
+    ],
     "Rural Pavilions": [
       "Pavilion"
     ],
     "Bars Restaurants Visitor Center": [
+      "Civic Building",
       "Restaurant"
     ],
     "Offices Apartments Social Housing": [
@@ -5272,6 +5441,7 @@
       "Park"
     ],
     "Offices Visitor Center": [
+      "Civic Building",
       "Office"
     ],
     "Libraries Housing": [
@@ -5295,6 +5465,7 @@
       "Office"
     ],
     "Parks Visitor Center": [
+      "Civic Building",
       "Park"
     ],
     "Masterplans Urban Green Spaces Apartments": [
@@ -5306,9 +5477,11 @@
     ],
     "Heritages Masterplans Urban Green Spaces": [],
     "Visitor Center Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Visitor Center Cultural Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Rural Workshops Pavilions": [
@@ -5326,9 +5499,11 @@
       "Housing"
     ],
     "Swimming Pools Visitor Center Wellness Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Visitor Center Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Coasts Parks/Gardens Parks": [
@@ -5376,9 +5551,11 @@
       "Office"
     ],
     "Nurseries Playgrounds": [
+      "Kindergarten",
       "Park"
     ],
     "Auditoriums Nurseries": [
+      "Kindergarten",
       "Theatre"
     ],
     "Restaurants Student Housing": [
@@ -5386,9 +5563,11 @@
       "Student Housing"
     ],
     "Offices Embassies": [
+      "Civic Building",
       "Office"
     ],
     "Cinemas Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Coasts Boathouses": [],
@@ -5419,6 +5598,7 @@
       "Retail"
     ],
     "Exhibition Centres Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Gallery"
     ],
@@ -5432,6 +5612,7 @@
       "Sports Centre"
     ],
     "Restaurants Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Restaurant"
     ],
@@ -5444,12 +5625,14 @@
       "Park"
     ],
     "Offices Community Centres Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Individual Buildings Parks/Gardens Urban Green Spaces": [
       "Park"
     ],
     "Bars Cultural Centres Theaters": [
+      "Civic Building",
       "Restaurant",
       "Theatre"
     ],
@@ -5467,6 +5650,7 @@
       "Museum"
     ],
     "Cultural Centres Memorials Museums": [
+      "Civic Building",
       "Memorial",
       "Museum"
     ],
@@ -5487,6 +5671,7 @@
       "Hospital"
     ],
     "Universities Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "University"
     ],
@@ -5494,9 +5679,11 @@
       "Hospital"
     ],
     "Hospitals Nurseries": [
-      "Hospital"
+      "Hospital",
+      "Kindergarten"
     ],
     "Hotels Sports Centres Cultural Centres": [
+      "Civic Building",
       "Hotel",
       "Sports Centre"
     ],
@@ -5505,14 +5692,15 @@
     ],
     "Offices Villages Apartments": [
       "Apartment",
-      "House",
       "Office"
     ],
     "Commercial Landscape Community Centres": [
+      "Civic Building",
       "Park"
     ],
     "Townscapes Streets": [],
     "Offices Showrooms Cultural Centres": [
+      "Civic Building",
       "Office",
       "Retail"
     ],
@@ -5529,6 +5717,7 @@
       "Theatre"
     ],
     "Concert Halls Cultural Centres Museums": [
+      "Civic Building",
       "Concert Hall",
       "Museum"
     ],
@@ -5586,9 +5775,7 @@
       "House",
       "Office"
     ],
-    "Masterplans Villages": [
-      "House"
-    ],
+    "Masterplans Villages": [],
     "Masterplans Research Facilities": [],
     "Hotels Swimming Pools Apartments": [
       "Apartment",
@@ -5596,6 +5783,7 @@
       "Sports Centre"
     ],
     "Primary Schools Cultural Centres": [
+      "Civic Building",
       "School"
     ],
     "Hotels Nightclubs Swimming Pools": [
@@ -5652,6 +5840,7 @@
       "Theatre"
     ],
     "Community Centres Libraries Primary Schools": [
+      "Civic Building",
       "Library",
       "School"
     ],
@@ -5663,6 +5852,7 @@
       "Park"
     ],
     "Auditoriums Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Theatre"
     ],
@@ -5676,6 +5866,7 @@
       "Retail"
     ],
     "Parks/Gardens Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Park"
     ],
@@ -5705,6 +5896,7 @@
       "Park"
     ],
     "Nurseries Sports Centres": [
+      "Kindergarten",
       "Sports Centre"
     ],
     "Offices Rural Factories": [
@@ -5729,7 +5921,9 @@
       "Housing",
       "Sports Centre"
     ],
-    "Zoos Cultural Centres": [],
+    "Zoos Cultural Centres": [
+      "Civic Building"
+    ],
     "Townscapes Apartments Housing": [
       "Apartment",
       "Housing"
@@ -5757,8 +5951,8 @@
       "Office"
     ],
     "Nurseries Primary Schools Playgrounds": [
-      "Park",
-      "School"
+      "Kindergarten",
+      "Park"
     ],
     "Masterplans Wineries Hotels": [
       "Hotel",
@@ -5773,6 +5967,7 @@
       "Restaurant"
     ],
     "Shopping Centres Community Centres": [
+      "Civic Building",
       "Shopping Centre"
     ],
     "Parks/Gardens Waterways/Wetlands Parks": [
@@ -5838,7 +6033,6 @@
       "Sports Centre"
     ],
     "Parks/Gardens Urban Green Spaces Villages": [
-      "House",
       "Park"
     ],
     "Exhibitions Housing": [
@@ -5885,9 +6079,7 @@
       "Restaurant",
       "Sports Centre"
     ],
-    "Streets Villages": [
-      "House"
-    ],
+    "Streets Villages": [],
     "Banks Exhibition Centres Offices": [
       "Bank",
       "Gallery",
@@ -5913,6 +6105,7 @@
       "University"
     ],
     "Auditoriums Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Theatre"
     ],
@@ -5927,7 +6120,9 @@
       "Pavilion"
     ],
     "Cities Nationals Regionals": [],
-    "Urban Green Spaces Cities Cultural Centres": [],
+    "Urban Green Spaces Cities Cultural Centres": [
+      "Civic Building"
+    ],
     "Commercial Landscape Airports": [
       "Airport",
       "Park"
@@ -5941,6 +6136,7 @@
       "Theatre"
     ],
     "Information Centres Sports Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Offices Commercial Landscape Urban Green Spaces": [
@@ -5993,6 +6189,7 @@
       "Gallery"
     ],
     "Art Galleries Cultural Centres Housing": [
+      "Civic Building",
       "Gallery",
       "Housing"
     ],
@@ -6016,6 +6213,7 @@
       "Office"
     ],
     "Hospitals Sports Centres Cultural Centres": [
+      "Civic Building",
       "Hospital",
       "Sports Centre"
     ],
@@ -6041,6 +6239,7 @@
       "Retail"
     ],
     "Cultural Centres Student Housing": [
+      "Civic Building",
       "Student Housing"
     ],
     "Parks/Gardens Cities Housing": [
@@ -6076,6 +6275,7 @@
     ],
     "Bridges Universities Cultural Centres": [
       "Bridge",
+      "Civic Building",
       "University"
     ],
     "Hospitals Social Housing": [
@@ -6106,6 +6306,7 @@
       "Park"
     ],
     "Offices Shopping Centres Cultural Centres": [
+      "Civic Building",
       "Office",
       "Shopping Centre"
     ],
@@ -6137,6 +6338,7 @@
       "Park"
     ],
     "Primary Schools Sports Centres Social Housing": [
+      "Civic Building",
       "Housing",
       "School",
       "Sports Centre"
@@ -6146,6 +6348,7 @@
       "Housing"
     ],
     "Community Centres Auditoriums Workshops": [
+      "Civic Building",
       "Industrial",
       "Theatre"
     ],
@@ -6158,7 +6361,9 @@
       "Office",
       "Retail"
     ],
-    "Passenger Terminals Cultural Centres": [],
+    "Passenger Terminals Cultural Centres": [
+      "Civic Building"
+    ],
     "Bars Casinos Nightclubs": [
       "Restaurant"
     ],
@@ -6166,7 +6371,6 @@
       "Restaurant"
     ],
     "Estates Villages Housing": [
-      "House",
       "Housing"
     ],
     "Supermarkets Towns": [],
@@ -6189,6 +6393,7 @@
       "Restaurant"
     ],
     "Urban Green Spaces Sports Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Urban Green Spaces Libraries": [
@@ -6222,6 +6427,7 @@
       "Retail"
     ],
     "Auditoriums Stadiums Cultural Centres": [
+      "Civic Building",
       "Stadium",
       "Theatre"
     ],
@@ -6281,14 +6487,13 @@
     "Bars Restaurants Sculptures": [
       "Restaurant"
     ],
-    "Regionals Villages": [
-      "House"
-    ],
+    "Regionals Villages": [],
     "Offices Showrooms Supermarkets": [
       "Office",
       "Retail"
     ],
     "Community Centres Bars": [
+      "Civic Building",
       "Restaurant"
     ],
     "Masterplans Townscapes Cities": [],
@@ -6305,6 +6510,7 @@
       "Retail"
     ],
     "Libraries Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Library"
     ],
@@ -6354,11 +6560,12 @@
       "Office"
     ],
     "Auditoriums Nurseries Primary Schools": [
-      "School",
+      "Kindergarten",
       "Theatre"
     ],
     "Marinas Yachts": [],
     "Workshops Information Centres Cultural Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Trade Shows Shops Shopping Centres": [
@@ -6444,6 +6651,7 @@
       "Restaurant"
     ],
     "Community Centres Swimming Pools": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Care Homes Primary Schools Sports Centres": [
@@ -6457,6 +6665,7 @@
     ],
     "Individual Buildings Wellness Centres": [],
     "Urban Green Spaces Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre"
     ],
     "Hospitals Senior Housing": [
@@ -6471,7 +6680,7 @@
       "Train Station"
     ],
     "Nurseries Secondary Schools": [
-      "School"
+      "Kindergarten"
     ],
     "Parks/Gardens Rural Townscapes": [
       "Park"
@@ -6546,10 +6755,12 @@
       "Pavilion"
     ],
     "Concert Halls Cultural Centres Pavilions": [
+      "Civic Building",
       "Concert Hall",
       "Pavilion"
     ],
     "Community Centres Libraries Sports Centres": [
+      "Civic Building",
       "Library",
       "Sports Centre"
     ],
@@ -6561,6 +6772,7 @@
       "Park"
     ],
     "Community Centres Auditoriums": [
+      "Civic Building",
       "Theatre"
     ],
     "Offices Mills": [
@@ -6610,6 +6822,7 @@
       "Train Station"
     ],
     "Heritages Cultural Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Parks Private Houses": [
@@ -6642,6 +6855,7 @@
       "Retail"
     ],
     "Community Centres Libraries Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Library"
     ],
@@ -6651,6 +6865,7 @@
       "Retail"
     ],
     "Universities Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "University"
     ],
@@ -6700,7 +6915,6 @@
     ],
     "Residential Landscape Villages Apartments": [
       "Apartment",
-      "House",
       "Housing",
       "Park"
     ],
@@ -6716,12 +6930,15 @@
       "House",
       "Sports Centre"
     ],
-    "Streets Cultural Centres": [],
+    "Streets Cultural Centres": [
+      "Civic Building"
+    ],
     "Urban Green Spaces Primary Schools Playgrounds": [
       "Park",
       "School"
     ],
     "Community Centres Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Information Centres Restaurants": [
@@ -6739,6 +6956,7 @@
       "Park"
     ],
     "Auditoriums Secondary Schools Cultural Centres": [
+      "Civic Building",
       "School",
       "Theatre"
     ],
@@ -6769,13 +6987,16 @@
       "Park"
     ],
     "Community Centres Libraries Information Centres": [
+      "Civic Building",
       "Library"
     ],
     "Workshops Restaurants Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Restaurant"
     ],
     "Community Centres Workshops Information Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Shops Shopping Centres Hotels": [
@@ -6787,6 +7008,7 @@
       "Train Station"
     ],
     "Community Centres Secondary Schools": [
+      "Civic Building",
       "School"
     ],
     "Secondary Schools Sports Centres Swimming Pools": [
@@ -6795,11 +7017,13 @@
     ],
     "Coasts Masterplans Urban Green Spaces": [],
     "Community Centres Auditoriums Universities": [
+      "Civic Building",
       "Theatre",
       "University"
     ],
     "Care Homes Community Centres Pavilions": [
       "Care Home",
+      "Civic Building",
       "Pavilion"
     ],
     "Exhibition Centres Offices Information Centres": [
@@ -6823,13 +7047,16 @@
       "Shopping Centre",
       "Sports Centre"
     ],
-    "Urban Green Spaces Cultural Centres": [],
+    "Urban Green Spaces Cultural Centres": [
+      "Civic Building"
+    ],
     "Offices Research Facilities Sports Centres": [
       "Office",
       "Sports Centre"
     ],
     "Nurseries Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Exhibition Centres Offices Residential Landscape": [
       "Gallery",
@@ -6851,9 +7078,11 @@
       "Warehouse"
     ],
     "Community Centres Chapels": [
+      "Civic Building",
       "Religious Building"
     ],
     "Community Centres Sports Centres Pavilions": [
+      "Civic Building",
       "Pavilion",
       "Sports Centre"
     ],
@@ -6897,6 +7126,7 @@
       "University"
     ],
     "Offices Heritages Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Residential Landscape Rural Urban Green Spaces": [
@@ -6919,6 +7149,7 @@
       "Civic Building"
     ],
     "Restaurants Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Restaurant"
     ],
@@ -6982,6 +7213,7 @@
       "Retail"
     ],
     "Community Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Warehouses Art Galleries": [
@@ -7004,6 +7236,7 @@
       "Hotel"
     ],
     "Shopping Centres Community Centres Housing": [
+      "Civic Building",
       "Housing",
       "Shopping Centre"
     ],
@@ -7035,6 +7268,7 @@
       "Shopping Centre"
     ],
     "Parks/Gardens Community Centres Parks": [
+      "Civic Building",
       "Park"
     ],
     "Primary Schools Secondary Schools Restaurants": [
@@ -7045,12 +7279,15 @@
       "Hotel"
     ],
     "Community Centres Sports Centres Wellness Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Community Centres Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall"
     ],
     "Parks Cultural Centres Pavilions": [
+      "Civic Building",
       "Park",
       "Pavilion"
     ],
@@ -7065,7 +7302,9 @@
       "Park",
       "University"
     ],
-    "Individual Buildings Cultural Centres": [],
+    "Individual Buildings Cultural Centres": [
+      "Civic Building"
+    ],
     "Restaurants Zoos": [
       "Restaurant"
     ],
@@ -7109,6 +7348,7 @@
       "Sports Centre"
     ],
     "Exhibition Centres Commercial Landscape Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Park"
     ],
@@ -7134,6 +7374,7 @@
       "Warehouse"
     ],
     "Exhibition Centres Hotels Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Hotel"
     ],
@@ -7165,6 +7406,7 @@
       "Industrial"
     ],
     "Urban Green Spaces Cultural Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Shopping Centres Parks": [
@@ -7205,7 +7447,8 @@
       "Restaurant"
     ],
     "Nurseries Workshops": [
-      "Industrial"
+      "Industrial",
+      "Kindergarten"
     ],
     "Offices Shopping Centres Theaters": [
       "Office",
@@ -7263,6 +7506,7 @@
       "Restaurant"
     ],
     "Visitor Center Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Offices Auditoriums Bars": [
@@ -7314,17 +7558,21 @@
       "School"
     ],
     "Community Centres Hospitals Housing": [
+      "Civic Building",
       "Hospital",
       "Housing"
     ],
     "Factories Cultural Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Parks Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Park"
     ],
     "Libraries Information Centres Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Restaurants Sports Centres Swimming Pools": [
@@ -7335,6 +7583,7 @@
       "Office"
     ],
     "Shops Shopping Centres Cultural Centres": [
+      "Civic Building",
       "Shopping Centre"
     ],
     "Transports Bicycle Stands": [],
@@ -7358,6 +7607,7 @@
       "Park"
     ],
     "Showrooms Visitor Center": [
+      "Civic Building",
       "Retail"
     ],
     "Rurals Wellness Centres": [],
@@ -7380,6 +7630,7 @@
       "Library"
     ],
     "Offices Community Centres Hotels": [
+      "Civic Building",
       "Hotel",
       "Office"
     ],
@@ -7400,6 +7651,7 @@
       "Park"
     ],
     "Community Centres Playgrounds": [
+      "Civic Building",
       "Park"
     ],
     "Offices Warehouses Workshops": [
@@ -7411,6 +7663,7 @@
       "School"
     ],
     "Community Centres Workshops Cultural Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Towns Apartments": [
@@ -7418,11 +7671,15 @@
     ],
     "Coasts Urban Green Spaces Waterways/Wetlands": [],
     "Workshops Hotels Cultural Centres": [
+      "Civic Building",
       "Hotel",
       "Industrial"
     ],
-    "Information Centres Visitor Center": [],
+    "Information Centres Visitor Center": [
+      "Civic Building"
+    ],
     "Community Centres Monasteries": [
+      "Civic Building",
       "Religious Building"
     ],
     "Residential Landscape Parks/Gardens Waterways/Wetlands": [
@@ -7430,6 +7687,7 @@
       "Park"
     ],
     "Offices Community Centres Restaurants": [
+      "Civic Building",
       "Office",
       "Restaurant"
     ],
@@ -7438,30 +7696,36 @@
       "Park"
     ],
     "Shops Showrooms Visitor Center": [
+      "Civic Building",
       "Retail"
     ],
     "Shops Information Centres": [
       "Retail"
     ],
     "Urban Green Spaces Community Centres Parks": [
+      "Civic Building",
       "Park"
     ],
     "Exhibition Centres Visitor Center Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Shopping Centres Visitor Center": [
+      "Civic Building",
       "Shopping Centre"
     ],
     "Parks Skateparks Theme Parks": [
       "Park"
     ],
     "Parks/Gardens Urban Green Spaces Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Parks/Gardens Transports": [
       "Park"
     ],
     "Universities Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "University"
     ],
@@ -7473,6 +7737,7 @@
       "Park"
     ],
     "Restaurants Visitor Center": [
+      "Civic Building",
       "Restaurant"
     ],
     "Community Centres Fire stations": [
@@ -7498,7 +7763,9 @@
       "Pavilion",
       "Restaurant"
     ],
-    "Rural Cultural Centres": [],
+    "Rural Cultural Centres": [
+      "Civic Building"
+    ],
     "Masterplans Townscapes Towns": [],
     "Universities Housing": [
       "Housing",
@@ -7524,13 +7791,15 @@
       "Warehouse"
     ],
     "Nurseries Primary Schools Cultural Centres": [
-      "School"
+      "Civic Building",
+      "Kindergarten"
     ],
     "Offices Shops Wellness Centres": [
       "Office",
       "Retail"
     ],
     "Distribution Centres Offices Nurseries": [
+      "Kindergarten",
       "Office"
     ],
     "Transports Urban Green Spaces Airports": [
@@ -7555,6 +7824,7 @@
     ],
     "Masterplans Waterways/Wetlands": [],
     "Offices Shops Community Centres": [
+      "Civic Building",
       "Office",
       "Retail"
     ],
@@ -7579,7 +7849,9 @@
     ],
     "Coasts Masterplans Waterways/Wetlands": [],
     "Masterplans Townscapes Urban Green Spaces": [],
-    "Embassies Cultural Centres": [],
+    "Embassies Cultural Centres": [
+      "Civic Building"
+    ],
     "Masterplans Hospitals": [
       "Hospital"
     ],
@@ -7588,6 +7860,7 @@
       "Retail"
     ],
     "Shops Community Centres Libraries": [
+      "Civic Building",
       "Library",
       "Retail"
     ],
@@ -7611,6 +7884,7 @@
       "Sports Centre"
     ],
     "Community Centres Primary Schools Cultural Centres": [
+      "Civic Building",
       "School"
     ],
     "Showrooms Commercial Landscape": [
@@ -7626,10 +7900,12 @@
       "Shopping Centre"
     ],
     "Visitor Center Exhibitions Museums": [
+      "Civic Building",
       "Gallery",
       "Museum"
     ],
     "Playgrounds Visitor Center": [
+      "Civic Building",
       "Park"
     ],
     "Auditoriums Secondary Schools Universities": [
@@ -7673,6 +7949,7 @@
     ],
     "Shops Nurseries Apartments": [
       "Apartment",
+      "Kindergarten",
       "Retail"
     ],
     "Exhibition Centres Sports Centres Stadiums": [
@@ -7696,6 +7973,7 @@
       "Park"
     ],
     "Offices Community Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Office"
     ],
@@ -7717,6 +7995,7 @@
       "Religious Building"
     ],
     "Exhibition Centres Visitor Center Museums": [
+      "Civic Building",
       "Gallery",
       "Museum"
     ],
@@ -7737,6 +8016,7 @@
       "Office"
     ],
     "Offices Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Office"
     ],
@@ -7783,13 +8063,16 @@
       "Pavilion"
     ],
     "Showrooms Cultural Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Heritages Townscapes": [],
     "Heritages Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Community Centres Parks Playgrounds": [
+      "Civic Building",
       "Park"
     ],
     "Towns Private Houses": [
@@ -7807,6 +8090,7 @@
       "Housing"
     ],
     "Visitor Center Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Residential Landscape Parks/Gardens Playgrounds": [
@@ -7851,6 +8135,7 @@
       "Office"
     ],
     "Offices Nurseries Restaurants": [
+      "Kindergarten",
       "Office",
       "Restaurant"
     ],
@@ -7875,20 +8160,26 @@
       "Retail"
     ],
     "Secondary Schools Cultural Centres": [
+      "Civic Building",
       "School"
     ],
     "Community Centres Auditoriums Churches": [
+      "Civic Building",
       "Religious Building",
       "Theatre"
     ],
-    "Masterplans Urban Green Spaces Community Centres": [],
+    "Masterplans Urban Green Spaces Community Centres": [
+      "Civic Building"
+    ],
     "Community Centres Art Galleries": [
+      "Civic Building",
       "Gallery"
     ],
     "Shopping Centres Heritages": [
       "Shopping Centre"
     ],
     "Exhibition Centres Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Primary Schools Theaters": [
@@ -7901,6 +8192,7 @@
       "Retail"
     ],
     "Exhibition Centres Cultural Centres Sculptures": [
+      "Civic Building",
       "Gallery"
     ],
     "Townscapes Libraries": [
@@ -7938,17 +8230,20 @@
       "Bridge"
     ],
     "Care Homes Cultural Centres": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Estates Churches Private Houses": [
       "House",
       "Religious Building"
     ],
     "Exhibition Centres Parks/Gardens Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Park"
     ],
     "Exhibition Centres Cultural Centres Theaters": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -8006,9 +8301,8 @@
       "Shopping Centre"
     ],
     "Parks/Gardens Care Homes": [
-      "Car Park",
       "Care Home",
-      "Garden"
+      "Park"
     ],
     "Libraries Bars Restaurants": [
       "Library",
@@ -8029,11 +8323,13 @@
       "Religious Building"
     ],
     "Towns Care Homes Nurseries": [
-      "Care Home"
+      "Care Home",
+      "Kindergarten"
     ],
     "Car Parks Nurseries Housing": [
       "Car Park",
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Nurse Housing Student Housing": [
       "Student Housing"
@@ -8042,6 +8338,7 @@
       "Train Station"
     ],
     "Shops Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Retail"
     ],
@@ -8083,6 +8380,7 @@
       "Housing"
     ],
     "Parks/Gardens Wellness Centres Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Art Galleries Museums Theaters": [
@@ -8107,11 +8405,11 @@
       "Museum"
     ],
     "Community Centres Hospitals Primary Schools": [
+      "Civic Building",
       "Hospital",
       "School"
     ],
     "Rurals Villages Workshops": [
-      "House",
       "Industrial"
     ],
     "Farms Mills Museums": [
@@ -8167,6 +8465,7 @@
       "Sports Centre"
     ],
     "Embassies Hotels": [
+      "Civic Building",
       "Hotel"
     ],
     "Offices Cities Bicycle Stands": [
@@ -8198,6 +8497,7 @@
     ],
     "Banks Offices Community Centres": [
       "Bank",
+      "Civic Building",
       "Office"
     ],
     "Banks Shopping Centres Housing": [
@@ -8270,7 +8570,8 @@
       "Library"
     ],
     "Care Homes Community Centres Housing": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Heritages Parks/Gardens Cities": [
       "Park"
@@ -8343,6 +8644,7 @@
       "University"
     ],
     "Community Centres Cultural Centres Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Nightclubs Parks": [
@@ -8352,6 +8654,7 @@
       "Restaurant"
     ],
     "Parks/Gardens Towns Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Shops Bars Pavilions": [
@@ -8406,7 +8709,9 @@
       "Office",
       "Shopping Centre"
     ],
-    "Masterplans Information Centres Cultural Centres": [],
+    "Masterplans Information Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Masterplans Parks/Gardens Streets": [
       "Park"
     ],
@@ -8414,7 +8719,9 @@
       "Library",
       "Train Station"
     ],
-    "Transports Community Centres": [],
+    "Transports Community Centres": [
+      "Civic Building"
+    ],
     "Offices Cities Art Galleries": [
       "Gallery",
       "Office"
@@ -8484,6 +8791,7 @@
       "Religious Building"
     ],
     "Offices Warehouses Nurseries": [
+      "Kindergarten",
       "Office",
       "Warehouse"
     ],
@@ -8521,6 +8829,7 @@
       "Housing"
     ],
     "Auditoriums Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -8528,13 +8837,16 @@
       "Gallery"
     ],
     "Nurseries Nurse Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Factories Libraries Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Library"
     ],
     "Community Centres Primary Schools Workshops": [
+      "Civic Building",
       "Industrial",
       "School"
     ],
@@ -8601,6 +8913,7 @@
     ],
     "Masterplans Streets Towns": [],
     "Community Centres Hotels Housing": [
+      "Civic Building",
       "Hotel",
       "Housing"
     ],
@@ -8614,13 +8927,16 @@
       "Shopping Centre"
     ],
     "Care Homes Community Centres Nurse Housing": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Residential Landscape Golf Courses": [
       "Housing",
       "Park"
     ],
-    "Masterplans Cities Cultural Centres": [],
+    "Masterplans Cities Cultural Centres": [
+      "Civic Building"
+    ],
     "Exhibition Centres Train stations": [
       "Gallery",
       "Train Station"
@@ -8639,16 +8955,20 @@
       "Train Station"
     ],
     "Community Centres Hotels": [
+      "Civic Building",
       "Hotel"
     ],
     "Bars Nightclubs Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Community Centres Bars Museums": [
+      "Civic Building",
       "Museum",
       "Restaurant"
     ],
     "Individual Buildings Universities Cultural Centres": [
+      "Civic Building",
       "University"
     ],
     "Art Galleries Museums Housing": [
@@ -8694,6 +9014,7 @@
     ],
     "Bridges Community Centres Theme Parks": [
       "Bridge",
+      "Civic Building",
       "Park"
     ],
     "Subway Stations Playgrounds": [
@@ -8722,6 +9043,7 @@
       "Sports Centre"
     ],
     "Commercial Landscape Community Centres Museums": [
+      "Civic Building",
       "Museum",
       "Park"
     ],
@@ -8763,6 +9085,7 @@
     ],
     "Streets Sculptures": [],
     "Rural Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Playgrounds Exhibitions Pavilions": [
@@ -8799,6 +9122,7 @@
       "Restaurant"
     ],
     "Community Centres Stadiums": [
+      "Civic Building",
       "Stadium"
     ],
     "Heritages Wineries Restaurants": [
@@ -8818,7 +9142,8 @@
       "Park"
     ],
     "Bicycle Stands Car Parks Cultural Centres": [
-      "Car Park"
+      "Car Park",
+      "Civic Building"
     ],
     "Car Parks Universities Student Housing": [
       "Car Park",
@@ -8826,6 +9151,7 @@
       "University"
     ],
     "Streets Nurseries Museums": [
+      "Kindergarten",
       "Museum"
     ],
     "Cities Streets Farms": [],
@@ -8860,10 +9186,12 @@
       "Religious Building"
     ],
     "Parks/Gardens Community Centres Workshops": [
+      "Civic Building",
       "Industrial",
       "Park"
     ],
     "Auditoriums Cultural Centres Memorial spaces": [
+      "Civic Building",
       "Memorial",
       "Theatre"
     ],
@@ -8876,7 +9204,8 @@
       "Pavilion"
     ],
     "Nurseries Senior Housing Social Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Secondary Schools Concert Halls": [
       "Concert Hall",
@@ -8886,6 +9215,7 @@
       "Park"
     ],
     "Hotels Cultural Centres Housing": [
+      "Civic Building",
       "Hotel",
       "Housing"
     ],
@@ -8904,6 +9234,7 @@
     ],
     "Banks Offices Cultural Centres": [
       "Bank",
+      "Civic Building",
       "Office"
     ],
     "Coasts Commercial Landscape Individual Buildings": [
@@ -8962,7 +9293,7 @@
       "Shopping Centre"
     ],
     "Auditoriums Nurseries Secondary Schools": [
-      "School",
+      "Kindergarten",
       "Theatre"
     ],
     "Masterplans Primary Schools": [
@@ -8981,7 +9312,6 @@
     ],
     "Shopping Centres Villages Hotels": [
       "Hotel",
-      "House",
       "Shopping Centre"
     ],
     "Individual Buildings Swimming Pools Private Houses": [
@@ -8994,6 +9324,7 @@
     "Nationals Regionals Streets": [],
     "Shopping Centres Apartments Social Housing": [
       "Apartment",
+      "Civic Building",
       "Housing",
       "Shopping Centre"
     ],
@@ -9003,6 +9334,7 @@
       "Theatre"
     ],
     "Masterplans Parks/Gardens Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Fire stations Workshops": [
@@ -9052,6 +9384,7 @@
       "Memorial"
     ],
     "Sports Centres Stadiums Cultural Centres": [
+      "Civic Building",
       "Sports Centre",
       "Stadium"
     ],
@@ -9088,20 +9421,19 @@
       "Restaurant"
     ],
     "Townscapes Villages Housing": [
-      "House",
       "Housing"
     ],
     "Libraries Cinemas Cultural Centres": [
+      "Civic Building",
       "Library",
       "Theatre"
     ],
     "Parks/Gardens Hotels Cultural Centres": [
+      "Civic Building",
       "Hotel",
       "Park"
     ],
-    "Estates Streets Villages": [
-      "House"
-    ],
+    "Estates Streets Villages": [],
     "Exhibition Centres Shops Pavilions": [
       "Gallery",
       "Pavilion",
@@ -9111,6 +9443,7 @@
       "Memorial"
     ],
     "Universities Cultural Centres Theaters": [
+      "Civic Building",
       "Theatre",
       "University"
     ],
@@ -9120,6 +9453,7 @@
       "Theatre"
     ],
     "Streets Community Centres Universities": [
+      "Civic Building",
       "University"
     ],
     "Workshops Information Centres": [
@@ -9169,6 +9503,7 @@
       "Housing"
     ],
     "Residential Landscape Community Centres Primary Schools": [
+      "Civic Building",
       "Housing",
       "Park",
       "School"
@@ -9218,15 +9553,14 @@
       "Retail"
     ],
     "Community Centres Playgrounds Theaters": [
+      "Civic Building",
       "Park",
       "Theatre"
     ],
     "Townscapes Cities Exhibitions": [
       "Gallery"
     ],
-    "Rurals Villages": [
-      "House"
-    ],
+    "Rurals Villages": [],
     "Hotels Golf Courses Wellness Centres": [
       "Hotel"
     ],
@@ -9258,6 +9592,7 @@
       "University"
     ],
     "Workshops Cultural Centres Student Housing": [
+      "Civic Building",
       "Industrial",
       "Student Housing"
     ],
@@ -9312,6 +9647,7 @@
       "University"
     ],
     "Offices Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Office"
     ],
@@ -9333,6 +9669,7 @@
     ],
     "Transports Waterways/Wetlands Boathouses": [],
     "Parks/Gardens Cultural Centres Memorials": [
+      "Civic Building",
       "Garden",
       "Memorial"
     ],
@@ -9348,7 +9685,8 @@
     ],
     "Estates Towns": [],
     "Nurseries Senior Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Shops Streets Parks": [
       "Park",
@@ -9387,6 +9725,7 @@
     ],
     "Care Homes Community Centres Sports Centres": [
       "Care Home",
+      "Civic Building",
       "Sports Centre"
     ],
     "Residential Landscape Care Homes": [
@@ -9405,6 +9744,7 @@
       "Park"
     ],
     "Embassies Libraries Art Galleries": [
+      "Civic Building",
       "Gallery",
       "Library"
     ],
@@ -9427,6 +9767,7 @@
       "Theatre"
     ],
     "Commercial Landscape Cities Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Parks/Gardens Golf Courses Sports Centres": [
@@ -9445,6 +9786,7 @@
       "University"
     ],
     "Masterplans Community Centres Mosques": [
+      "Civic Building",
       "Religious Building"
     ],
     "Parks Restaurants Apartments": [
@@ -9453,17 +9795,21 @@
       "Restaurant"
     ],
     "Cultural Centres Exhibitions Churches": [
+      "Civic Building",
       "Gallery",
       "Religious Building"
     ],
     "Wellness Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Commercial Landscape Apartments": [
       "Apartment",
       "Park"
     ],
-    "Community Centres Palaces": [],
+    "Community Centres Palaces": [
+      "Civic Building"
+    ],
     "Banks Palaces": [
       "Bank"
     ],
@@ -9473,6 +9819,7 @@
       "Park"
     ],
     "Showrooms Urban Green Spaces Cultural Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Coasts City Halls Cultural Centres": [
@@ -9491,6 +9838,7 @@
       "Pavilion"
     ],
     "Heritages Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Commercial Landscape Social Housing": [
@@ -9507,6 +9855,7 @@
     ],
     "Cities Subway Stations Tunnels": [],
     "Universities Cultural Centres Housing": [
+      "Civic Building",
       "Housing",
       "University"
     ],
@@ -9520,7 +9869,6 @@
       "Theatre"
     ],
     "Urban Green Spaces Villages Social Housing": [
-      "House",
       "Housing"
     ],
     "Bars Information Centres Pavilions": [
@@ -9590,6 +9938,7 @@
       "University"
     ],
     "Offices Embassies Secondary Schools": [
+      "Civic Building",
       "Office",
       "School"
     ],
@@ -9598,7 +9947,8 @@
       "Train Station"
     ],
     "Banks Information Centres Cultural Centres": [
-      "Bank"
+      "Bank",
+      "Civic Building"
     ],
     "Hospitals Universities Housing": [
       "Hospital",
@@ -9620,6 +9970,7 @@
       "Winery"
     ],
     "Art Galleries Cultural Centres Sculptures": [
+      "Civic Building",
       "Gallery"
     ],
     "Exhibition Centres Trade Shows Workshops": [
@@ -9638,7 +9989,9 @@
       "Office",
       "Student Housing"
     ],
-    "Heritages Townscapes Cultural Centres": [],
+    "Heritages Townscapes Cultural Centres": [
+      "Civic Building"
+    ],
     "Individual Buildings Urban Green Spaces Hotels": [
       "Hotel"
     ],
@@ -9663,9 +10016,11 @@
       "Pavilion"
     ],
     "Individual Buildings Auditoriums Cultural Centres": [
+      "Civic Building",
       "Theatre"
     ],
     "Shopping Centres Hospitals Cultural Centres": [
+      "Civic Building",
       "Hospital",
       "Shopping Centre"
     ],
@@ -9674,7 +10029,9 @@
       "Pavilion",
       "Theatre"
     ],
-    "Individual Buildings Cultural Centres Sculptures": [],
+    "Individual Buildings Cultural Centres Sculptures": [
+      "Civic Building"
+    ],
     "Parks/Gardens Airports Sound Barriers": [
       "Airport",
       "Park"
@@ -9694,6 +10051,7 @@
       "Park"
     ],
     "Offices Community Centres Universities": [
+      "Civic Building",
       "Office",
       "University"
     ],
@@ -9717,6 +10075,7 @@
       "Airport"
     ],
     "Libraries Universities Cultural Centres": [
+      "Civic Building",
       "Library",
       "University"
     ],
@@ -9751,7 +10110,6 @@
       "University"
     ],
     "Towns Villages Housing": [
-      "House",
       "Housing"
     ],
     "Exhibition Centres Individual Buildings Concert Halls": [
@@ -9770,6 +10128,7 @@
       "House"
     ],
     "Libraries Cultural Centres Housing": [
+      "Civic Building",
       "Housing",
       "Library"
     ],
@@ -9796,6 +10155,7 @@
       "Retail"
     ],
     "Community Centres Workshops Art Galleries": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -9825,7 +10185,7 @@
       "House"
     ],
     "Nurseries Primary Schools Theaters": [
-      "School",
+      "Kindergarten",
       "Theatre"
     ],
     "Shopping Centres Hotels Stadiums": [
@@ -9927,6 +10287,7 @@
       "Civic Building"
     ],
     "Shops Community Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Passenger Terminals Exhibitions": [
@@ -9974,11 +10335,13 @@
     ],
     "Urban Green Spaces Waterways/Wetlands Streets": [],
     "Villages Cultural Centres": [
-      "House"
+      "Civic Building"
     ],
-    "Regionals Tunnels Cultural Centres": [],
+    "Regionals Tunnels Cultural Centres": [
+      "Civic Building"
+    ],
     "Villages Highways Cultural Centres": [
-      "House"
+      "Civic Building"
     ],
     "Warehouses Individual Buildings": [
       "Warehouse"
@@ -9987,6 +10350,7 @@
       "Park"
     ],
     "Shopping Centres Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Shopping Centre"
     ],
@@ -10008,6 +10372,7 @@
       "Park"
     ],
     "Shops Parks/Gardens Cultural Centres": [
+      "Civic Building",
       "Park",
       "Retail"
     ],
@@ -10023,7 +10388,6 @@
       "Religious Building"
     ],
     "Parks/Gardens Villages": [
-      "House",
       "Park"
     ],
     "Trade Shows Shopping Centres Supermarkets": [
@@ -10074,10 +10438,12 @@
       "University"
     ],
     "Individual Buildings Community Centres Restaurants": [
+      "Civic Building",
       "Restaurant"
     ],
     "Shops Nurseries Housing": [
       "Housing",
+      "Kindergarten",
       "Retail"
     ],
     "Residential Landscape Universities Workshops": [
@@ -10092,6 +10458,7 @@
       "Religious Building"
     ],
     "Community Centres Swimming Pools Wellness Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Rural Exhibitions": [
@@ -10131,6 +10498,7 @@
       "Student Housing"
     ],
     "Offices Information Centres Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Art Galleries Pavilions Theaters": [
@@ -10150,6 +10518,7 @@
     ],
     "Residential Landscape Nurseries": [
       "Housing",
+      "Kindergarten",
       "Park"
     ],
     "Distribution Centres Offices Trade Shows": [
@@ -10207,6 +10576,7 @@
       "Park"
     ],
     "Offices Cities Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Shops Hotels Exhibitions": [
@@ -10220,6 +10590,7 @@
       "Park"
     ],
     "Offices Estates Nurseries": [
+      "Kindergarten",
       "Office"
     ],
     "Offices Individual Buildings Restaurants": [
@@ -10266,6 +10637,7 @@
       "Shopping Centre"
     ],
     "Consulates Embassies Restaurants": [
+      "Civic Building",
       "Restaurant"
     ],
     "Parks Playgrounds Pavilions": [
@@ -10285,6 +10657,7 @@
       "Shopping Centre"
     ],
     "Shops Streets Cultural Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Exhibition Centres Trade Shows Restaurants": [
@@ -10292,6 +10665,7 @@
       "Restaurant"
     ],
     "Libraries Primary Schools Cultural Centres": [
+      "Civic Building",
       "Library",
       "School"
     ],
@@ -10306,9 +10680,7 @@
       "Car Park",
       "Train Station"
     ],
-    "Coasts Villages": [
-      "House"
-    ],
+    "Coasts Villages": [],
     "Offices Residential Landscape Casinos": [
       "Housing",
       "Office",
@@ -10329,6 +10701,7 @@
       "Park"
     ],
     "Offices Community Centres Pavilions": [
+      "Civic Building",
       "Office",
       "Pavilion"
     ],
@@ -10343,6 +10716,7 @@
       "School"
     ],
     "Cultural Centres Memorials Sculptures": [
+      "Civic Building",
       "Memorial"
     ],
     "Shopping Centres Supermarkets Bars": [
@@ -10412,6 +10786,7 @@
     ],
     "Estates Regionals": [],
     "Commercial Landscape Restaurants Cultural Centres": [
+      "Civic Building",
       "Park",
       "Restaurant"
     ],
@@ -10448,6 +10823,7 @@
       "Hotel"
     ],
     "Workshops Sports Centres Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Sports Centre"
     ],
@@ -10504,7 +10880,6 @@
     ],
     "Parks/Gardens Villages Hospitals": [
       "Hospital",
-      "House",
       "Park"
     ],
     "Secondary Schools Chapels": [
@@ -10548,6 +10923,7 @@
       "Shopping Centre"
     ],
     "Parks/Gardens Community Centres Secondary Schools": [
+      "Civic Building",
       "Park",
       "School"
     ],
@@ -10566,6 +10942,7 @@
     "Urban Green Spaces Towns": [],
     "Art Galleries Cultural Centres Apartments": [
       "Apartment",
+      "Civic Building",
       "Gallery"
     ],
     "Primary Schools Workshops Apartments": [
@@ -10575,7 +10952,7 @@
     ],
     "Hospitals Nurseries Primary Schools": [
       "Hospital",
-      "School"
+      "Kindergarten"
     ],
     "Banks Exhibition Centres Shops": [
       "Bank",
@@ -10625,9 +11002,12 @@
     ],
     "Coasts Individual Buildings Sculptures": [],
     "Masterplans Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall"
     ],
     "Community Centres Auditoriums Nurseries": [
+      "Civic Building",
+      "Kindergarten",
       "Theatre"
     ],
     "Exhibition Centres Townscapes": [
@@ -10659,10 +11039,10 @@
     "Trade Shows Playgrounds": [
       "Park"
     ],
-    "Cities Villages": [
-      "House"
+    "Cities Villages": [],
+    "Urban Green Spaces Towns Nurseries": [
+      "Kindergarten"
     ],
-    "Urban Green Spaces Towns Nurseries": [],
     "Swimming Pools Theme Parks Wellness Centres": [
       "Park",
       "Sports Centre"
@@ -10708,6 +11088,7 @@
     ],
     "Cultural Centres Theaters Apartments": [
       "Apartment",
+      "Civic Building",
       "Theatre"
     ],
     "Supermarkets Restaurants Apartments": [
@@ -10763,6 +11144,7 @@
       "Park"
     ],
     "Cultural Centres Mosques": [
+      "Civic Building",
       "Religious Building"
     ],
     "Offices City Halls Community Centres": [
@@ -10789,6 +11171,7 @@
       "Industrial"
     ],
     "Cultural Centres Temples": [
+      "Civic Building",
       "Religious Building"
     ],
     "Shopping Centres Hotels Theaters": [
@@ -10845,6 +11228,7 @@
       "Theatre"
     ],
     "Auditoriums Information Centres Cultural Centres": [
+      "Civic Building",
       "Theatre"
     ],
     "Warehouses Bars Restaurants": [
@@ -10852,15 +11236,12 @@
       "Warehouse"
     ],
     "Offices Villages": [
-      "House",
       "Office"
     ],
     "Trade Shows Courthouses": [
       "Civic Building"
     ],
-    "Rurals Streets Villages": [
-      "House"
-    ],
+    "Rurals Streets Villages": [],
     "Exhibitions Pavilions Temples": [
       "Gallery",
       "Pavilion",
@@ -10868,13 +11249,16 @@
     ],
     "Auditoriums Nurseries Workshops": [
       "Industrial",
+      "Kindergarten",
       "Theatre"
     ],
     "Libraries Workshops Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Library"
     ],
     "Cultural Centres Pavilions Theaters": [
+      "Civic Building",
       "Pavilion",
       "Theatre"
     ],
@@ -10883,14 +11267,16 @@
       "Retail"
     ],
     "Streets Parks Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Nurseries Universities Workshops": [
       "Industrial",
+      "Kindergarten",
       "University"
     ],
     "Individual Buildings Nurseries Primary Schools": [
-      "School"
+      "Kindergarten"
     ],
     "Concert Halls Pavilions Theaters": [
       "Concert Hall",
@@ -10898,6 +11284,7 @@
       "Theatre"
     ],
     "Bars Cinemas Cultural Centres": [
+      "Civic Building",
       "Restaurant",
       "Theatre"
     ],
@@ -10938,6 +11325,7 @@
       "Office"
     ],
     "Nurseries Churches": [
+      "Kindergarten",
       "Religious Building"
     ],
     "Care Homes Restaurants": [
@@ -10964,9 +11352,7 @@
       "Theatre",
       "University"
     ],
-    "Villages Farms": [
-      "House"
-    ],
+    "Villages Farms": [],
     "Offices Factories Housing": [
       "Housing",
       "Industrial",
@@ -10997,6 +11383,7 @@
       "Industrial"
     ],
     "Parks/Gardens Libraries Cultural Centres": [
+      "Civic Building",
       "Library",
       "Park"
     ],
@@ -11065,11 +11452,12 @@
       "Park"
     ],
     "Hotels Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Hotel"
     ],
     "Villages Community Centres Museums": [
-      "House",
+      "Civic Building",
       "Museum"
     ],
     "Residential Landscape Cities Nationals": [
@@ -11102,6 +11490,7 @@
       "Park"
     ],
     "Cultural Centres Memorials Theaters": [
+      "Civic Building",
       "Memorial",
       "Theatre"
     ],
@@ -11177,7 +11566,8 @@
       "Restaurant"
     ],
     "Care Homes Nurseries Nurse Housing": [
-      "Care Home"
+      "Care Home",
+      "Kindergarten"
     ],
     "Sculptures Apartments": [
       "Apartment"
@@ -11192,6 +11582,7 @@
       "Train Station"
     ],
     "Bus stations Community Centres": [
+      "Civic Building",
       "Train Station"
     ],
     "Masterplans Hotels Wellness Centres": [
@@ -11199,6 +11590,7 @@
     ],
     "Transports Waterways/Wetlands": [],
     "Offices Universities Cultural Centres": [
+      "Civic Building",
       "Office",
       "University"
     ],
@@ -11265,9 +11657,11 @@
       "Retail"
     ],
     "Community Centres Information Centres Restaurants": [
+      "Civic Building",
       "Restaurant"
     ],
     "Secondary Schools Sports Centres Cultural Centres": [
+      "Civic Building",
       "School",
       "Sports Centre"
     ],
@@ -11290,6 +11684,7 @@
       "Retail"
     ],
     "Community Centres Auditoriums Museums": [
+      "Civic Building",
       "Museum",
       "Theatre"
     ],
@@ -11299,6 +11694,7 @@
     ],
     "Power Plants Tram Stops": [],
     "Information Centres Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Bicycle Stands Bus stations Subway Stations": [
@@ -11354,12 +11750,10 @@
       "House",
       "Industrial"
     ],
-    "Masterplans Regionals Villages": [
-      "House"
-    ],
+    "Masterplans Regionals Villages": [],
     "Villages Concert Halls Cultural Centres": [
-      "Concert Hall",
-      "House"
+      "Civic Building",
+      "Concert Hall"
     ],
     "Playgrounds Stadiums": [
       "Park",
@@ -11374,11 +11768,13 @@
       "Pavilion"
     ],
     "Nurseries Playgrounds Restaurants": [
+      "Kindergarten",
       "Park",
       "Restaurant"
     ],
     "Restaurants Cultural Centres Apartments": [
       "Apartment",
+      "Civic Building",
       "Restaurant"
     ],
     "Offices Cities Car Parks": [
@@ -11414,7 +11810,9 @@
       "Park"
     ],
     "Research Facilities Art Galleries Cultural Centres": [
-      "Gallery"
+      "Civic Building",
+      "Gallery",
+      "Office"
     ],
     "Banks Offices Concert Halls": [
       "Bank",
@@ -11423,6 +11821,7 @@
     ],
     "Nurseries Workshops Pavilions": [
       "Industrial",
+      "Kindergarten",
       "Pavilion"
     ],
     "Hospitals Wellness Centres Apartments": [
@@ -11434,6 +11833,7 @@
       "Train Station"
     ],
     "Offices Nurseries Bars": [
+      "Kindergarten",
       "Office",
       "Restaurant"
     ],
@@ -11470,6 +11870,7 @@
       "Restaurant"
     ],
     "Auditoriums Workshops Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Theatre"
     ],
@@ -11487,7 +11888,7 @@
       "Sports Centre"
     ],
     "Villages Wineries Cultural Centres": [
-      "House",
+      "Civic Building",
       "Winery"
     ],
     "Individual Buildings Urban Green Spaces Pavilions": [
@@ -11506,6 +11907,7 @@
       "Museum"
     ],
     "Community Centres Libraries Museums": [
+      "Civic Building",
       "Library",
       "Museum"
     ],
@@ -11529,12 +11931,16 @@
       "Warehouse"
     ],
     "Masterplans Waterways/Wetlands Cities": [],
-    "Research Facilities Community Centres": [],
+    "Research Facilities Community Centres": [
+      "Civic Building",
+      "Office"
+    ],
     "Townscapes Libraries Art Galleries": [
       "Gallery",
       "Library"
     ],
     "Streets Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Exhibition Centres Workshops Museums": [
@@ -11543,6 +11949,7 @@
       "Museum"
     ],
     "Offices Information Centres Social Housing": [
+      "Civic Building",
       "Housing",
       "Office"
     ],
@@ -11593,6 +12000,7 @@
       "Theatre"
     ],
     "Embassies Parks Art Galleries": [
+      "Civic Building",
       "Gallery",
       "Park"
     ],
@@ -11645,7 +12053,6 @@
       "Civic Building"
     ],
     "Shops Villages": [
-      "House",
       "Retail"
     ],
     "Exhibition Centres Cinemas Museums": [
@@ -11655,6 +12062,7 @@
     ],
     "Townscapes Cities Estates": [],
     "Shopping Centres Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion",
       "Shopping Centre"
     ],
@@ -11671,6 +12079,7 @@
       "Shopping Centre"
     ],
     "Community Centres Museums Pavilions": [
+      "Civic Building",
       "Museum",
       "Pavilion"
     ],
@@ -11748,20 +12157,24 @@
       "Hotel",
       "Museum"
     ],
-    "Masterplans Cultural Centres": [],
+    "Masterplans Cultural Centres": [
+      "Civic Building"
+    ],
     "Nurseries Primary Schools Universities": [
-      "School",
+      "Kindergarten",
       "University"
     ],
     "City Halls Information Centres": [
       "Civic Building"
     ],
     "Offices Community Centres Libraries": [
+      "Civic Building",
       "Library",
       "Office"
     ],
     "Care Homes Community Centres Student Housing": [
       "Care Home",
+      "Civic Building",
       "Student Housing"
     ],
     "Universities Art Galleries Museums": [
@@ -11778,6 +12191,7 @@
       "University"
     ],
     "Auditoriums Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -11820,7 +12234,9 @@
     "Laboratories Research Facilities Restaurants": [
       "Restaurant"
     ],
-    "Urban Green Spaces Subway Stations Cultural Centres": [],
+    "Urban Green Spaces Subway Stations Cultural Centres": [
+      "Civic Building"
+    ],
     "Cities Estates Towns": [],
     "Bicycle Stands Car Parks": [
       "Car Park"
@@ -11829,9 +12245,8 @@
       "Park"
     ],
     "Parks/Gardens Care Homes Social Housing": [
-      "Car Park",
       "Care Home",
-      "Garden"
+      "Park"
     ],
     "Hotels Apartments Senior Housing": [
       "Apartment",
@@ -11860,6 +12275,7 @@
       "Housing"
     ],
     "Embassies Private Houses": [
+      "Civic Building",
       "House"
     ],
     "Cathedrals Churches Memorial spaces": [
@@ -11919,6 +12335,7 @@
     ],
     "Secondary Schools Cultural Centres Apartments": [
       "Apartment",
+      "Civic Building",
       "School"
     ],
     "Offices Showrooms Residential Landscape": [
@@ -11932,6 +12349,7 @@
       "Theatre"
     ],
     "Community Centres Chapels Housing": [
+      "Civic Building",
       "Housing",
       "Religious Building"
     ],
@@ -11940,6 +12358,7 @@
       "Pavilion"
     ],
     "Parks/Gardens Urban Green Spaces Community Centres": [
+      "Civic Building",
       "Park"
     ],
     "Offices Shops Workshops": [
@@ -11969,8 +12388,11 @@
       "House",
       "Housing"
     ],
-    "Urban Green Spaces Community Centres": [],
+    "Urban Green Spaces Community Centres": [
+      "Civic Building"
+    ],
     "Community Centres Auditoriums Libraries": [
+      "Civic Building",
       "Library",
       "Theatre"
     ],
@@ -11996,14 +12418,17 @@
       "Museum"
     ],
     "Community Centres Restaurants Sports Centres": [
+      "Civic Building",
       "Restaurant",
       "Sports Centre"
     ],
     "Offices Warehouses Community Centres": [
+      "Civic Building",
       "Office",
       "Warehouse"
     ],
     "Community Centres Information Centres Sports Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Offices Hospitals Workshops": [
@@ -12041,16 +12466,19 @@
       "Shopping Centre"
     ],
     "Laboratories Cultural Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Urban Green Spaces Estates Wellness Centres": [],
     "Community Centres Hotels Wellness Centres": [
+      "Civic Building",
       "Hotel"
     ],
     "Offices Heritages Rural": [
       "Office"
     ],
     "Train stations Cultural Centres": [
+      "Civic Building",
       "Train Station"
     ],
     "Urban Green Spaces Sports Centres Pavilions": [
@@ -12059,9 +12487,11 @@
     ],
     "Passenger Terminals Information Centres Wellness Centres": [],
     "Parks/Gardens Parks Visitor Center": [
+      "Civic Building",
       "Park"
     ],
     "Exhibition Centres Restaurants Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Restaurant"
     ],
@@ -12124,6 +12554,7 @@
       "Hospital"
     ],
     "Shopping Centres Cultural Centres Theaters": [
+      "Civic Building",
       "Shopping Centre",
       "Theatre"
     ],
@@ -12164,8 +12595,7 @@
       "Park"
     ],
     "Streets Villages Apartments": [
-      "Apartment",
-      "House"
+      "Apartment"
     ],
     "Townscapes Cities Playgrounds": [
       "Park"
@@ -12182,6 +12612,7 @@
       "Car Park"
     ],
     "Exhibition Centres Community Centres Sports Centres": [
+      "Civic Building",
       "Gallery",
       "Sports Centre"
     ],
@@ -12218,7 +12649,6 @@
       "Theatre"
     ],
     "Parks/Gardens Villages Social Housing": [
-      "House",
       "Housing",
       "Park"
     ],
@@ -12241,6 +12671,7 @@
       "Housing"
     ],
     "Exhibition Centres Shops Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Retail"
     ],
@@ -12264,6 +12695,7 @@
       "Civic Building"
     ],
     "Workshops Cultural Centres Memorial spaces": [
+      "Civic Building",
       "Industrial",
       "Memorial"
     ],
@@ -12301,7 +12733,9 @@
       "House"
     ],
     "Streets Towns": [],
-    "Cities Cultural Centres": [],
+    "Cities Cultural Centres": [
+      "Civic Building"
+    ],
     "Bars Sports Centres Swimming Pools": [
       "Restaurant",
       "Sports Centre"
@@ -12312,6 +12746,7 @@
     ],
     "Residential Landscape Libraries Nurseries": [
       "Housing",
+      "Kindergarten",
       "Library",
       "Park"
     ],
@@ -12325,6 +12760,7 @@
       "Memorial"
     ],
     "Residential Landscape Community Centres Private Houses": [
+      "Civic Building",
       "House",
       "Housing",
       "Park"
@@ -12372,7 +12808,8 @@
       "Park"
     ],
     "Heritages Nurseries Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Bars Restaurants Stadiums": [
       "Restaurant",
@@ -12387,6 +12824,7 @@
       "Religious Building"
     ],
     "Factories Mills Community Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Shopping Centres Streets Bus stations": [
@@ -12412,6 +12850,7 @@
       "Shopping Centre"
     ],
     "Bars Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Restaurant"
     ],
@@ -12424,6 +12863,7 @@
       "Hospital"
     ],
     "Heritages Parks Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Offices Commercial Landscape Farms": [
@@ -12435,6 +12875,7 @@
       "School"
     ],
     "Heritages Universities Cultural Centres": [
+      "Civic Building",
       "University"
     ],
     "Banks Universities": [
@@ -12442,6 +12883,7 @@
       "University"
     ],
     "Parks/Gardens Community Centres Hospitals": [
+      "Civic Building",
       "Hospital",
       "Park"
     ],
@@ -12507,6 +12949,7 @@
       "Warehouse"
     ],
     "Cities Community Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Showrooms Information Centres": [
@@ -12533,9 +12976,11 @@
       "Shopping Centre"
     ],
     "Exhibition Centres Urban Green Spaces Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Cultural Centres Chapels Churches": [
+      "Civic Building",
       "Religious Building"
     ],
     "Commercial Landscape Residential Landscape Apartments": [
@@ -12562,6 +13007,7 @@
       "Housing"
     ],
     "Art Galleries Cultural Centres Private Houses": [
+      "Civic Building",
       "Gallery",
       "House"
     ],
@@ -12605,6 +13051,7 @@
       "Park"
     ],
     "Theme Parks Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Supermarkets Housing": [
@@ -12639,6 +13086,7 @@
       "Office"
     ],
     "Shops Nurseries Restaurants": [
+      "Kindergarten",
       "Restaurant",
       "Retail"
     ],
@@ -12673,6 +13121,7 @@
       "Pavilion"
     ],
     "Parks/Gardens Parks Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Trade Shows Sports Centres Stadiums": [
@@ -12688,10 +13137,10 @@
       "Housing",
       "Park"
     ],
-    "Heritages Urban Green Spaces Villages": [
-      "House"
+    "Heritages Urban Green Spaces Villages": [],
+    "Heritages Military buildings Cultural Centres": [
+      "Civic Building"
     ],
-    "Heritages Military buildings Cultural Centres": [],
     "Libraries Workshops Restaurants": [
       "Industrial",
       "Library",
@@ -12727,6 +13176,7 @@
       "University"
     ],
     "Exhibition Centres Heritages Embassies": [
+      "Civic Building",
       "Gallery"
     ],
     "Primary Schools Secondary Schools Pavilions": [
@@ -12746,6 +13196,7 @@
       "Park"
     ],
     "Wineries Cultural Centres": [
+      "Civic Building",
       "Winery"
     ],
     "Urban Green Spaces Wineries": [
@@ -12781,6 +13232,7 @@
       "Theatre"
     ],
     "Parks/Gardens Community Centres Pavilions": [
+      "Civic Building",
       "Park",
       "Pavilion"
     ],
@@ -12817,6 +13269,7 @@
       "Bridge"
     ],
     "Cultural Centres Memorial spaces": [
+      "Civic Building",
       "Memorial"
     ],
     "Concert Halls Memorials": [
@@ -12834,9 +13287,7 @@
       "Housing"
     ],
     "Rural Estates Rurals": [],
-    "Estates Rurals Villages": [
-      "House"
-    ],
+    "Estates Rurals Villages": [],
     "Exhibition Centres Information Centres Exhibitions": [
       "Gallery"
     ],
@@ -12852,6 +13303,7 @@
     ],
     "Passenger Terminals Wellness Centres": [],
     "Exhibition Centres Sports Centres Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Sports Centre"
     ],
@@ -12860,8 +13312,11 @@
       "Restaurant",
       "Theatre"
     ],
-    "Heritages Individual Buildings Cultural Centres": [],
+    "Heritages Individual Buildings Cultural Centres": [
+      "Civic Building"
+    ],
     "Rural Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Universities Restaurants Student Housing": [
@@ -12870,6 +13325,7 @@
       "University"
     ],
     "Showrooms Nurseries": [
+      "Kindergarten",
       "Retail"
     ],
     "Exhibition Centres Shopping Centres Parks/Gardens": [
@@ -12884,9 +13340,7 @@
     "Offices Heritages Urban Green Spaces": [
       "Office"
     ],
-    "Individual Buildings Villages Mills": [
-      "House"
-    ],
+    "Individual Buildings Villages Mills": [],
     "Shops Heritages Restaurants": [
       "Restaurant",
       "Retail"
@@ -12904,10 +13358,12 @@
       "School"
     ],
     "Community Centres Secondary Schools Playgrounds": [
+      "Civic Building",
       "Park",
       "School"
     ],
     "Cultural Centres Mosques Temples": [
+      "Civic Building",
       "Religious Building"
     ],
     "Offices Masterplans Sports Centres": [
@@ -12933,9 +13389,11 @@
       "Shopping Centre"
     ],
     "Masterplans Community Centres Hotels": [
+      "Civic Building",
       "Hotel"
     ],
     "Workshops Playgrounds Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Park"
     ],
@@ -12978,6 +13436,7 @@
       "Religious Building"
     ],
     "Community Centres Sports Centres Stadiums": [
+      "Civic Building",
       "Sports Centre",
       "Stadium"
     ],
@@ -13002,6 +13461,7 @@
       "Park"
     ],
     "Cultural Centres Cathedrals": [
+      "Civic Building",
       "Religious Building"
     ],
     "Shops Watch Towers Apartments": [
@@ -13026,6 +13486,7 @@
       "Park"
     ],
     "Heritages Community Centres Hospitals": [
+      "Civic Building",
       "Hospital"
     ],
     "Masterplans Train stations Universities": [
@@ -13115,9 +13576,11 @@
       "Hotel"
     ],
     "Shops Community Centres Cultural Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Heritages Community Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Commercial Landscape Rural": [
@@ -13131,9 +13594,12 @@
     "Research Facilities Care Homes": [
       "Care Home"
     ],
-    "Nurseries Wellness Centres": [],
+    "Nurseries Wellness Centres": [
+      "Kindergarten"
+    ],
     "Exhibition Centres Shopping Centres Nurseries": [
       "Gallery",
+      "Kindergarten",
       "Shopping Centre"
     ],
     "Residential Landscape Individual Buildings Military buildings": [
@@ -13161,6 +13627,7 @@
       "Student Housing"
     ],
     "Offices Bars Cultural Centres": [
+      "Civic Building",
       "Office",
       "Restaurant"
     ],
@@ -13206,6 +13673,7 @@
       "School"
     ],
     "Community Centres Wellness Centres Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Heritages Individual Buildings Transports": [],
@@ -13223,6 +13691,7 @@
       "Theatre"
     ],
     "Community Centres Concert Halls Theaters": [
+      "Civic Building",
       "Concert Hall",
       "Theatre"
     ],
@@ -13236,23 +13705,27 @@
       "Park"
     ],
     "Wellness Centres Cultural Centres Senior Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Nurseries Primary Schools Churches": [
-      "Religious Building",
-      "School"
+      "Kindergarten",
+      "Religious Building"
     ],
     "Restaurants Swimming Pools Art Galleries": [
       "Gallery",
       "Restaurant",
       "Sports Centre"
     ],
-    "Farms Community Centres": [],
+    "Farms Community Centres": [
+      "Civic Building"
+    ],
     "Offices Commercial Landscape Information Centres": [
       "Office",
       "Park"
     ],
     "Universities Sports Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre",
       "University"
     ],
@@ -13368,6 +13841,7 @@
       "Bridge"
     ],
     "Skateparks Cultural Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Shops Coasts Housing": [
@@ -13405,6 +13879,7 @@
       "Warehouse"
     ],
     "Exhibition Centres Community Centres Auditoriums": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -13415,6 +13890,7 @@
       "Industrial"
     ],
     "Community Centres Workshops Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -13446,7 +13922,9 @@
     "Community Centres Courthouses": [
       "Civic Building"
     ],
-    "Farms Cultural Centres": [],
+    "Farms Cultural Centres": [
+      "Civic Building"
+    ],
     "Showrooms Bars Art Galleries": [
       "Gallery",
       "Restaurant",
@@ -13463,6 +13941,7 @@
       "Memorial"
     ],
     "Farms Community Centres Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Townscapes Towns": [],
@@ -13483,6 +13962,7 @@
       "Religious Building"
     ],
     "Offices Community Centres Theaters": [
+      "Civic Building",
       "Office",
       "Theatre"
     ],
@@ -13508,6 +13988,7 @@
       "Hospital"
     ],
     "Offices Cities Concert Halls": [
+      "Civic Building",
       "Concert Hall",
       "Office"
     ],
@@ -13546,14 +14027,18 @@
       "Restaurant"
     ],
     "Community Centres Restaurants Swimming Pools": [
+      "Civic Building",
       "Restaurant",
       "Sports Centre"
     ],
-    "Community Centres Nightclubs": [],
+    "Community Centres Nightclubs": [
+      "Civic Building"
+    ],
     "Coasts Urban Green Spaces Museums": [
       "Museum"
     ],
     "Community Centres Art Galleries Pavilions": [
+      "Civic Building",
       "Gallery",
       "Pavilion"
     ],
@@ -13575,6 +14060,7 @@
       "Retail"
     ],
     "Sports Centres Swimming Pools Social Housing": [
+      "Civic Building",
       "Housing",
       "Sports Centre"
     ],
@@ -13591,6 +14077,7 @@
       "University"
     ],
     "Commercial Landscape Train stations Cultural Centres": [
+      "Civic Building",
       "Park",
       "Train Station"
     ],
@@ -13599,7 +14086,6 @@
       "Sports Centre"
     ],
     "Villages Farms Social Housing": [
-      "House",
       "Housing"
     ],
     "Care Homes Apartments Senior Housing": [
@@ -13607,6 +14093,7 @@
       "Care Home"
     ],
     "Sports Centres Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion",
       "Sports Centre"
     ],
@@ -13618,6 +14105,7 @@
       "Park"
     ],
     "Exhibition Centres Parks Visitor Center": [
+      "Civic Building",
       "Gallery",
       "Park"
     ],
@@ -13626,9 +14114,11 @@
     ],
     "Offices Nurseries Hotels": [
       "Hotel",
+      "Kindergarten",
       "Office"
     ],
     "Workshops Visitor Center Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -13639,6 +14129,7 @@
       "House"
     ],
     "Passenger Terminals Bars Visitor Center": [
+      "Civic Building",
       "Restaurant"
     ],
     "Urban Green Spaces Highways": [],
@@ -13655,6 +14146,7 @@
       "Office"
     ],
     "Visitor Center Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Shopping Centres Showrooms Casinos": [
@@ -13689,6 +14181,7 @@
     ],
     "Coasts Masterplans Wellness Centres": [],
     "Shopping Centres Streets Cultural Centres": [
+      "Civic Building",
       "Shopping Centre"
     ],
     "Offices Showrooms Masterplans": [
@@ -13717,6 +14210,7 @@
       "Pavilion"
     ],
     "Shopping Centres Nurseries Playgrounds": [
+      "Kindergarten",
       "Park",
       "Shopping Centre"
     ],
@@ -13731,6 +14225,7 @@
       "Train Station"
     ],
     "Visitor Center Art Galleries Museums": [
+      "Civic Building",
       "Gallery",
       "Museum"
     ],
@@ -13738,6 +14233,7 @@
       "Park"
     ],
     "Cities Libraries Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Parks/Gardens Bus stations": [
@@ -13745,10 +14241,12 @@
       "Train Station"
     ],
     "Community Centres Hospitals Wellness Centres": [
+      "Civic Building",
       "Hospital"
     ],
     "Exhibition Centres Showrooms Research Facilities": [
       "Gallery",
+      "Office",
       "Retail"
     ],
     "Showrooms Hotels": [
@@ -13795,6 +14293,7 @@
       "Office"
     ],
     "Visitor Center Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Supermarkets Townscapes Apartments": [
@@ -13810,10 +14309,10 @@
       "Retail"
     ],
     "Community Centres Skateparks Sports Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Villages Libraries": [
-      "House",
       "Library"
     ],
     "Bars Housing": [
@@ -13822,7 +14321,6 @@
     ],
     "Individual Buildings Farms": [],
     "Residential Landscape Parks/Gardens Villages": [
-      "House",
       "Housing",
       "Park"
     ],
@@ -13834,9 +14332,11 @@
       "Care Home"
     ],
     "Workshops Visitor Center Cultural Centres": [
+      "Civic Building",
       "Industrial"
     ],
     "Shops Masterplans Cultural Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Urban Green Spaces Cities Highways": [],
@@ -13853,6 +14353,7 @@
       "Park"
     ],
     "Residential Landscape Rurals Visitor Center": [
+      "Civic Building",
       "Housing",
       "Park"
     ],
@@ -13960,6 +14461,7 @@
       "Apartment"
     ],
     "Exhibition Centres Regionals Visitor Center": [
+      "Civic Building",
       "Gallery"
     ],
     "Parks/Gardens Playgrounds Art Galleries": [
@@ -14011,6 +14513,7 @@
       "Park"
     ],
     "Cinemas Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "Theatre"
     ],
@@ -14036,6 +14539,7 @@
       "Park"
     ],
     "Heritages Visitor Center Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Shops Bars Parks": [
@@ -14084,12 +14588,12 @@
       "Sports Centre"
     ],
     "Offices Shops Villages": [
-      "House",
       "Office",
       "Retail"
     ],
     "Estates Nurseries Apartments": [
-      "Apartment"
+      "Apartment",
+      "Kindergarten"
     ],
     "Parks/Gardens Urban Green Spaces Bus stations": [
       "Park",
@@ -14104,6 +14608,7 @@
       "University"
     ],
     "Masterplans Libraries Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Libraries Workshops Information Centres": [
@@ -14120,6 +14625,7 @@
       "University"
     ],
     "Cultural Centres Cemeteries": [
+      "Civic Building",
       "Memorial"
     ],
     "Workshops Housing Social Housing": [
@@ -14135,6 +14641,7 @@
       "Park"
     ],
     "Urban Green Spaces Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Warehouses Pump stations Fire stations": [
@@ -14213,6 +14720,7 @@
       "Park"
     ],
     "Residential Landscape Towns Community Centres": [
+      "Civic Building",
       "Housing",
       "Park"
     ],
@@ -14240,7 +14748,6 @@
       "Restaurant"
     ],
     "Parks/Gardens Rural Villages": [
-      "House",
       "Park"
     ],
     "Hospitals Primary Schools": [
@@ -14272,6 +14779,7 @@
       "Pavilion"
     ],
     "Shops Cinemas Cultural Centres": [
+      "Civic Building",
       "Retail",
       "Theatre"
     ],
@@ -14296,10 +14804,12 @@
       "Sports Centre"
     ],
     "Community Centres Primary Schools Housing": [
+      "Civic Building",
       "Housing",
       "School"
     ],
     "Primary Schools Sports Centres Cultural Centres": [
+      "Civic Building",
       "School",
       "Sports Centre"
     ],
@@ -14321,6 +14831,7 @@
       "Sports Centre"
     ],
     "Auditoriums Libraries Nurseries": [
+      "Kindergarten",
       "Library",
       "Theatre"
     ],
@@ -14340,10 +14851,12 @@
       "Winery"
     ],
     "Offices Cultural Centres Housing": [
+      "Civic Building",
       "Housing",
       "Office"
     ],
     "Exhibition Centres Individual Buildings Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Shops Bars Concert Halls": [
@@ -14361,9 +14874,11 @@
       "Housing"
     ],
     "Exhibition Centres Nurseries Wellness Centres": [
-      "Gallery"
+      "Gallery",
+      "Kindergarten"
     ],
     "Cultural Centres Theaters Churches": [
+      "Civic Building",
       "Religious Building",
       "Theatre"
     ],
@@ -14394,6 +14909,7 @@
       "Theatre"
     ],
     "Streets Promenades Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Shopping Centres Car Parks Apartments": [
@@ -14432,6 +14948,7 @@
       "Park"
     ],
     "Parks/Gardens Information Centres Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Auditoriums Universities Sports Centres": [
@@ -14447,7 +14964,8 @@
       "Housing"
     ],
     "Individual Buildings Care Homes Community Centres": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Laboratories Wellness Centres": [],
     "Warehouses Transports": [
@@ -14478,10 +14996,12 @@
       "Park"
     ],
     "Masterplans Stadiums Cultural Centres": [
+      "Civic Building",
       "Stadium"
     ],
     "Offices Car Parks Cultural Centres": [
       "Car Park",
+      "Civic Building",
       "Office"
     ],
     "Exhibition Centres Offices Pavilions": [
@@ -14490,6 +15010,7 @@
       "Pavilion"
     ],
     "Laboratories Secondary Schools Cultural Centres": [
+      "Civic Building",
       "School"
     ],
     "Aquaducts Bridges Highways": [
@@ -14501,6 +15022,7 @@
       "Park"
     ],
     "Offices Parks/Gardens Cultural Centres": [
+      "Civic Building",
       "Office",
       "Park"
     ],
@@ -14521,6 +15043,7 @@
       "School"
     ],
     "Cultural Centres Memorials Churches": [
+      "Civic Building",
       "Memorial",
       "Religious Building"
     ],
@@ -14544,6 +15067,7 @@
       "Gallery"
     ],
     "Individual Buildings Community Centres Playgrounds": [
+      "Civic Building",
       "Park"
     ],
     "Bars Restaurants Chapels": [
@@ -14555,6 +15079,7 @@
       "Park"
     ],
     "Parks/Gardens Rural Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Offices Cities Streets": [
@@ -14610,12 +15135,15 @@
     ],
     "Distribution Centres Wellness Centres": [],
     "Rural Cultural Centres Temples": [
+      "Civic Building",
       "Religious Building"
     ],
     "Information Centres Playgrounds Visitor Center": [
+      "Civic Building",
       "Park"
     ],
     "Exhibition Centres Community Centres Information Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Parks/Gardens Exhibitions Sculptures": [
@@ -14624,12 +15152,14 @@
     ],
     "Offices Nurseries Private Houses": [
       "House",
+      "Kindergarten",
       "Office"
     ],
     "Casinos Nightclubs Restaurants": [
       "Restaurant"
     ],
     "Parks/Gardens Visitor Center Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Park"
     ],
@@ -14638,6 +15168,7 @@
       "Retail"
     ],
     "Community Centres Wellness Centres Exhibitions": [
+      "Civic Building",
       "Gallery"
     ],
     "Wellness Centres Art Galleries": [
@@ -14652,6 +15183,7 @@
       "Retail"
     ],
     "Sports Centres Stadiums Visitor Center": [
+      "Civic Building",
       "Sports Centre",
       "Stadium"
     ],
@@ -14676,9 +15208,10 @@
       "Park"
     ],
     "Villages Community Centres": [
-      "House"
+      "Civic Building"
     ],
     "Exhibition Centres Community Centres Stadiums": [
+      "Civic Building",
       "Gallery",
       "Stadium"
     ],
@@ -14707,6 +15240,7 @@
       "Restaurant"
     ],
     "Universities Cultural Centres Museums": [
+      "Civic Building",
       "Museum",
       "University"
     ],
@@ -14720,15 +15254,18 @@
     ],
     "Community Centres Apartments Social Housing": [
       "Apartment",
+      "Civic Building",
       "Housing"
     ],
     "Farms Universities": [
       "University"
     ],
     "Exhibition Centres Information Centres Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Restaurants Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Restaurant"
     ],
@@ -14750,6 +15287,7 @@
       "Theatre"
     ],
     "Visitor Center Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Residential Landscape Wellness Centres": [
@@ -14765,18 +15303,18 @@
       "Gallery",
       "School"
     ],
-    "Individual Buildings Urban Green Spaces Villages": [
-      "House"
-    ],
+    "Individual Buildings Urban Green Spaces Villages": [],
     "Individual Buildings Memorials Museums": [
       "Memorial",
       "Museum"
     ],
     "Offices Cities Community Centres": [
+      "Civic Building",
       "Office"
     ],
     "Care Homes Community Centres Social Housing": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Coasts Parks/Gardens Waterways/Wetlands": [
       "Park"
@@ -14813,6 +15351,7 @@
       "Memorial"
     ],
     "Universities Visitor Center": [
+      "Civic Building",
       "University"
     ],
     "Shops Parks/Gardens Hospitals": [
@@ -14821,6 +15360,7 @@
       "Retail"
     ],
     "Sports Centres Visitor Center": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Primary Schools Private Houses": [
@@ -14843,10 +15383,12 @@
       "Retail"
     ],
     "Hotels Cultural Centres Museums": [
+      "Civic Building",
       "Hotel",
       "Museum"
     ],
     "Cultural Centres Pavilions Synagogues": [
+      "Civic Building",
       "Pavilion",
       "Religious Building"
     ],
@@ -14860,6 +15402,7 @@
       "Park"
     ],
     "Libraries Visitor Center": [
+      "Civic Building",
       "Library"
     ],
     "Primary Schools Universities": [
@@ -14876,10 +15419,12 @@
     ],
     "Offices Nurseries Workshops": [
       "Industrial",
+      "Kindergarten",
       "Office"
     ],
     "Bridges Cultural Centres Exhibitions": [
       "Bridge",
+      "Civic Building",
       "Gallery"
     ],
     "Heritages Memorials Memorial spaces": [
@@ -14898,6 +15443,7 @@
     ],
     "Care Homes Community Centres Churches": [
       "Care Home",
+      "Civic Building",
       "Religious Building"
     ],
     "Heritages Masterplans": [],
@@ -14905,6 +15451,7 @@
       "Park"
     ],
     "Exhibition Centres Libraries Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Library"
     ],
@@ -14966,6 +15513,7 @@
       "Gallery"
     ],
     "Visitor Center Exhibitions Pavilions": [
+      "Civic Building",
       "Gallery",
       "Pavilion"
     ],
@@ -14973,9 +15521,11 @@
       "Airport"
     ],
     "Hotels Visitor Center": [
+      "Civic Building",
       "Hotel"
     ],
     "Hospitals Cultural Centres": [
+      "Civic Building",
       "Hospital"
     ],
     "Shopping Centres Car Parks Housing": [
@@ -14995,14 +15545,17 @@
       "Office"
     ],
     "Shops Cultural Centres Housing": [
+      "Civic Building",
       "Housing",
       "Retail"
     ],
     "Libraries Playgrounds Cultural Centres": [
+      "Civic Building",
       "Library",
       "Park"
     ],
     "Laboratories Hospitals Visitor Center": [
+      "Civic Building",
       "Hospital"
     ],
     "Exhibition Centres Apartments Private Houses": [
@@ -15011,7 +15564,6 @@
       "House"
     ],
     "Coasts Residential Landscape Villages": [
-      "House",
       "Housing",
       "Park"
     ],
@@ -15053,6 +15605,7 @@
       "Bridge"
     ],
     "Exhibition Centres Waterways/Wetlands Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Zoos Museums": [
@@ -15069,6 +15622,7 @@
       "Park"
     ],
     "Exhibition Centres Visitor Center Theaters": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -15123,10 +15677,12 @@
       "Hotel"
     ],
     "Parks/Gardens Community Centres Social Housing": [
+      "Civic Building",
       "Housing",
       "Park"
     ],
     "Information Centres Visitor Center Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Universities Social Housing Student Housing": [
@@ -15141,6 +15697,7 @@
       "Memorial"
     ],
     "Cultural Centres Exhibitions Housing": [
+      "Civic Building",
       "Gallery",
       "Housing"
     ],
@@ -15148,7 +15705,6 @@
       "Sports Centre"
     ],
     "Cities Villages Housing": [
-      "House",
       "Housing"
     ],
     "Offices Showrooms Skateparks": [
@@ -15181,7 +15737,6 @@
       "Restaurant"
     ],
     "Warehouses Waterways/Wetlands Villages": [
-      "House",
       "Warehouse"
     ],
     "Cities Airports Passenger Terminals": [
@@ -15192,6 +15747,7 @@
       "Housing"
     ],
     "Visitor Center Exhibitions Sculptures": [
+      "Civic Building",
       "Gallery"
     ],
     "Farms Research Facilities Universities": [
@@ -15232,9 +15788,12 @@
       "Park"
     ],
     "Research Facilities Cultural Centres Museums": [
-      "Museum"
+      "Civic Building",
+      "Museum",
+      "Office"
     ],
     "Universities Cultural Centres Student Housing": [
+      "Civic Building",
       "Student Housing",
       "University"
     ],
@@ -15253,6 +15812,7 @@
       "University"
     ],
     "Individual Buildings Visitor Center Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Offices Hotels Exhibitions": [
@@ -15310,6 +15870,7 @@
       "Bridge"
     ],
     "Parks/Gardens Restaurants Cultural Centres": [
+      "Civic Building",
       "Park",
       "Restaurant"
     ],
@@ -15329,7 +15890,6 @@
       "Theatre"
     ],
     "Offices Villages Housing": [
-      "House",
       "Housing",
       "Office"
     ],
@@ -15343,7 +15903,7 @@
     ],
     "Care Homes Nurseries Primary Schools": [
       "Care Home",
-      "School"
+      "Kindergarten"
     ],
     "Skateparks Sports Centres": [
       "Sports Centre"
@@ -15376,13 +15936,16 @@
       "Park"
     ],
     "Sports Centres Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Sports Centre"
     ],
     "Factories Visitor Center": [
+      "Civic Building",
       "Industrial"
     ],
     "Cultural Centres Exhibitions Sculptures": [
+      "Civic Building",
       "Gallery"
     ],
     "Farms Sculptures": [],
@@ -15437,6 +16000,7 @@
       "Shopping Centre"
     ],
     "Libraries Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Library"
     ],
@@ -15534,6 +16098,7 @@
       "Memorial"
     ],
     "Community Centres Memorials": [
+      "Civic Building",
       "Memorial"
     ],
     "Primary Schools Pavilions": [
@@ -15567,6 +16132,7 @@
       "Religious Building"
     ],
     "Community Centres Universities Sports Centres": [
+      "Civic Building",
       "Sports Centre",
       "University"
     ],
@@ -15596,6 +16162,7 @@
     ],
     "Care Homes Community Centres Primary Schools": [
       "Care Home",
+      "Civic Building",
       "School"
     ],
     "Exhibition Centres Heritages Memorials": [
@@ -15603,6 +16170,7 @@
       "Memorial"
     ],
     "Playgrounds Visitor Center Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Laboratories Exhibitions": [
@@ -15638,11 +16206,13 @@
       "Theatre"
     ],
     "Factories Visitor Center Museums": [
+      "Civic Building",
       "Industrial",
       "Museum"
     ],
     "Offices Community Centres Apartments": [
       "Apartment",
+      "Civic Building",
       "Office"
     ],
     "Supermarkets Car Parks Primary Schools": [
@@ -15662,10 +16232,12 @@
       "Theatre"
     ],
     "Secondary Schools Universities Cultural Centres": [
+      "Civic Building",
       "School",
       "University"
     ],
     "Shopping Centres Bars Visitor Center": [
+      "Civic Building",
       "Restaurant",
       "Shopping Centre"
     ],
@@ -15719,7 +16291,8 @@
       "Office"
     ],
     "Banks Cultural Centres": [
-      "Bank"
+      "Bank",
+      "Civic Building"
     ],
     "Heritages Promenades": [
       "Park"
@@ -15729,6 +16302,7 @@
       "Train Station"
     ],
     "Exhibition Centres Trade Shows Community Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Masterplans Student Housing": [
@@ -15749,6 +16323,7 @@
       "Memorial"
     ],
     "Heritages Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Temples Housing": [
@@ -15789,6 +16364,7 @@
     ],
     "Sports Centres Cultural Centres Apartments": [
       "Apartment",
+      "Civic Building",
       "Sports Centre"
     ],
     "Art Galleries Private Houses Student Housing": [
@@ -15811,11 +16387,13 @@
       "Restaurant"
     ],
     "Concert Halls Cultural Centres Chapels": [
+      "Civic Building",
       "Concert Hall",
       "Religious Building"
     ],
     "Streets Community Centres Apartments": [
-      "Apartment"
+      "Apartment",
+      "Civic Building"
     ],
     "Concert Halls Housing": [
       "Concert Hall",
@@ -15850,6 +16428,7 @@
       "Retail"
     ],
     "Warehouses Cultural Centres": [
+      "Civic Building",
       "Warehouse"
     ],
     "Urban Green Spaces Towns Cemeteries": [
@@ -15864,6 +16443,7 @@
       "Park"
     ],
     "Offices Hotels Cultural Centres": [
+      "Civic Building",
       "Hotel",
       "Office"
     ],
@@ -15873,10 +16453,12 @@
       "Theatre"
     ],
     "Parks Restaurants Visitor Center": [
+      "Civic Building",
       "Park",
       "Restaurant"
     ],
     "Cinemas Visitor Center": [
+      "Civic Building",
       "Theatre"
     ],
     "Offices Zoos": [
@@ -15900,12 +16482,15 @@
       "Retail",
       "Sports Centre"
     ],
-    "Rurals Visitor Center Cultural Centres": [],
+    "Rurals Visitor Center Cultural Centres": [
+      "Civic Building"
+    ],
     "Showrooms Hospitals": [
       "Hospital",
       "Retail"
     ],
     "Hotels Swimming Pools Cultural Centres": [
+      "Civic Building",
       "Hotel",
       "Sports Centre"
     ],
@@ -15919,6 +16504,7 @@
       "Museum"
     ],
     "Offices Workshops Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Office"
     ],
@@ -15932,17 +16518,22 @@
       "Hospital"
     ],
     "Bars Visitor Center": [
+      "Civic Building",
       "Restaurant"
     ],
     "Waterways/Wetlands Streets Private Houses": [
       "House"
     ],
     "Sports Centres Social Housing": [
+      "Civic Building",
       "Housing",
       "Sports Centre"
     ],
-    "Mills Visitor Center": [],
+    "Mills Visitor Center": [
+      "Civic Building"
+    ],
     "Wineries Visitor Center": [
+      "Civic Building",
       "Winery"
     ],
     "Marinas Passenger Terminals Subway Stations": [],
@@ -15964,7 +16555,9 @@
       "Stadium"
     ],
     "Streets Skateparks": [],
-    "Rural Visitor Center": [],
+    "Rural Visitor Center": [
+      "Civic Building"
+    ],
     "Urban Green Spaces Memorials Sculptures": [
       "Memorial"
     ],
@@ -15977,26 +16570,30 @@
       "Park"
     ],
     "Townscapes Sports Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Nurseries Housing Social Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Exhibition Centres Workshops Concert Halls": [
       "Concert Hall",
       "Gallery",
       "Industrial"
     ],
-    "Individual Buildings Visitor Center": [],
+    "Individual Buildings Visitor Center": [
+      "Civic Building"
+    ],
     "Laboratories Care Homes Community Centres": [
-      "Care Home"
+      "Care Home",
+      "Civic Building"
     ],
     "Individual Buildings Apartments Student Housing": [
       "Apartment",
       "Student Housing"
     ],
     "Villages Pavilions": [
-      "House",
       "Pavilion"
     ],
     "Offices Car Parks Auditoriums": [
@@ -16028,6 +16625,7 @@
       "Housing"
     ],
     "Community Centres Libraries Housing": [
+      "Civic Building",
       "Housing",
       "Library"
     ],
@@ -16048,12 +16646,14 @@
       "Civic Building"
     ],
     "Sports Centres Visitor Center Wellness Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Heritages Rural Bridges": [
       "Bridge"
     ],
     "Masterplans Community Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Exhibition Centres Parks/Gardens Auditoriums": [
@@ -16064,7 +16664,9 @@
     "Bicycle Stands Promenades": [
       "Park"
     ],
-    "Individual Buildings Urban Green Spaces Community Centres": [],
+    "Individual Buildings Urban Green Spaces Community Centres": [
+      "Civic Building"
+    ],
     "Offices Heritages Housing": [
       "Housing",
       "Office"
@@ -16078,7 +16680,9 @@
       "Housing",
       "University"
     ],
-    "Streets Visitor Center": [],
+    "Streets Visitor Center": [
+      "Civic Building"
+    ],
     "Subway Stations Restaurants Swimming Pools": [
       "Restaurant",
       "Sports Centre"
@@ -16088,6 +16692,7 @@
       "Pavilion"
     ],
     "Promenades Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "City Halls Art Galleries Concert Halls": [
@@ -16126,7 +16731,6 @@
       "Theatre"
     ],
     "Urban Green Spaces Villages Pavilions": [
-      "House",
       "Pavilion"
     ],
     "Commercial Landscape Bridges": [
@@ -16176,7 +16780,8 @@
       "Theatre"
     ],
     "Visitor Center Apartments": [
-      "Apartment"
+      "Apartment",
+      "Civic Building"
     ],
     "Workshops Restaurants Sports Centres": [
       "Industrial",
@@ -16184,6 +16789,7 @@
       "Sports Centre"
     ],
     "Hotels Visitor Center Concert Halls": [
+      "Civic Building",
       "Concert Hall",
       "Hotel"
     ],
@@ -16259,10 +16865,12 @@
       "Park"
     ],
     "Individual Buildings Visitor Center Apartments": [
-      "Apartment"
+      "Apartment",
+      "Civic Building"
     ],
     "Nurseries Sports Centres Concert Halls": [
       "Concert Hall",
+      "Kindergarten",
       "Sports Centre"
     ],
     "Primary Schools Housing Private Houses": [
@@ -16315,6 +16923,7 @@
     ],
     "Townscapes Transports": [],
     "Visitor Center Pavilions Private Houses": [
+      "Civic Building",
       "House",
       "Pavilion"
     ],
@@ -16332,6 +16941,7 @@
       "Restaurant"
     ],
     "Hotels Visitor Center Art Galleries": [
+      "Civic Building",
       "Gallery",
       "Hotel"
     ],
@@ -16343,6 +16953,7 @@
       "Train Station"
     ],
     "Community Centres Workshops Parks": [
+      "Civic Building",
       "Industrial",
       "Park"
     ],
@@ -16371,6 +16982,7 @@
       "Office"
     ],
     "Nurseries Museums": [
+      "Kindergarten",
       "Museum"
     ],
     "Transports Car Parks Highways": [
@@ -16380,6 +16992,7 @@
       "Park"
     ],
     "Residential Landscape Cultural Centres Private Houses": [
+      "Civic Building",
       "House",
       "Housing",
       "Park"
@@ -16392,7 +17005,7 @@
       "Student Housing"
     ],
     "Streets Nurseries Primary Schools": [
-      "School"
+      "Kindergarten"
     ],
     "Libraries Playgrounds Pavilions": [
       "Library",
@@ -16409,10 +17022,9 @@
       "Industrial",
       "Memorial"
     ],
-    "Coasts Waterways/Wetlands Villages": [
-      "House"
-    ],
+    "Coasts Waterways/Wetlands Villages": [],
     "Parks Sports Centres Cultural Centres": [
+      "Civic Building",
       "Park",
       "Sports Centre"
     ],
@@ -16449,6 +17061,7 @@
     ],
     "Urban Green Spaces Cities Farms": [],
     "Cultural Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Estates Hotels Private Houses": [
@@ -16478,6 +17091,7 @@
       "Theatre"
     ],
     "Showrooms Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Retail"
     ],
@@ -16489,10 +17103,12 @@
       "Bridge"
     ],
     "Community Centres Synagogues": [
+      "Civic Building",
       "Religious Building"
     ],
     "Urban Green Spaces Care Homes Nurseries": [
-      "Care Home"
+      "Care Home",
+      "Kindergarten"
     ],
     "Masterplans Cities Towns": [],
     "Offices Townscapes Courthouses": [
@@ -16509,6 +17125,7 @@
     ],
     "Transports Waterways/Wetlands Cities": [],
     "Individual Buildings Community Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Courthouses Private Houses": [
@@ -16521,6 +17138,7 @@
       "Hotel"
     ],
     "Shopping Centres Hotels Cultural Centres": [
+      "Civic Building",
       "Hotel",
       "Shopping Centre"
     ],
@@ -16530,9 +17148,11 @@
       "Park"
     ],
     "Exhibition Centres Information Centres Visitor Center": [
+      "Civic Building",
       "Gallery"
     ],
     "Visitor Center Private Houses": [
+      "Civic Building",
       "House"
     ],
     "Offices Residential Landscape Auditoriums": [
@@ -16591,6 +17211,7 @@
     ],
     "Coasts Cities Subway Stations": [],
     "Community Centres Auditoriums Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Theatre"
     ],
@@ -16599,7 +17220,8 @@
       "Housing"
     ],
     "Urban Green Spaces Nurseries Housing": [
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Sports Centres Concert Halls Student Housing": [
       "Concert Hall",
@@ -16620,8 +17242,8 @@
       "University"
     ],
     "Villages Community Centres Exhibitions": [
-      "Gallery",
-      "House"
+      "Civic Building",
+      "Gallery"
     ],
     "Heritages Streets": [],
     "Shopping Centres Residential Landscape Parks/Gardens": [
@@ -16630,8 +17252,7 @@
       "Shopping Centre"
     ],
     "Villages Wellness Centres Art Galleries": [
-      "Gallery",
-      "House"
+      "Gallery"
     ],
     "Hotels Art Galleries Exhibitions": [
       "Gallery",
@@ -16660,7 +17281,9 @@
     "Individual Buildings Waterways/Wetlands Hotels": [
       "Hotel"
     ],
-    "Urban Green Spaces Visitor Center Cultural Centres": [],
+    "Urban Green Spaces Visitor Center Cultural Centres": [
+      "Civic Building"
+    ],
     "Towns City Halls Community Centres": [
       "Civic Building"
     ],
@@ -16669,9 +17292,7 @@
       "House",
       "Park"
     ],
-    "Individual Buildings Villages": [
-      "House"
-    ],
+    "Individual Buildings Villages": [],
     "Exhibition Centres Trade Shows Pavilions": [
       "Gallery",
       "Pavilion"
@@ -16686,10 +17307,12 @@
       "Pavilion"
     ],
     "Shops Community Centres Restaurants": [
+      "Civic Building",
       "Restaurant",
       "Retail"
     ],
     "Exhibition Centres Heritages Visitor Center": [
+      "Civic Building",
       "Gallery"
     ],
     "Heritages Libraries Art Galleries": [
@@ -16733,6 +17356,7 @@
       "Park"
     ],
     "Visitor Center Cultural Centres Memorials": [
+      "Civic Building",
       "Memorial"
     ],
     "Hospitals Pavilions": [
@@ -16750,9 +17374,7 @@
       "Restaurant",
       "School"
     ],
-    "Rural Villages": [
-      "House"
-    ],
+    "Rural Villages": [],
     "Heritages Townscapes Estates": [],
     "Shopping Centres Parks/Gardens Train stations": [
       "Park",
@@ -16763,6 +17385,7 @@
       "Religious Building"
     ],
     "Heritages Libraries Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Masterplans Research Facilities Universities": [
@@ -16800,12 +17423,8 @@
     "Commercial Landscape Townscapes Cities": [
       "Park"
     ],
-    "Estates Towns Villages": [
-      "House"
-    ],
-    "Heritages Individual Buildings Villages": [
-      "House"
-    ],
+    "Estates Towns Villages": [],
+    "Heritages Individual Buildings Villages": [],
     "Hotels Playgrounds Theme Parks": [
       "Hotel",
       "Park"
@@ -16848,6 +17467,7 @@
       "Sports Centre"
     ],
     "Offices Community Centres Swimming Pools": [
+      "Civic Building",
       "Office",
       "Sports Centre"
     ],
@@ -16899,6 +17519,7 @@
       "Winery"
     ],
     "Palaces Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Shops Sports Centres Swimming Pools": [
@@ -16925,7 +17546,6 @@
       "Warehouse"
     ],
     "Coasts Villages Promenades": [
-      "House",
       "Park"
     ],
     "Coasts Casinos Hotels": [
@@ -16986,10 +17606,12 @@
       "Park"
     ],
     "Showrooms Community Centres": [
+      "Civic Building",
       "Retail"
     ],
     "Care Homes Community Centres Playgrounds": [
       "Care Home",
+      "Civic Building",
       "Park"
     ],
     "Rural Urban Green Spaces": [],
@@ -17012,7 +17634,8 @@
       "Shopping Centre"
     ],
     "Masterplans Community Centres Apartments": [
-      "Apartment"
+      "Apartment",
+      "Civic Building"
     ],
     "Commercial Landscape Masterplans Hotels": [
       "Hotel",
@@ -17027,10 +17650,14 @@
       "Retail"
     ],
     "Coasts Hotels Visitor Center": [
+      "Civic Building",
       "Hotel"
     ],
-    "Laboratories Community Centres": [],
+    "Laboratories Community Centres": [
+      "Civic Building"
+    ],
     "Offices Community Centres Auditoriums": [
+      "Civic Building",
       "Office",
       "Theatre"
     ],
@@ -17066,6 +17693,7 @@
       "School"
     ],
     "Commercial Landscape Visitor Center Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Information Centres Skateparks": [],
@@ -17087,10 +17715,12 @@
       "Train Station"
     ],
     "Cultural Centres Exhibitions Private Houses": [
+      "Civic Building",
       "Gallery",
       "House"
     ],
     "Offices Community Centres Sports Centres": [
+      "Civic Building",
       "Office",
       "Sports Centre"
     ],
@@ -17108,6 +17738,7 @@
       "School"
     ],
     "Offices Embassies Palaces": [
+      "Civic Building",
       "Office"
     ],
     "Offices Rural": [
@@ -17123,16 +17754,13 @@
       "Industrial"
     ],
     "Villages Sports Centres": [
-      "House",
       "Sports Centre"
     ],
     "Wellness Centres Art Galleries Housing": [
       "Gallery",
       "Housing"
     ],
-    "Coasts Villages Power Plants": [
-      "House"
-    ],
+    "Coasts Villages Power Plants": [],
     "Rurals Primary Schools": [
       "School"
     ],
@@ -17152,10 +17780,12 @@
       "Park"
     ],
     "Offices Factories Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Office"
     ],
     "Community Centres Libraries Playgrounds": [
+      "Civic Building",
       "Library",
       "Park"
     ],
@@ -17198,6 +17828,7 @@
       "House"
     ],
     "Community Centres Auditoriums Concert Halls": [
+      "Civic Building",
       "Concert Hall",
       "Theatre"
     ],
@@ -17210,6 +17841,7 @@
       "Pavilion"
     ],
     "Showrooms Restaurants Visitor Center": [
+      "Civic Building",
       "Restaurant",
       "Retail"
     ],
@@ -17235,7 +17867,9 @@
       "Office"
     ],
     "Community Centres Nurseries Housing": [
-      "Housing"
+      "Civic Building",
+      "Housing",
+      "Kindergarten"
     ],
     "Hospitals Workshops": [
       "Hospital",
@@ -17250,7 +17884,8 @@
       "Restaurant"
     ],
     "Heritages Care Homes Nurseries": [
-      "Care Home"
+      "Care Home",
+      "Kindergarten"
     ],
     "Offices Showrooms Exhibitions": [
       "Gallery",
@@ -17281,6 +17916,7 @@
       "Apartment"
     ],
     "Masterplans Universities Cultural Centres": [
+      "Civic Building",
       "University"
     ],
     "Rural Tunnels": [],
@@ -17289,7 +17925,9 @@
       "Shopping Centre",
       "Sports Centre"
     ],
-    "Information Centres Visitor Center Wellness Centres": [],
+    "Information Centres Visitor Center Wellness Centres": [
+      "Civic Building"
+    ],
     "Parks Housing Social Housing": [
       "Housing",
       "Park"
@@ -17302,7 +17940,8 @@
       "Retail"
     ],
     "Airports Passenger Terminals Visitor Center": [
-      "Airport"
+      "Airport",
+      "Civic Building"
     ],
     "Shopping Centres Commercial Landscape Parks/Gardens": [
       "Park",
@@ -17316,12 +17955,15 @@
     "Heritages Bridges": [
       "Bridge"
     ],
-    "Heritages Urban Green Spaces Cultural Centres": [],
+    "Heritages Urban Green Spaces Cultural Centres": [
+      "Civic Building"
+    ],
     "Parks/Gardens Bars Restaurants": [
       "Park",
       "Restaurant"
     ],
     "Libraries Wellness Centres Cultural Centres": [
+      "Civic Building",
       "Library"
     ],
     "Offices Shopping Centres Car Parks": [
@@ -17330,6 +17972,7 @@
       "Shopping Centre"
     ],
     "Parks/Gardens Visitor Center Pavilions": [
+      "Civic Building",
       "Park",
       "Pavilion"
     ],
@@ -17337,6 +17980,7 @@
       "Retail"
     ],
     "Community Centres Parks Pavilions": [
+      "Civic Building",
       "Park",
       "Pavilion"
     ],
@@ -17380,6 +18024,7 @@
       "Office"
     ],
     "Offices Parks Cultural Centres": [
+      "Civic Building",
       "Office",
       "Park"
     ],
@@ -17403,6 +18048,7 @@
       "Pavilion"
     ],
     "Offices Libraries Cultural Centres": [
+      "Civic Building",
       "Library",
       "Office"
     ],
@@ -17411,9 +18057,12 @@
       "Hospital"
     ],
     "Heritages Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
-    "Rural Community Centres Visitor Center": [],
+    "Rural Community Centres Visitor Center": [
+      "Civic Building"
+    ],
     "Nightclubs Sports Centres Private Houses": [
       "House",
       "Sports Centre"
@@ -17434,6 +18083,7 @@
       "Religious Building"
     ],
     "Community Centres Restaurants Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Restaurant"
     ],
@@ -17441,9 +18091,11 @@
       "Warehouse"
     ],
     "Urban Green Spaces Universities Cultural Centres": [
+      "Civic Building",
       "University"
     ],
     "Parks Playgrounds Cultural Centres": [
+      "Civic Building",
       "Park"
     ],
     "Streets Subway Stations": [],
@@ -17484,12 +18136,16 @@
     ],
     "Coasts Urban Green Spaces Sound Barriers": [],
     "Community Centres Wellness Centres Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
-    "Heritages Rural Cultural Centres": [],
+    "Heritages Rural Cultural Centres": [
+      "Civic Building"
+    ],
     "Nurseries Apartments Senior Housing": [
       "Apartment",
-      "Housing"
+      "Housing",
+      "Kindergarten"
     ],
     "Commercial Landscape Residential Landscape Restaurants": [
       "Housing",
@@ -17500,9 +18156,7 @@
       "Pavilion",
       "Retail"
     ],
-    "Rural Rurals Villages": [
-      "House"
-    ],
+    "Rural Rurals Villages": [],
     "Bars Housing Senior Housing": [
       "Housing",
       "Restaurant"
@@ -17519,6 +18173,7 @@
       "Memorial"
     ],
     "Offices Auditoriums Cultural Centres": [
+      "Civic Building",
       "Office",
       "Theatre"
     ],
@@ -17540,14 +18195,18 @@
       "Office"
     ],
     "Warehouses Urban Green Spaces Cultural Centres": [
+      "Civic Building",
       "Warehouse"
     ],
     "Offices Parks/Gardens Waterways/Wetlands": [
       "Office",
       "Park"
     ],
-    "Heritages Visitor Center": [],
+    "Heritages Visitor Center": [
+      "Civic Building"
+    ],
     "Auditoriums Visitor Center Cultural Centres": [
+      "Civic Building",
       "Theatre"
     ],
     "Bridge Control Buildings Marinas Passenger Terminals": [
@@ -17559,6 +18218,7 @@
     ],
     "Community Centres Apartments Senior Housing": [
       "Apartment",
+      "Civic Building",
       "Housing"
     ],
     "Townscapes Restaurants Swimming Pools": [
@@ -17571,6 +18231,7 @@
       "Winery"
     ],
     "Offices Urban Green Spaces Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Offices Cities Workshops": [
@@ -17582,10 +18243,12 @@
       "Restaurant"
     ],
     "Offices Community Centres Art Galleries": [
+      "Civic Building",
       "Gallery",
       "Office"
     ],
     "Golf Courses Swimming Pools Visitor Center": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Shopping Centres Playgrounds Sculptures": [
@@ -17597,6 +18260,7 @@
       "Sports Centre"
     ],
     "Community Centres Playgrounds Pavilions": [
+      "Civic Building",
       "Park",
       "Pavilion"
     ],
@@ -17620,6 +18284,7 @@
       "Bridge"
     ],
     "Universities Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant",
       "University"
     ],
@@ -17646,7 +18311,9 @@
     "Rurals Wellness Centres Pavilions": [
       "Pavilion"
     ],
-    "Coasts Rural Community Centres": [],
+    "Coasts Rural Community Centres": [
+      "Civic Building"
+    ],
     "Urban Green Spaces City Halls Parks": [
       "Civic Building",
       "Park"
@@ -17655,6 +18322,7 @@
       "Care Home"
     ],
     "Offices Waterways/Wetlands Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Art Galleries Apartments Housing": [
@@ -17678,7 +18346,6 @@
       "Retail"
     ],
     "Parks/Gardens Villages Parks": [
-      "House",
       "Park"
     ],
     "Libraries Secondary Schools Student Housing": [
@@ -17695,6 +18362,7 @@
       "Warehouse"
     ],
     "Primary Schools Visitor Center Wellness Centres": [
+      "Civic Building",
       "School"
     ],
     "Shops Cities Art Galleries": [
@@ -17705,6 +18373,7 @@
       "Apartment"
     ],
     "Cultural Centres Pavilions Memorial spaces": [
+      "Civic Building",
       "Memorial",
       "Pavilion"
     ],
@@ -17719,6 +18388,7 @@
       "School"
     ],
     "Exhibition Centres Community Centres Pavilions": [
+      "Civic Building",
       "Gallery",
       "Pavilion"
     ],
@@ -17729,14 +18399,14 @@
     ],
     "Shopping Centres Villages Apartments": [
       "Apartment",
-      "House",
       "Shopping Centre"
     ],
     "Villages Community Centres Sports Centres": [
-      "House",
+      "Civic Building",
       "Sports Centre"
     ],
     "Swimming Pools Wellness Centres Cultural Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Parks/Gardens Promenades Art Galleries": [
@@ -17744,6 +18414,7 @@
       "Park"
     ],
     "Masterplans Hotels Golf Courses Sports Centres Visitor Center": [
+      "Civic Building",
       "Hotel",
       "Sports Centre"
     ],
@@ -17752,6 +18423,7 @@
     ],
     "Coasts Wellness Centres": [],
     "Exhibition Centres Showrooms Community Centres": [
+      "Civic Building",
       "Gallery",
       "Retail"
     ],
@@ -17807,7 +18479,9 @@
       "Park",
       "Religious Building"
     ],
-    "Heritages Community Centres Cultural Centres": [],
+    "Heritages Community Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Masterplans Urban Green Spaces Pavilions": [
       "Pavilion"
     ],
@@ -17815,6 +18489,7 @@
       "Memorial"
     ],
     "Workshops Bars Cultural Centres": [
+      "Civic Building",
       "Industrial",
       "Restaurant"
     ],
@@ -17836,6 +18511,7 @@
       "Park"
     ],
     "Nurseries Universities": [
+      "Kindergarten",
       "University"
     ],
     "Heritages Bars Restaurants": [
@@ -17894,6 +18570,7 @@
       "Sports Centre"
     ],
     "Parks/Gardens Restaurants Visitor Center": [
+      "Civic Building",
       "Park",
       "Restaurant"
     ],
@@ -17912,6 +18589,7 @@
       "Office"
     ],
     "Shopping Centres Urban Green Spaces Cultural Centres": [
+      "Civic Building",
       "Shopping Centre"
     ],
     "Marinas Bars Art Galleries": [
@@ -17936,6 +18614,7 @@
       "House"
     ],
     "Heritages Parks/Gardens Community Centres": [
+      "Civic Building",
       "Park"
     ],
     "Workshops Restaurants Theaters": [
@@ -17945,7 +18624,7 @@
     ],
     "Nurseries Primary Schools Nurse Housing": [
       "Housing",
-      "School"
+      "Kindergarten"
     ],
     "Commercial Landscape Masterplans Marinas": [
       "Park"
@@ -17969,6 +18648,7 @@
     ],
     "Transports Highways Sculptures": [],
     "Community Centres Restaurants Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Masterplans Parks/Gardens Bridges": [
@@ -18011,8 +18691,11 @@
     "Masterplans Highways Parks": [
       "Park"
     ],
-    "Rurals Community Centres Cultural Centres": [],
+    "Rurals Community Centres Cultural Centres": [
+      "Civic Building"
+    ],
     "Hotels Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Hotel"
     ],
@@ -18025,6 +18708,7 @@
       "Retail"
     ],
     "Offices Research Facilities Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Offices Heritages Cities": [
@@ -18046,12 +18730,14 @@
     ],
     "Shops Nurseries Workshops": [
       "Industrial",
+      "Kindergarten",
       "Retail"
     ],
     "Parks/Gardens Townscapes Passenger Terminals": [
       "Park"
     ],
     "Visitor Center Chapels": [
+      "Civic Building",
       "Religious Building"
     ],
     "Showrooms Secondary Schools": [
@@ -18068,6 +18754,7 @@
       "Theatre"
     ],
     "Offices Urban Green Spaces Community Centres": [
+      "Civic Building",
       "Office"
     ],
     "Bars Concert Halls Theaters": [
@@ -18126,15 +18813,15 @@
       "Sports Centre"
     ],
     "Community Centres Cinemas": [
+      "Civic Building",
       "Theatre"
     ],
     "Workshops Cultural Centres Theaters": [
+      "Civic Building",
       "Industrial",
       "Theatre"
     ],
-    "Masterplans Urban Green Spaces Villages": [
-      "House"
-    ],
+    "Masterplans Urban Green Spaces Villages": [],
     "Residential Landscape Individual Buildings Parks": [
       "Housing",
       "Park"
@@ -18144,9 +18831,11 @@
       "Retail"
     ],
     "Restaurants Visitor Center Wellness Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Exhibition Centres Shopping Centres Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Shopping Centre"
     ],
@@ -18155,6 +18844,7 @@
       "Train Station"
     ],
     "Community Centres Libraries Visitor Center": [
+      "Civic Building",
       "Library"
     ],
     "Libraries Pavilions Sculptures": [
@@ -18189,12 +18879,14 @@
       "Park"
     ],
     "Urban Green Spaces Community Centres Sports Centres": [
+      "Civic Building",
       "Sports Centre"
     ],
     "Golf Courses Swimming Pools": [
       "Sports Centre"
     ],
     "Community Centres Stadiums Museums": [
+      "Civic Building",
       "Museum",
       "Stadium"
     ],
@@ -18211,6 +18903,7 @@
       "Housing"
     ],
     "Offices Farms Visitor Center": [
+      "Civic Building",
       "Office"
     ],
     "Shops Regionals": [
@@ -18225,16 +18918,20 @@
       "Museum"
     ],
     "Community Centres Cultural Centres Museums": [
+      "Civic Building",
       "Museum"
     ],
     "Coasts Regionals Private Houses": [
       "House"
     ],
     "Parks/Gardens Community Centres Sports Centres": [
+      "Civic Building",
       "Park",
       "Sports Centre"
     ],
-    "Heritages Community Centres": [],
+    "Heritages Community Centres": [
+      "Civic Building"
+    ],
     "Masterplans Marinas Hotels": [
       "Hotel"
     ],
@@ -18243,7 +18940,9 @@
       "Housing",
       "Park"
     ],
-    "Community Centres Visitor Center": [],
+    "Community Centres Visitor Center": [
+      "Civic Building"
+    ],
     "Exhibition Centres Trade Shows Sculptures": [
       "Gallery"
     ],
@@ -18305,20 +19004,16 @@
       "Hotel",
       "House"
     ],
-    "Villages Farms Zoos": [
-      "House"
-    ],
+    "Villages Farms Zoos": [],
     "Heritages Nationals Museums": [
       "Museum"
     ],
-    "Regionals Towns Villages": [
-      "House"
-    ],
+    "Regionals Towns Villages": [],
     "Villages Hotels": [
-      "Hotel",
-      "House"
+      "Hotel"
     ],
     "Sports Centres Visitor Center Pavilions": [
+      "Civic Building",
       "Pavilion",
       "Sports Centre"
     ],
@@ -18332,6 +19027,7 @@
       "Park"
     ],
     "Restaurants Wellness Centres Cultural Centres": [
+      "Civic Building",
       "Restaurant"
     ],
     "Offices Showrooms Cities": [
@@ -18347,6 +19043,7 @@
       "Retail"
     ],
     "Community Centres Libraries Restaurants": [
+      "Civic Building",
       "Library",
       "Restaurant"
     ],
@@ -18359,7 +19056,10 @@
       "Housing",
       "Park"
     ],
-    "Research Facilities Visitor Center": [],
+    "Research Facilities Visitor Center": [
+      "Civic Building",
+      "Office"
+    ],
     "Stadiums Wellness Centres": [
       "Stadium"
     ],
@@ -18390,6 +19090,7 @@
       "Theatre"
     ],
     "Urban Green Spaces Art Galleries Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Workshops Exhibitions Sculptures": [
@@ -18420,7 +19121,9 @@
     "Airports Marinas Passenger Terminals": [
       "Airport"
     ],
-    "Distribution Centres Community Centres": [],
+    "Distribution Centres Community Centres": [
+      "Civic Building"
+    ],
     "Heritages Parks/Gardens Primary Schools": [
       "Park",
       "School"
@@ -18436,7 +19139,9 @@
       "Gallery",
       "Park"
     ],
-    "Coasts Waterways/Wetlands Cultural Centres": [],
+    "Coasts Waterways/Wetlands Cultural Centres": [
+      "Civic Building"
+    ],
     "Showrooms Wineries Bars": [
       "Restaurant",
       "Retail",
@@ -18447,7 +19152,8 @@
       "Retail"
     ],
     "Community Centres Nurseries Primary Schools": [
-      "School"
+      "Civic Building",
+      "Kindergarten"
     ],
     "Parks/Gardens Townscapes Promenades": [
       "Park"
@@ -18457,9 +19163,11 @@
       "Pavilion"
     ],
     "Heritages Visitor Center Pavilions": [
+      "Civic Building",
       "Pavilion"
     ],
     "Rurals Community Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Individual Buildings Hotels Senior Housing": [
@@ -18467,7 +19175,6 @@
       "Housing"
     ],
     "Commercial Landscape Villages Farms": [
-      "House",
       "Park"
     ],
     "Shopping Centres Masterplans Urban Green Spaces": [
@@ -18499,7 +19206,6 @@
       "School"
     ],
     "Towns Villages Memorial spaces": [
-      "House",
       "Memorial"
     ],
     "Cinemas Playgrounds Apartments": [
@@ -18530,6 +19236,7 @@
       "Office"
     ],
     "Factories Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Industrial"
     ],
@@ -18554,6 +19261,7 @@
       "Retail"
     ],
     "Swimming Pools Cultural Centres Exhibitions": [
+      "Civic Building",
       "Gallery",
       "Sports Centre"
     ],
@@ -18588,6 +19296,7 @@
       "Warehouse"
     ],
     "Parks/Gardens Concert Halls Cultural Centres": [
+      "Civic Building",
       "Concert Hall",
       "Park"
     ],
@@ -18605,6 +19314,8 @@
       "Retail"
     ],
     "Research Facilities Auditoriums Cultural Centres": [
+      "Civic Building",
+      "Office",
       "Theatre"
     ],
     "Factories Apartments": [
@@ -18616,6 +19327,7 @@
       "Library"
     ],
     "Community Centres Private Houses": [
+      "Civic Building",
       "House"
     ],
     "Commercial Landscape Pavilions Sculptures": [
@@ -18623,6 +19335,7 @@
       "Pavilion"
     ],
     "Exhibition Centres Showrooms Cultural Centres": [
+      "Civic Building",
       "Gallery",
       "Retail"
     ],
@@ -18642,10 +19355,12 @@
       "Pavilion"
     ],
     "Commercial Landscape Bars Visitor Center": [
+      "Civic Building",
       "Park",
       "Restaurant"
     ],
     "Community Centres Memorial spaces": [
+      "Civic Building",
       "Memorial"
     ],
     "Power Plants Sculptures": [],
@@ -18653,15 +19368,17 @@
       "Housing",
       "Office"
     ],
-    "Community Centres Visitor Center Cultural Centres": [],
+    "Community Centres Visitor Center Cultural Centres": [
+      "Civic Building"
+    ],
     "Community Centres Cultural Centres Social Housing": [
+      "Civic Building",
       "Housing"
     ],
     "Townscapes Towns City Halls": [
       "Civic Building"
     ],
     "Shopping Centres Towns Villages": [
-      "House",
       "Shopping Centre"
     ],
     "Bridges Auditoriums Universities": [
@@ -18682,6 +19399,7 @@
       "University"
     ],
     "Secondary Schools Cultural Centres Pavilions": [
+      "Civic Building",
       "Pavilion",
       "School"
     ],
@@ -18727,11 +19445,15 @@
       "Retail"
     ],
     "Visitor Center Museums Pavilions": [
+      "Civic Building",
       "Museum",
       "Pavilion"
     ],
-    "Individual Buildings Rural Visitor Center": [],
+    "Individual Buildings Rural Visitor Center": [
+      "Civic Building"
+    ],
     "Offices Farms Cultural Centres": [
+      "Civic Building",
       "Office"
     ],
     "Coasts Waterways/Wetlands Swimming Pools": [
@@ -18749,10 +19471,12 @@
       "Sports Centre"
     ],
     "Hotels Cultural Centres Pavilions": [
+      "Civic Building",
       "Hotel",
       "Pavilion"
     ],
     "Workshops Cultural Centres Pavilions": [
+      "Civic Building",
       "Industrial",
       "Pavilion"
     ],
@@ -18805,6 +19529,7 @@
       "Retail"
     ],
     "Community Centres Universities Concert Halls": [
+      "Civic Building",
       "Concert Hall",
       "University"
     ],
@@ -18824,6 +19549,7 @@
       "Museum"
     ],
     "Exhibition Centres Community Centres Cultural Centres": [
+      "Civic Building",
       "Gallery"
     ],
     "Shopping Centres Heritages Hotels": [
@@ -18846,9 +19572,7 @@
       "Office",
       "Park"
     ],
-    "Heritages Rural Villages": [
-      "House"
-    ],
+    "Heritages Rural Villages": [],
     "Farms Restaurants": [
       "Restaurant"
     ],
@@ -18856,6 +19580,7 @@
       "Warehouse"
     ],
     "Cultural Centres Pavilions Churches": [
+      "Civic Building",
       "Pavilion",
       "Religious Building"
     ],
