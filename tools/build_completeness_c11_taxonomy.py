@@ -17,6 +17,7 @@ only (embeddings are regenerated downstream). Read-only w.r.t. Neon.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import sys
 from collections import Counter
@@ -51,6 +52,44 @@ _TYPOLOGY_PRIORITY = [
     "Student Housing", "House", "Apartment", "Housing", "Mixed Use",
 ]
 _PRIO_IDX = {t: i for i, t in enumerate(_TYPOLOGY_PRIORITY)}
+
+# Fallback chain for rows whose source tags yield no typology: an unambiguous
+# institution word in the name, then a program value that maps cleanly to one
+# typology. Provenance is recorded in typology_primary_source.
+_NAME_RULES = [
+    (re.compile(r"kindergarten|\bnurser|pre-?school", re.I), "Kindergarten"),
+    (re.compile(r"universit|\bcollege\b", re.I), "University"),
+    (re.compile(r"\bschool\b", re.I), "School"),
+    (re.compile(r"\blibrar|bibliote|mediathe|bibliothek", re.I), "Library"),
+    (re.compile(r"\bmuseum|\bmuseo\b|mus[ée]e|muzeum", re.I), "Museum"),
+    (re.compile(r"\bgaller|galer[íi]a|galerie", re.I), "Gallery"),
+    (re.compile(r"cathedral|basilica|\bchurch|\bchapel|mosque|synagogue|"
+                r"\btemple\b|monaster|convent", re.I), "Religious Building"),
+    (re.compile(r"\bhospital|\bclinic", re.I), "Hospital"),
+    (re.compile(r"\bstadium\b|\barena\b", re.I), "Stadium"),
+    (re.compile(r"\bairport\b", re.I), "Airport"),
+    (re.compile(r"train station|railway station", re.I), "Train Station"),
+    (re.compile(r"town hall|city hall", re.I), "Civic Building"),
+    (re.compile(r"\bwinery\b|vineyard|bodega", re.I), "Winery"),
+]
+# program -> typology, only where the program value maps to exactly one type
+_PROGRAM_FALLBACK = {
+    "Office": "Office", "Museum": "Museum", "Religion": "Religious Building",
+    "Sports": "Sports Centre", "Healthcare": "Hospital", "Mixed Use": "Mixed Use",
+    "Landscape": "Park", "Housing": "Housing",
+}
+
+
+def _name_fallback(name):
+    text = str(name or "")
+    for rx, term in _NAME_RULES:
+        if rx.search(text):
+            return term
+    return None
+
+
+def _program_fallback(program):
+    return _PROGRAM_FALLBACK.get(program)
 
 
 def _load_source_tags() -> dict:
@@ -106,6 +145,7 @@ def main() -> int:
 
     counts = Counter()
     primary_dist: Counter = Counter()
+    prov_dist: Counter = Counter()
     n_in = 0
     f = OUT.open("w", encoding="utf-8")
     f.write('{"buildings":[')
@@ -130,21 +170,35 @@ def main() -> int:
                             elements.add(term)
 
             row["source_categories"] = src_cats
-            row["typology_tags"] = sorted(typ_counter)
             row["architectural_elements"] = sorted(elements)
-            primary = _pick_primary(typ_counter)
+            if typ_counter:
+                typ_tags = sorted(typ_counter)
+                primary = _pick_primary(typ_counter)
+                prov = "source_tags"
+            else:
+                name_fb = _name_fallback(row.get("name"))
+                prog_fb = _program_fallback(row.get("program"))
+                if name_fb:
+                    typ_tags, primary, prov = [name_fb], name_fb, "name"
+                elif prog_fb:
+                    typ_tags, primary, prov = [prog_fb], prog_fb, "program"
+                else:
+                    typ_tags, primary, prov = [], None, None
+            row["typology_tags"] = typ_tags
             row["typology_primary"] = primary
+            row["typology_primary_source"] = prov
 
             counts["rows_total"] += 1
             if src_cats:
                 counts["rows_with_source_categories"] += 1
-            if typ_counter:
+            if typ_tags:
                 counts["rows_with_typology"] += 1
             if elements:
                 counts["rows_with_elements"] += 1
             if primary:
                 counts["rows_with_typology_primary"] += 1
                 primary_dist[primary] += 1
+                prov_dist[prov] += 1
             elif row.get("is_publishable"):
                 counts["publishable_without_typology"] += 1
 
@@ -161,11 +215,13 @@ def main() -> int:
         "rows_total": n_in,
         "counts": dict(counts),
         "typology_primary_distribution": dict(primary_dist.most_common()),
+        "typology_primary_source_distribution": dict(prov_dist),
     }
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"C11 taxonomy backfill -> {OUT.relative_to(ROOT)}")
-    print(json.dumps({"rows_total": n_in, "counts": dict(counts)},
+    print(json.dumps({"rows_total": n_in, "counts": dict(counts),
+                      "primary_source": dict(prov_dist)},
                      ensure_ascii=False, indent=2))
     print("typology_primary top: " + ", ".join(
         f"{t}:{c:,}" for t, c in primary_dist.most_common(15)))
