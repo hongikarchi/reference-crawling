@@ -15,10 +15,18 @@ This file is the operating manual. For schema/vocab/tool detail see
 - **State lives in files, never terminal memory.** The durable record is: the
   data artifacts, `.claude/ops/jobs/` job cards, and the dashboard. Re-derive
   state by reading those — never assume in-memory continuity between sessions.
-- **Current production dataset:** Neon table `canonical_v2_buildings`
-  (39,478 rows / 36,864 publishable, artifact `completeness_c23_final`,
-  schema includes `year_kind`). The legacy metalocus-only
-  `architecture_vectors` table + `data/enrich/` pipeline are retired.
+- **Current production dataset (Neon `neondb`):**
+  - `canonical_v2_buildings`: 39,478 rows / 36,864 publishable, artifact
+    `completeness_c23_final`, schema includes `year_kind`.
+  - `canonical_v2_architects`: 14,216 rows / 4,357 recommendable, derived from
+    `id_registry_architects.json` + 3 source firm DBs + buildings reverse-index;
+    portfolio embedding = mean of publishable building embeddings (384-dim, same
+    space). See `docs/ARCHITECT_RECOMMENDATION.md`.
+  - Mental model: **`neondb` = architecture data** (buildings + architects);
+    **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes
+    (make_web migration ongoing). Same project, separate DBs.
+  - Legacy metalocus-only `architecture_vectors` table + `data/enrich/` pipeline
+    are retired.
 
 ## Pipeline (5 stages — detail in docs/REFERENCE.md)
 

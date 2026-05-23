@@ -208,7 +208,7 @@ def _inspect(conn) -> dict:
                 "distinct_countries": row[2], "n_buildings_publishable_gte_3": row[3]}
 
 
-def _load_rows(input_path, dry_run, batch_size=500):
+def _load_rows(input_path, dry_run, batch_size=100):
     conn = _connect()
     n_loaded = 0
     counts = {}
@@ -223,6 +223,10 @@ def _load_rows(input_path, dry_run, batch_size=500):
                     psycopg2.extras.execute_values(cur, UPSERT_SQL, batch, page_size=batch_size)
                     n_loaded += len(batch)
                     batch.clear()
+                    if not dry_run and n_loaded % 1000 == 0:
+                        # commit per 1000 to avoid huge transaction + SSL timeout
+                        conn.commit()
+                        print(f"  committed {n_loaded} rows", file=sys.stderr)
             if batch:
                 psycopg2.extras.execute_values(cur, UPSERT_SQL, batch, page_size=batch_size)
                 n_loaded += len(batch)
