@@ -128,6 +128,7 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "typology_tags": row.get("typology_tags") or [],
         "architectural_elements": row.get("architectural_elements") or [],
         "source_categories": row.get("source_categories") or {},
+        "year_kind": row.get("year_kind") or "unknown",
         "embedding": row.get("embedding"),
     }
 

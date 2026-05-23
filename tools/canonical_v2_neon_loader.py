@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS {TABLE} (
     typology_tags                 TEXT[]      NOT NULL DEFAULT '{{}}',
     architectural_elements        TEXT[]      NOT NULL DEFAULT '{{}}',
     source_categories             JSONB       NOT NULL DEFAULT '{{}}'::jsonb,
+    year_kind                     TEXT        NOT NULL DEFAULT 'unknown' CHECK (year_kind IN ('completed','future','unknown')),
     embedding                     VECTOR(384) NOT NULL,
     created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -119,7 +120,19 @@ ALTER TABLE {TABLE}
     ADD COLUMN IF NOT EXISTS typology_primary_source TEXT,
     ADD COLUMN IF NOT EXISTS typology_tags TEXT[] NOT NULL DEFAULT '{{}}',
     ADD COLUMN IF NOT EXISTS architectural_elements TEXT[] NOT NULL DEFAULT '{{}}',
-    ADD COLUMN IF NOT EXISTS source_categories JSONB NOT NULL DEFAULT '{{}}'::jsonb;
+    ADD COLUMN IF NOT EXISTS source_categories JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+    ADD COLUMN IF NOT EXISTS year_kind TEXT NOT NULL DEFAULT 'unknown';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = '{TABLE}_year_kind_check'
+    ) THEN
+        ALTER TABLE {TABLE}
+            ADD CONSTRAINT {TABLE}_year_kind_check
+            CHECK (year_kind IN ('completed','future','unknown'));
+    END IF;
+END$$;
 
 CREATE INDEX IF NOT EXISTS idx_{TABLE}_typology_primary
     ON {TABLE} (typology_primary);
@@ -129,6 +142,8 @@ CREATE INDEX IF NOT EXISTS idx_{TABLE}_arch_elements
     ON {TABLE} USING GIN (architectural_elements);
 CREATE INDEX IF NOT EXISTS idx_{TABLE}_source_categories
     ON {TABLE} USING GIN (source_categories);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_year_kind
+    ON {TABLE} (year_kind);
 """
 
 COLUMNS = (
@@ -166,6 +181,7 @@ COLUMNS = (
     "typology_tags",
     "architectural_elements",
     "source_categories",
+    "year_kind",
     "embedding",
 )
 
@@ -206,6 +222,7 @@ ON CONFLICT (canonical_bld_id) DO UPDATE SET
     typology_tags                = EXCLUDED.typology_tags,
     architectural_elements       = EXCLUDED.architectural_elements,
     source_categories            = EXCLUDED.source_categories,
+    year_kind                    = EXCLUDED.year_kind,
     embedding                    = EXCLUDED.embedding,
     updated_at                   = NOW();
 """
@@ -287,6 +304,7 @@ def _row_tuple(mapped: dict[str, Any]) -> tuple[Any, ...]:
         mapped["typology_tags"],
         mapped["architectural_elements"],
         psycopg2.extras.Json(mapped["source_categories"]),
+        mapped.get("year_kind") or "unknown",
         _vec_literal(mapped["embedding"]),
     )
 

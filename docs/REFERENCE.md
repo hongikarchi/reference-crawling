@@ -79,14 +79,15 @@ CREATE TABLE canonical_v2_buildings (
   typology_tags                 TEXT[]      NOT NULL DEFAULT '{}',
   architectural_elements        TEXT[]      NOT NULL DEFAULT '{}',
   source_categories             JSONB       NOT NULL DEFAULT '{}',    -- raw source taxonomy
+  year_kind                     TEXT        NOT NULL DEFAULT 'unknown', -- completed | future | unknown (derived from project_year vs current_year)
   embedding                     VECTOR(384) NOT NULL,
   created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-Indexes: B-tree on country/city/year/program/style/tier/is_publishable and
-`typology_primary`; GIN on `architect_canonical_ids`, `source_refs`,
+Indexes: B-tree on country/city/year/program/style/tier/is_publishable,
+`typology_primary`, and `year_kind`; GIN on `architect_canonical_ids`, `source_refs`,
 `typology_tags`, `architectural_elements`, `source_categories`; HNSW
 (`vector_cosine_ops`) on `embedding`. Embedding model:
 `paraphrase-multilingual-MiniLM-L12-v2`, 384-dim. `python3
