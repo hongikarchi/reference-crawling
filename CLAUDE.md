@@ -16,7 +16,8 @@ This file is the operating manual. For schema/vocab/tool detail see
   data artifacts, `.claude/ops/jobs/` job cards, and the dashboard. Re-derive
   state by reading those — never assume in-memory continuity between sessions.
 - **Current production dataset:** Neon table `canonical_v2_buildings`
-  (39,776 rows, artifact `completeness_c8`). The legacy metalocus-only
+  (39,484 rows / 36,870 publishable, artifact `completeness_c22_make_web_polish`,
+  schema includes `year_kind`). The legacy metalocus-only
   `architecture_vectors` table + `data/enrich/` pipeline are retired.
 
 ## Pipeline (5 stages — detail in docs/REFERENCE.md)
