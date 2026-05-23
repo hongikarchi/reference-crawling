@@ -24,7 +24,7 @@ _DIVISARE_OLD_RE = re.compile(r"/project_images/(\d+)/([^/?.]+)")
 # Architizer: /uploads/<13-digit timestamp><basename>.<ext> ; same <basename>
 # uploaded twice gets different timestamps → identity = basename without ts/ext.
 _ARCH_UPLOADS_RE = re.compile(
-    r"/uploads/\d{13}(.+?)\.(?:jpe?g|png|webp|gif|avif)(?:\?|$)",
+    r"/uploads/\d{13}(.{3,}?)\.(?:jpe?g|png|webp|gif|avif)(?:\?|$)",
     re.I,
 )
 _ARCH_UPLOADS_FALLBACK_RE = re.compile(r"/uploads/(.+?)$")
@@ -69,10 +69,14 @@ def _canonical_asset_key(url) -> str | None:
             return f"architizer|{m.group(1)}"
         m_fb = _ARCH_UPLOADS_FALLBACK_RE.search(path)
         if m_fb:
-            # fallback: strip query, strip extension, strip leading 12-16 digits
+            # fallback: strip query, strip extension; strip leading 13-digit
+            # timestamp ONLY if doing so leaves >=3 chars (else the trailing
+            # portion is too generic to dedup across buildings — keep full).
             base = m_fb.group(1).split("?")[0]
             base = re.sub(r"\.[a-z0-9]{2,5}$", "", base, flags=re.I)
-            base = re.sub(r"^\d{13}", "", base)
+            stripped = re.sub(r"^\d{13}", "", base)
+            if len(stripped) >= 3:
+                base = stripped
             return f"architizer|{base}"
         last = path.rstrip("/").split("/")[-1]
         return f"architizer|{last}" if last else None
