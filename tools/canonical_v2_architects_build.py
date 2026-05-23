@@ -60,14 +60,36 @@ def _clean_social_url(url):
     return url
 
 
+_TRAILING_PUNCT_RE = re.compile(r"[\s\-,/.;:]+$")
+_EXTRA_KNOWN_COUNTRIES = {"Kosovo"}  # not in _KNOWN_COUNTRIES base set
+
+
 def _clean_country(value, arch_name_set):
-    """Validate country via _KNOWN_COUNTRIES + architect-name check."""
-    norm = _normalize_country_full(value)
-    if not norm or norm not in _KNOWN_COUNTRIES:
+    """Validate country via _KNOWN_COUNTRIES + architect-name check.
+    Trim trailing punctuation; try last-token extraction for `city country`
+    mashups like 'Riyadh Saudi Arabia'."""
+    if not isinstance(value, str):
         return None
-    if norm.lower() in arch_name_set:
+    raw = _TRAILING_PUNCT_RE.sub("", value.strip())
+    if not raw or raw.isdigit():
         return None
-    return norm
+    norm = _normalize_country_full(raw)
+    if norm and (norm in _KNOWN_COUNTRIES or norm in _EXTRA_KNOWN_COUNTRIES):
+        if norm.casefold() in arch_name_set:
+            return None
+        return norm
+    # try trailing 1-3 word extraction for `<city> <country>` strings
+    tokens = raw.split()
+    for n in (1, 2, 3, 4):
+        if n > len(tokens):
+            break
+        candidate = " ".join(tokens[-n:])
+        cnorm = _normalize_country_full(candidate)
+        if cnorm and (cnorm in _KNOWN_COUNTRIES or cnorm in _EXTRA_KNOWN_COUNTRIES):
+            if cnorm.casefold() in arch_name_set:
+                return None
+            return cnorm
+    return None
 
 
 _CITY_SUSPICIOUS_RE = re.compile(r"^[\d\s\-]+$|^[A-Za-z]$")
@@ -553,28 +575,39 @@ def main() -> int:
                 counts["skipped_no_embedding"] += 1
                 continue
 
-            # Portfolio modal override for country (most reliable signal):
-            # firm's most-common country across publishable buildings.
+            # Portfolio modal override:
+            #   country: most-common VALID country across publishable buildings
+            #   city: most-common city among buildings IN that country (keeps
+            #         country/city paired and avoids city-state country mismatch)
             country_counter = Counter()
-            city_counter = Counter()
             for r in buildings:
                 if not r.get("is_publishable"):
                     continue
-                c = r.get("location_country")
+                c = _clean_country(r.get("location_country"), arch_name_set)
                 if c:
                     country_counter[c] += 1
-                ci = r.get("location_city")
-                if ci:
-                    city_counter[ci] += 1
-            # Country: prefer portfolio modal if present.
+            # Country: prefer portfolio modal valid country.
+            modal_country = None
             if country_counter:
                 modal_country = country_counter.most_common(1)[0][0]
                 src_country = metadata["country"]
                 if src_country and src_country != modal_country:
                     counts["country_source_overridden_by_portfolio_modal"] += 1
                 metadata["country"] = modal_country
-            # City: keep source value if valid AND firm has at least 1 building in
-            # that city; else use modal building city.
+            # City: only count buildings whose country normalizes to the final
+            # country — keeps city paired with country.
+            final_country = metadata["country"]
+            city_counter = Counter()
+            if final_country:
+                for r in buildings:
+                    if not r.get("is_publishable"):
+                        continue
+                    bc = _clean_country(r.get("location_country"), arch_name_set)
+                    if bc != final_country:
+                        continue
+                    ci = _clean_city(r.get("location_city"), final_country, arch_name_set)
+                    if ci:
+                        city_counter[ci] += 1
             src_city = metadata["city"]
             if src_city and city_counter.get(src_city, 0) >= 1:
                 pass  # source agrees with portfolio
@@ -583,6 +616,11 @@ def main() -> int:
                 if src_city and src_city != modal_city:
                     counts["city_source_overridden_by_portfolio_modal"] += 1
                 metadata["city"] = modal_city
+            else:
+                # No buildings in final_country had a valid city → null city
+                if src_city:
+                    counts["city_nulled_no_in_country_match"] += 1
+                metadata["city"] = None
 
             is_recommendable = (
                 agg["n_buildings_publishable"] >= 3
