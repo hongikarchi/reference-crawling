@@ -14,11 +14,13 @@ Output: data/canonical/canonical_architects_v2.json (streaming JSON array).
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import numpy as np
 
@@ -26,7 +28,89 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.build_strict_canonical import _build_source_url  # noqa: E402
+from tools.canonical_v2_c20_make_web_polish import (  # noqa: E402
+    _strip_architect_brand,
+)
+from tools.canonical_v2_c21_make_web_polish import (  # noqa: E402
+    _normalize_country_full,
+)
+from tools.canonical_v2_c23_final import _KNOWN_COUNTRIES  # noqa: E402
 from tools.canonical_v2_upload_validator import iter_buildings  # noqa: E402
+
+# Phase A-2 — social-link brand leak filter
+_SOURCE_BRAND_RE = re.compile(r"archello|architizer|divisare|metalocus",
+                              re.IGNORECASE)
+
+
+def _clean_social_url(url):
+    """Return None if URL is a source-brand account leak; else the URL.
+    Block any host or path containing archello/architizer/divisare/metalocus."""
+    if not isinstance(url, str) or not url.strip():
+        return None
+    url = url.strip()
+    if _SOURCE_BRAND_RE.search(url):
+        return None
+    try:
+        sp = urlsplit(url if "://" in url else "https://" + url)
+    except ValueError:
+        return None
+    if not sp.netloc:
+        return None
+    return url
+
+
+def _clean_country(value, arch_name_set):
+    """Validate country via _KNOWN_COUNTRIES + architect-name check."""
+    norm = _normalize_country_full(value)
+    if not norm or norm not in _KNOWN_COUNTRIES:
+        return None
+    if norm.lower() in arch_name_set:
+        return None
+    return norm
+
+
+_CITY_SUSPICIOUS_RE = re.compile(r"^[\d\s\-]+$|^[A-Za-z]$")
+
+
+def _clean_city(value, country_norm, arch_name_set):
+    """Reject city == country/architect name, suspicious patterns. Also reject
+    if any token of the city matches an architect name token (catches partner
+    name leakage like 'Christine Binswanger')."""
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s or _CITY_SUSPICIOUS_RE.match(s):
+        return None
+    sl = s.casefold()
+    if country_norm and sl == country_norm.casefold():
+        return None
+    # reject if normalized form is itself a known country (city == country name)
+    if _normalize_country_full(s) in _KNOWN_COUNTRIES:
+        return None
+    if sl in arch_name_set:
+        return None
+    # token-level reject: any city token in arch_name_set
+    city_tokens = [t.casefold() for t in re.split(r"[\s,;.&|/]+", s) if len(t) >= 3]
+    if city_tokens and all(t in arch_name_set for t in city_tokens):
+        return None
+    return s
+
+
+_WEBSITE_SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.IGNORECASE)
+
+
+def _normalize_website(value):
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s:
+        return None
+    if s.startswith("//"):
+        return "https:" + s
+    if _WEBSITE_SCHEME_RE.match(s):
+        return s
+    return "https://" + s
 
 CCR = ROOT / "data/canonical/country_conflict_refresh"
 BUILDINGS = CCR / "canonical_buildings_strict_embedded.completeness_c23_final.json"
@@ -136,8 +220,10 @@ def _first_nonempty(*values):
     return None
 
 
-def _merge_metadata(source_refs, src_data):
-    """source_refs: {source: [ids]} from registry. src_data: per-source dicts."""
+def _merge_metadata(source_refs, src_data, arch_name_set, sanitize_counts):
+    """source_refs: {source: [ids]} from registry. src_data: per-source dicts.
+    arch_name_set: lowercase set of architect names (for country/city dirty check).
+    sanitize_counts: Counter for sanitizer telemetry."""
     # Per-source resolved entry
     resolved = {}
     for src in _SOURCE_PRIORITY + ("metalocus",):
@@ -147,48 +233,84 @@ def _merge_metadata(source_refs, src_data):
         if src == "metalocus":
             resolved[src] = {"slug": None, "name": None}
             continue
-        # Use first available sid for this source
         for sid in sids:
             data = src_data.get(src, {}).get(str(sid))
             if data:
                 resolved[src] = data
                 break
 
-    # Build source_urls + source_descriptions per source
+    # source_urls: force-fill for every source_ref via _build_source_url
     source_urls = {}
     source_descriptions = {}
-    for src, data in resolved.items():
-        slug = data.get("slug") if data else None
+    for src, sids in source_refs.items():
+        if not sids:
+            continue
+        if src == "metalocus":
+            continue  # metalocus firm URL pattern not stable
+        data = resolved.get(src) or {}
+        slug = data.get("slug")
+        sid = str(sids[0])
+        meta = {"slug": slug}
+        # Use C20/build_strict_canonical helper where applicable
         if src == "divisare" and slug:
-            sids = source_refs.get(src) or []
-            if sids:
-                source_urls[src] = f"https://divisare.com/authors/{sids[0]}-{slug}"
-        elif src == "architizer" and slug:
-            source_urls[src] = f"https://architizer.com/firms/{slug}/"
+            source_urls[src] = f"https://divisare.com/authors/{sid}-{slug}"
+        elif src == "architizer":
+            # architizer source_refs ARE the slug (not numeric ID)
+            source_urls[src] = f"https://architizer.com/firms/{sid}/"
         elif src == "archello" and slug:
             source_urls[src] = f"https://archello.com/brand/{slug}"
-        if data and data.get("description"):
+        else:
+            sanitize_counts["source_ref_without_profile_url"] += 1
+        if data.get("description"):
             source_descriptions[src] = data["description"]
 
-    # Priority field merge: divisare > archello > architizer
+    # A-1: priority merge with validation. Try divisare → archello → architizer,
+    # falling through if value invalid. Validation uses arch_name_set +
+    # _KNOWN_COUNTRIES.
+    def _pick_validated_field(getter, validator, *args):
+        for src in _SOURCE_PRIORITY:
+            raw = (resolved.get(src) or {}).get(getter)
+            cleaned = validator(raw, *args)
+            if cleaned:
+                return cleaned
+        return None
+
+    src_country = _pick_validated_field("country", _clean_country, arch_name_set)
+    src_city = _pick_validated_field("city", _clean_city, src_country, arch_name_set)
+    # Override applied at higher level via portfolio modal (see main()).
+    country = src_country
+    city = src_city
+
+    # Website: try in priority order, normalize scheme
+    website = None
+    for src in _SOURCE_PRIORITY:
+        raw = (resolved.get(src) or {}).get("website")
+        norm = _normalize_website(raw)
+        if norm:
+            website = norm
+            break
+
     div = resolved.get("divisare") or {}
     arc = resolved.get("archello") or {}
     azi = resolved.get("architizer") or {}
-
-    website = _first_nonempty(div.get("website"), arc.get("website"))
-    country = _first_nonempty(div.get("country"), arc.get("country"))
-    city = _first_nonempty(div.get("city"), arc.get("city"))
     phone = div.get("phone")
     description = _first_nonempty(div.get("description"), arc.get("description"),
                                   azi.get("description"))
-    # social_links: archello has 5 platforms, architizer 2-3. Merge w/ archello win.
+
+    # A-2: social_links with brand-leak filter
     social = {}
     for src in ("architizer", "archello"):
         s = (resolved.get(src) or {}).get("social_links") or {}
         for k, v in s.items():
-            if v and k not in social:
-                social[k] = v
-    # offices: union
+            if k in social:
+                continue
+            cleaned = _clean_social_url(v)
+            if cleaned:
+                social[k] = cleaned
+            elif v:
+                sanitize_counts["social_link_leaks_filtered"] += 1
+
+    # offices: union (no validation needed — already structured JSON)
     offices = []
     seen_office = set()
     for src in ("archello", "architizer"):
@@ -383,26 +505,84 @@ def main() -> int:
             n_sources = sum(1 for k, v in source_refs.items() if v)
             confidence_tier = _confidence_tier(n_sources)
 
-            metadata = _merge_metadata(source_refs, src_data)
+            # A-3: name suffix strip on ALL names first → pick shortest non-empty
+            raw_names = reg.get("names") or []
+            stripped_names = []
+            for n in raw_names:
+                if not isinstance(n, str):
+                    continue
+                clean, _ = _strip_architect_brand(n)
+                clean = " ".join(clean.split()) if clean else ""
+                if clean:
+                    stripped_names.append(clean)
+            # dedup preserving order
+            seen_name = set()
+            stripped_uniq = []
+            for n in stripped_names:
+                if n.casefold() in seen_name:
+                    continue
+                seen_name.add(n.casefold())
+                stripped_uniq.append(n)
+            if not stripped_uniq:
+                # All names had branded form; reluctantly use first raw
+                if not raw_names:
+                    counts["skipped_no_names"] += 1
+                    continue
+                stripped_uniq = [raw_names[0]]
+                counts["fallback_branded_name"] += 1
+            # canonical = shortest (cleaner display); tie-break alphabetical
+            canonical_name = sorted(stripped_uniq, key=lambda s: (len(s), s.casefold()))[0]
+            name_alts = sorted(set(stripped_uniq) - {canonical_name})
+
+            # arch_name_set for country/city validation — includes full names +
+            # individual word tokens (catches partner names that source DBs
+            # sometimes leak into city/country fields).
+            arch_name_set = {n.casefold() for n in stripped_uniq}
+            arch_name_set.add(canonical_name.casefold())
+            for n in stripped_uniq + [canonical_name]:
+                # tokenize on whitespace + common name separators
+                for tok in re.split(r"[\s,;.&|/]+", n):
+                    tok = tok.strip().casefold()
+                    if len(tok) >= 3:  # skip particles like "de", "&"
+                        arch_name_set.add(tok)
+
+            metadata = _merge_metadata(source_refs, src_data, arch_name_set, counts)
             agg = _aggregate_buildings(buildings)
 
             if agg["portfolio_embedding"] is None:
                 counts["skipped_no_embedding"] += 1
                 continue
 
-            names = reg.get("names") or []
-            # canonical_name = first non-source-branded name
-            canonical_name = None
-            for n in names:
-                if " - Architizer" in n or " - Archello" in n or " - Divisare" in n:
+            # Portfolio modal override for country (most reliable signal):
+            # firm's most-common country across publishable buildings.
+            country_counter = Counter()
+            city_counter = Counter()
+            for r in buildings:
+                if not r.get("is_publishable"):
                     continue
-                canonical_name = n
-                break
-            if not canonical_name and names:
-                canonical_name = names[0]
-            if not canonical_name:
-                continue
-            name_alts = sorted(set(names) - {canonical_name})
+                c = r.get("location_country")
+                if c:
+                    country_counter[c] += 1
+                ci = r.get("location_city")
+                if ci:
+                    city_counter[ci] += 1
+            # Country: prefer portfolio modal if present.
+            if country_counter:
+                modal_country = country_counter.most_common(1)[0][0]
+                src_country = metadata["country"]
+                if src_country and src_country != modal_country:
+                    counts["country_source_overridden_by_portfolio_modal"] += 1
+                metadata["country"] = modal_country
+            # City: keep source value if valid AND firm has at least 1 building in
+            # that city; else use modal building city.
+            src_city = metadata["city"]
+            if src_city and city_counter.get(src_city, 0) >= 1:
+                pass  # source agrees with portfolio
+            elif city_counter:
+                modal_city = city_counter.most_common(1)[0][0]
+                if src_city and src_city != modal_city:
+                    counts["city_source_overridden_by_portfolio_modal"] += 1
+                metadata["city"] = modal_city
 
             is_recommendable = (
                 agg["n_buildings_publishable"] >= 3
