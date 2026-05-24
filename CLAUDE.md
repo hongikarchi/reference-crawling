@@ -22,11 +22,15 @@ This file is the operating manual. For schema/vocab/tool detail see
     `id_registry_architects.json` + 3 source firm DBs + buildings reverse-index;
     portfolio embedding = mean of publishable building embeddings (384-dim, same
     space). See `docs/ARCHITECT_RECOMMENDATION.md`.
-  - Mental model: **`neondb` = architecture data** (buildings + architects);
-    **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes
-    (make_web migration ongoing). Same project, separate DBs.
-  - Legacy metalocus-only `architecture_vectors` table + `data/enrich/` pipeline
-    are retired.
+  - Mental model: **`neondb` = architecture data** (only 2 tables above);
+    **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
+    make_web. As of 2026-05-24, all 23 user/app tables + legacy
+    `architecture_vectors` dropped from `neondb`.
+  - Roles: `neondb_owner` (writer, used by make_db); `makeweb_buildings_ro`
+    (SELECT-only on canonical_v2_*, used by make_web; creds in gitignored
+    `.env.makeweb-buildings-ro`).
+  - Cleanup runbook: `docs/NEON_CLEANUP_RUNBOOK.md`. Job card:
+    `.claude/ops/jobs/20260524_neondb_cleanup_role_separation.md`.
 
 ## Pipeline (5 stages — detail in docs/REFERENCE.md)
 
