@@ -32,7 +32,7 @@ Metrics serve that judgment — not the reverse.
 - **See the pipeline + DB state** → open `docs/dashboard.html` in a browser.
 - **Operate the pipeline** → `CLAUDE.md` is the operating manual.
 - **Technical reference** (schema, vocabularies, tools, runbooks) → `docs/REFERENCE.md`.
-- **Consumer interface** → `docs/MAKE_WEB_HANDOFF.md`.
+- **Architects recommendation** (schema + SQL templates) → `docs/ARCHITECT_RECOMMENDATION.md`.
 - **Run history** → `.claude/ops/jobs/`.
 
 ## Repository layout
@@ -42,8 +42,7 @@ core/             shared infrastructure (vocab, config, utils)
 crawl/<source>/   stage 1 — per-source crawlers
 enrich/           stages 2-3 — LLM text + image enrichment
 canonical/        stage 4 — matching + canonical consolidation
-upload/           stage 5 — Neon + R2 (manual gate)
-tools/            pipeline, audit, and dashboard scripts
+tools/            stage 5 (canonical_v2_neon_loader.py) + audit/dashboard scripts
 data/             data artifacts (gitignored)
 docs/             reference docs + the web dashboard
 .claude/ops/      job cards = run history

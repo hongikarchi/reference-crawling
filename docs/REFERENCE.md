@@ -32,9 +32,11 @@ as the base, metalocus + archello as match-or-drop enrichment), assigns a
 canonical artifact. Perceptual-hash false-merge gate in
 `canonical/match_phash_check.py`.
 
-**Stage 5 — Upload** (`tools/canonical_v2_neon_loader.py`, `upload/`)
+**Stage 5 — Upload** (`tools/canonical_v2_neon_loader.py`,
+`tools/canonical_v2_architects_neon_loader.py`)
 Loads the embedded canonical artifact into Neon `canonical_v2_buildings`
-(UPSERT on PK). User-gated. Cover images host on Cloudflare R2.
+and `canonical_v2_architects` (UPSERT on PK). User-gated. Cover images host
+on Cloudflare R2.
 
 Data flow: `data/crawl/*.db` → D-1/D-2/E-1/E-2 →
 `canonical_buildings_strict_embedded.completeness_cN.json` → Neon.
@@ -196,15 +198,15 @@ Artifacts live under `data/canonical/country_conflict_refresh/`.
 - **Build / QC:** `build_strict_canonical.py`, `qc_strict.py`, `embed_strict.py`,
   `canonical_v2_upload_validator.py`, `canonical_v2_neon_loader.py`
 - **Completeness:** `canonical_v2_gap_inventory.py`,
-  `canonical_v2_apply_completeness_*.py`, `canonical_v2_crawler_gap_audit.py`
+  `build_completeness_c9.py`, `build_completeness_c11_taxonomy.py`,
+  `canonical_v2_crawler_gap_audit.py`
 - **Taxonomy + recall (C10/C11):** `taxonomy_tag_inventory.py`,
   `build_typology_crosswalk.py`, `build_completeness_c11_taxonomy.py`,
   `canonical_v2_matcher_recall_audit.py`, `canonical_v2_recover_dropped_twins.py`
 - **Enrichment:** `d1_enrich_codex.py`, `d2_cover_vision.py`,
   `e1_phash_dedup.py`, `e2_vision_5type.py`, `image_dedup_5type.py`
-- **Audit (2026-05):** `audit_l1_structural.py`, `audit_l4l5.py`,
-  `audit_l3_sampler.py` / `_prep.py` / `_aggregate.py`,
-  `audit_canonical_data_integrity.py`
+- **Audit:** `audit_canonical_data_integrity.py`,
+  `canonical_v2_full_reaudit.py`, `canonical_v2_architects_audit.py`
 - **Dashboard:** `build_dashboard.py`
 
 `run.py` is the legacy metalocus-pipeline dispatcher. `tools/` has accumulated

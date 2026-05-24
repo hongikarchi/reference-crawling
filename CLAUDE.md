@@ -26,11 +26,11 @@ This file is the operating manual. For schema/vocab/tool detail see
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
     make_web. As of 2026-05-24, all 23 user/app tables + legacy
     `architecture_vectors` dropped from `archi_data`.
-  - Roles: `archi_data_owner` (writer, used by make_db); `make_web`
-    (SELECT-only on canonical_v2_*, used by make_web; creds in gitignored
-    `.env.make-web`).
-  - Cleanup runbook: `docs/NEON_CLEANUP_RUNBOOK.md`. Job card:
-    `.claude/ops/jobs/20260524_archi_data_cleanup_role_separation.md`.
+  - Roles: `neondb_owner` (writer, used by make_db — kept original name for
+    Neon platform compatibility); `make_web` (SELECT-only on canonical_v2_*,
+    used by make_web; creds in gitignored `.env.make-web`).
+  - Cleanup history: job card
+    `.claude/ops/jobs/20260524_neondb_cleanup_role_separation.md`.
 
 ## Pipeline (5 stages — detail in docs/REFERENCE.md)
 
@@ -39,7 +39,7 @@ This file is the operating manual. For schema/vocab/tool detail see
 | 1 Crawl | `crawl/{divisare,architizer,archello,metalocus}/` | `data/crawl/<source>.db` |
 | 2-3 Enrich | `enrich/`, `tools/d1_enrich_codex.py`, `tools/d2_cover_vision.py` | D-1 text + D-2 image fields |
 | 4 Canonical | `canonical/`, `tools/build_strict_canonical.py` | `canonical_buildings_strict_embedded.*.json` |
-| 5 Upload | `tools/canonical_v2_neon_loader.py`, `upload/` | Neon `canonical_v2_buildings` + R2 |
+| 5 Upload | `tools/canonical_v2_neon_loader.py`, `tools/canonical_v2_architects_neon_loader.py` | Neon `canonical_v2_buildings` + `canonical_v2_architects` + R2 |
 
 ## Running work
 
@@ -72,8 +72,10 @@ This file is the operating manual. For schema/vocab/tool detail see
   user decisions.
 - **Never delete `data/id_registry*.json`** — stable building/architect IDs;
   losing them breaks every downstream join.
-- **Upload is user-gated.** Never run a Neon write or `upload/*.py --confirm`
-  without explicit user approval. Always dry-run and present row counts first.
+- **Upload is user-gated.** Never run a Neon write
+  (`tools/canonical_v2_neon_loader.py --upsert --confirm-db-write` or the
+  architects equivalent) without explicit user approval. Always dry-run and
+  present row counts first.
 - **Git:** solo dev, single `main` branch, no feature branches. Commit per
   logical change. `git push` only on an explicit user request ("push" /
   "푸시해" / "올려"). Never force-push or rewrite history.
@@ -100,7 +102,7 @@ This file is the operating manual. For schema/vocab/tool detail see
 
 - `README.md` — what make_db is + quickstart
 - `docs/REFERENCE.md` — schema, vocabularies, tool specs, 5-stage architecture, new-source runbook
+- `docs/ARCHITECT_RECOMMENDATION.md` — architects table schema + cold-start + cosine SQL templates
 - `docs/dashboard.html` — live pipeline + DB state (regenerate: `python3 tools/build_dashboard.py`)
-- `docs/MAKE_WEB_HANDOFF.md` — the `make_web` consumer interface
 - `data/reports/db_quality_audit.md` — 2026-05 database quality audit (verdict: PASS with WARNINGS)
 - `.claude/ops/jobs/` — job cards = run history
