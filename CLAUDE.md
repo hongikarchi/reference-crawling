@@ -15,22 +15,22 @@ This file is the operating manual. For schema/vocab/tool detail see
 - **State lives in files, never terminal memory.** The durable record is: the
   data artifacts, `.claude/ops/jobs/` job cards, and the dashboard. Re-derive
   state by reading those — never assume in-memory continuity between sessions.
-- **Current production dataset (Neon `neondb`):**
+- **Current production dataset (Neon `archi_data`):**
   - `canonical_v2_buildings`: 39,478 rows / 36,864 publishable, artifact
     `completeness_c23_final`, schema includes `year_kind`.
   - `canonical_v2_architects`: 14,216 rows / 4,357 recommendable, derived from
     `id_registry_architects.json` + 3 source firm DBs + buildings reverse-index;
     portfolio embedding = mean of publishable building embeddings (384-dim, same
     space). See `docs/ARCHITECT_RECOMMENDATION.md`.
-  - Mental model: **`neondb` = architecture data** (only 2 tables above);
+  - Mental model: **`archi_data` = architecture data** (only 2 tables above);
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
     make_web. As of 2026-05-24, all 23 user/app tables + legacy
-    `architecture_vectors` dropped from `neondb`.
-  - Roles: `neondb_owner` (writer, used by make_db); `makeweb_buildings_ro`
+    `architecture_vectors` dropped from `archi_data`.
+  - Roles: `archi_data_owner` (writer, used by make_db); `make_web`
     (SELECT-only on canonical_v2_*, used by make_web; creds in gitignored
-    `.env.makeweb-buildings-ro`).
+    `.env.make-web`).
   - Cleanup runbook: `docs/NEON_CLEANUP_RUNBOOK.md`. Job card:
-    `.claude/ops/jobs/20260524_neondb_cleanup_role_separation.md`.
+    `.claude/ops/jobs/20260524_archi_data_cleanup_role_separation.md`.
 
 ## Pipeline (5 stages — detail in docs/REFERENCE.md)
 

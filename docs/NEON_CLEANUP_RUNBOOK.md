@@ -1,6 +1,6 @@
-# Neon `neondb` Cleanup Runbook
+# Neon `archi_data` Cleanup Runbook
 
-Goal: turn `neondb` into pure **architecture data** (buildings + architects).
+Goal: turn `archi_data` into pure **architecture data** (buildings + architects).
 Migrate or drop everything else. From make_web request 2026-05-24.
 
 **All destructive steps gated on (a) snapshot + (b) make_web "migration done"
@@ -14,7 +14,7 @@ confirmation.**
 
 1. Open https://console.neon.tech → archi-tinder project → Branches.
 2. Click "Create branch" → source `production` (or current branch holding
-   `neondb`) → name `pre-cleanup-2026-05-24` (or similar).
+   `archi_data`) → name `pre-cleanup-2026-05-24` (or similar).
 3. Confirm branch creation; verify it shows the current LSN.
 
 Alternative: `neonctl branches create --project-id <pid> --name
@@ -27,7 +27,7 @@ production endpoint back to the snapshot branch.
 
 ## Step 2 — KEEP list (confirmed)
 
-In `neondb`, **KEEP**:
+In `archi_data`, **KEEP**:
 
 | Object | Type | Size | Notes |
 |---|---|---|---|
@@ -48,7 +48,7 @@ In `neondb`, **KEEP**:
 
 ## Step 3 — DELETE candidates (gated on make_web "migration done" confirm)
 
-App / user / Django tables in `neondb` (should live in `user_data` per
+App / user / Django tables in `archi_data` (should live in `user_data` per
 2026-05-24 architecture decision):
 
 | Table | Rows | Size |
@@ -96,7 +96,7 @@ COMMIT;
    declares "no migration needed; these tables can be dropped".
 2. Verify snapshot exists (Step 1).
 3. Run the DROP block above.
-4. Re-inspect to confirm `neondb` has only `canonical_v2_buildings` +
+4. Re-inspect to confirm `archi_data` has only `canonical_v2_buildings` +
    `canonical_v2_architects` (+ `architecture_vectors` if not yet dropped).
 
 ---
@@ -107,28 +107,28 @@ Goal: read-only role for make_web's buildings queries; user_data role distinct.
 
 ```sql
 -- Read-only role for make_web building/architect access
-CREATE ROLE makeweb_buildings_ro LOGIN PASSWORD '<set-in-neon-secrets>';
-GRANT CONNECT ON DATABASE neondb TO makeweb_buildings_ro;
-GRANT USAGE ON SCHEMA public TO makeweb_buildings_ro;
+CREATE ROLE make_web LOGIN PASSWORD '<set-in-neon-secrets>';
+GRANT CONNECT ON DATABASE archi_data TO make_web;
+GRANT USAGE ON SCHEMA public TO make_web;
 GRANT SELECT ON canonical_v2_buildings, canonical_v2_architects
-  TO makeweb_buildings_ro;
+  TO make_web;
 -- Future tables in same schema get SELECT auto:
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT ON TABLES TO makeweb_buildings_ro;
+  GRANT SELECT ON TABLES TO make_web;
 
--- Optional: writer role for make_db (this is the existing neondb_owner; no change)
+-- Optional: writer role for make_db (this is the existing archi_data_owner; no change)
 ```
 
 make_web `.env`:
 ```
-BUILDINGS_DB_URL=postgresql://makeweb_buildings_ro:<pw>@<host>/neondb?sslmode=require
+BUILDINGS_DB_URL=postgresql://make_web:<pw>@<host>/archi_data?sslmode=require
 USER_DATA_DB_URL=postgresql://<userdata_role>:<pw>@<host>/user_data?sslmode=require
 ```
 
 make_db `.env` unchanged (continues to use writer role for upserts).
 
 **Execution order**:
-1. Create role + grant SELECT in Neon SQL editor (or via psql by `neondb_owner`).
+1. Create role + grant SELECT in Neon SQL editor (or via psql by `archi_data_owner`).
 2. Store password in Neon's secret vault or pass to make_web team via secure
    channel.
 3. make_web updates `BUILDINGS_DB_URL` env var in deployment.

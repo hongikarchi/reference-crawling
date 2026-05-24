@@ -36,4 +36,4 @@ __pycache__/
 
 # DB Ops — local terminal snapshots can contain transient screen state
 .claude/ops/snapshots/
-.env.makeweb-*
+# (.env.* above already covers .env.make-web; older .env.makeweb-* glob removed)

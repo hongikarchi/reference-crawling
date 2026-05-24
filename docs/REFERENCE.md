@@ -97,7 +97,7 @@ plus the additive migration (`SCHEMA_EVOLUTION_SQL`).
 ## 2b. Schema — Neon `canonical_v2_architects` (firm DB)
 
 Derived from `canonical_v2_buildings` + 3 source firm tables. Same Neon DB
-(`neondb`). Powers make_web's "swipe buildings → recommend firms" feature.
+(`archi_data`). Powers make_web's "swipe buildings → recommend firms" feature.
 
 ```sql
 CREATE TABLE canonical_v2_architects (
