@@ -94,6 +94,61 @@ Indexes: B-tree on country/city/year/program/style/tier/is_publishable,
 tools/canonical_v2_neon_loader.py --emit-sql` prints the authoritative DDL
 plus the additive migration (`SCHEMA_EVOLUTION_SQL`).
 
+## 2b. Schema — Neon `canonical_v2_architects` (firm DB)
+
+Derived from `canonical_v2_buildings` + 3 source firm tables. Same Neon DB
+(`neondb`). Powers make_web's "swipe buildings → recommend firms" feature.
+
+```sql
+CREATE TABLE canonical_v2_architects (
+  canonical_arch_id        TEXT        PRIMARY KEY,           -- arch_NNNNNN
+  canonical_name           TEXT        NOT NULL,
+  name_alts                TEXT[]      NOT NULL DEFAULT '{}',
+  description              TEXT,
+  primary_country          TEXT,                              -- portfolio modal (validated)
+  primary_city             TEXT,                              -- modal city in primary_country
+  office_locations         JSONB       NOT NULL DEFAULT '[]', -- archello/architizer offices merged
+  website                  TEXT,                              -- https:// normalized
+  email                    TEXT,                              -- always null (no source has email)
+  phone                    TEXT,
+  social_links             JSONB       NOT NULL DEFAULT '{}', -- {instagram, facebook, linkedin, ...} brand-leak filtered
+  building_ids             TEXT[]      NOT NULL DEFAULT '{}', -- FK → canonical_v2_buildings.canonical_bld_id
+  n_buildings              INTEGER     NOT NULL DEFAULT 0,
+  n_buildings_publishable  INTEGER     NOT NULL DEFAULT 0,
+  countries                TEXT[]      NOT NULL DEFAULT '{}', -- all countries in portfolio
+  cities                   TEXT[]      NOT NULL DEFAULT '{}',
+  top_programs             TEXT[]      NOT NULL DEFAULT '{}', -- top-5 frequency
+  top_styles               TEXT[]      NOT NULL DEFAULT '{}',
+  top_color_tones          TEXT[]      NOT NULL DEFAULT '{}',
+  top_atmospheres          TEXT[]      NOT NULL DEFAULT '{}',
+  top_materials            TEXT[]      NOT NULL DEFAULT '{}',
+  top_typologies           TEXT[]      NOT NULL DEFAULT '{}',
+  top_arch_elements        TEXT[]      NOT NULL DEFAULT '{}',
+  feature_distribution     JSONB       NOT NULL DEFAULT '{}', -- full counters per field
+  earliest_project_year    INTEGER,
+  latest_project_year      INTEGER,
+  source_refs              JSONB       NOT NULL,              -- {archello/architizer/divisare/metalocus: [ids]}
+  source_urls              JSONB       NOT NULL DEFAULT '{}', -- per-source profile URL
+  source_descriptions      JSONB       NOT NULL DEFAULT '{}', -- per-source bio
+  n_sources                INTEGER     NOT NULL CHECK (n_sources >= 1),
+  confidence_tier          TEXT        NOT NULL CHECK (confidence_tier IN ('T1','T2','T3')),
+  logo_url                 TEXT,                              -- archello.cover_image_url only (~30% coverage)
+  hero_building_id         TEXT,                              -- best-confidence publishable building
+  portfolio_embedding      VECTOR(384) NOT NULL,              -- mean of publishable building embeddings; same space
+  is_recommendable         BOOLEAN     NOT NULL DEFAULT FALSE,-- n_buildings_publishable >= 3 AND has source metadata
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+Indexes: B-tree on `primary_country/primary_city/is_recommendable/confidence_tier`;
+GIN on `top_programs/top_typologies/countries`; HNSW (`vector_cosine_ops`) on
+`portfolio_embedding`. Recommendation algorithm + SQL templates:
+`docs/ARCHITECT_RECOMMENDATION.md`. Loader: `tools/canonical_v2_architects_neon_loader.py`.
+
+**Coverage at C-A3**: 14,216 firms / 4,357 recommendable / 86 distinct countries.
+25,417 registry firms without ≥1 building in canonical are not loaded.
+
 ## 3. Controlled vocabularies
 
 `core/vocab.py` is the source of truth (`VOCAB_VERSION = "v2"`). Never edit it
