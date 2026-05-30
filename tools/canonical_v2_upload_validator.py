@@ -40,6 +40,24 @@ REQUIRED_TEXT_FIELDS = (
     "confidence_tier",
 )
 
+# Mirrors tools/audit_make_db_for_make_web.py::MATERIAL_TAXONOMY_NOISE. Spatial
+# elements / non-material terms that pollute `material_visual` filters. Stripped
+# at load time so cleanup is idempotent across canonical → Neon reloads.
+MATERIAL_TAXONOMY_NOISE = frozenset({
+    "balconies", "columns", "courtyard", "courtyards", "curtains",
+    "facade", "facade cladding", "furniture", "garden", "garden planting",
+    "grass", "greenery", "green roof", "landscape", "landscaping",
+    "light", "lighting", "planting", "plants", "skylights",
+    "stairs", "terrace", "terraces", "trees", "vegetation",
+    "walls", "water", "window frames", "windows",
+})
+
+
+def filter_material_noise(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return [v for v in values if isinstance(v, str) and v.strip().lower() not in MATERIAL_TAXONOMY_NOISE]
+
 GENERIC_NAME_TOKENS = {
     "a",
     "an",
@@ -91,8 +109,20 @@ def is_genericish_name(value: str) -> bool:
     return len(distinctive) <= 1
 
 
+EMPTY_MATERIAL_REASON = "material_noise_only"
+
+
 def map_row(row: dict[str, Any]) -> dict[str, Any]:
     """Return the exact row shape proposed for canonical_v2_buildings."""
+    raw_material = row.get("material_visual") or []
+    material_visual = filter_material_noise(raw_material)
+    publishability_reasons = list(row.get("publishability_reasons") or [])
+    is_publishable = bool(row.get("is_publishable"))
+    if raw_material and not material_visual:
+        # Building had only noise terms for material — unpublish + flag reason.
+        is_publishable = False
+        if EMPTY_MATERIAL_REASON not in publishability_reasons:
+            publishability_reasons.append(EMPTY_MATERIAL_REASON)
     return {
         "canonical_bld_id": row.get("canonical_bld_id"),
         "name": row.get("name"),
@@ -107,7 +137,7 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "style": row.get("style"),
         "color_tone": row.get("color_tone"),
         "atmosphere": row.get("atmosphere"),
-        "material_visual": row.get("material_visual") or [],
+        "material_visual": material_visual,
         "visual_description": row.get("visual_description"),
         "image_derived": row.get("image_derived") or {},
         "covers_by_type": row.get("covers_by_type") or {},
@@ -120,8 +150,8 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "n_sources": row.get("n_sources"),
         "cover_image_url_default": row.get("cover_image_url_default"),
         "display_cover_url": row.get("display_cover_url"),
-        "is_publishable": row.get("is_publishable"),
-        "publishability_reasons": row.get("publishability_reasons") or [],
+        "is_publishable": is_publishable,
+        "publishability_reasons": publishability_reasons,
         "needs_image_derived_backfill": bool(row.get("needs_image_derived_backfill")),
         "typology_primary": row.get("typology_primary"),
         "typology_primary_source": row.get("typology_primary_source"),
@@ -243,7 +273,11 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
 
         if mapped.get("confidence_tier") not in VALID_TIERS:
             failures["invalid_confidence_tier"] += 1
-        if not isinstance(mapped.get("material_visual"), list) or not mapped["material_visual"]:
+        if not isinstance(mapped.get("material_visual"), list):
+            failures["bad_material_visual"] += 1
+        elif not mapped["material_visual"] and EMPTY_MATERIAL_REASON not in (mapped.get("publishability_reasons") or []):
+            # Allow empty material_visual only when the row is flagged as
+            # noise-only (auto-unpublished). All other empties remain failures.
             failures["bad_material_visual"] += 1
         if not _covers_are_valid(mapped.get("covers_by_type")):
             failures["bad_covers_by_type"] += 1

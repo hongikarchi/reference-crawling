@@ -36,7 +36,10 @@ from tools.canonical_v2_c21_make_web_polish import (  # noqa: E402
     _normalize_country_full,
 )
 from tools.canonical_v2_c23_final import _KNOWN_COUNTRIES  # noqa: E402
-from tools.canonical_v2_upload_validator import iter_buildings  # noqa: E402
+from tools.canonical_v2_upload_validator import (  # noqa: E402
+    MATERIAL_TAXONOMY_NOISE as _MATERIAL_NOISE,
+    iter_buildings,
+)
 
 # Phase A-2 — social-link brand leak filter
 _SOURCE_BRAND_RE = re.compile(r"archello|architizer|divisare|metalocus",
@@ -398,7 +401,7 @@ def _aggregate_buildings(rows):
                 counters[fld][v] += 1
         # array fields
         for v in r.get("material_visual") or []:
-            if v:
+            if v and str(v).strip().lower() not in _MATERIAL_NOISE:
                 counters["material_visual"][v] += 1
         for v in r.get("architectural_elements") or []:
             if v:
