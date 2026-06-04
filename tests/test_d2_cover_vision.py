@@ -73,7 +73,8 @@ def test_d2_picks_best_cover_and_writes_mocked_vision_payload(tmp_path):
         for row in (json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines())
     }
     assert rows["bld_cover"]["cover_url"] == "https://img.test/cover.jpg"
-    assert rows["bld_cover"]["style_image"] == "contemporary"
+    assert rows["bld_cover"]["style_image"] == "Contemporary"
+    assert rows["bld_cover"]["color_tone_image"] == "Neutral"
     assert rows["bld_cover"]["material_visual_image"] == ["concrete", "glass"]
     assert rows["bld_missing"]["cover_url"] is None
     assert rows["bld_missing"]["visual_description_image"] is None
