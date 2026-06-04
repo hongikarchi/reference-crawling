@@ -69,6 +69,53 @@ def test_second_pass_maps_common_unmapped_materials_and_extra_noise():
                 "rock",
                 "gravel",
                 "roof",
+                "staircase",
+                "facades",
+                "canopy",
+                "cedar",
+                "textiles",
+                "wallpaper",
+                "pavement",
+                "cast iron",
+                "parquet",
+                "asphalt",
+                "plasterboard",
+                "velvet",
+                "microcement",
+                "mosaic",
+                "upholstery",
+                "teak",
+                "mortar",
+                "clt",
+                "roofing",
+                "pergola",
+                "roof terrace",
+                "perforated facade",
+                "decking",
+                "cork",
+                "membrane",
+                "shipping containers",
+                "douglas fir",
+                "basalt",
+                "linoleum",
+                "cor-ten",
+                "corian",
+                "linen",
+                "rubber",
+                "rope",
+                "adobe",
+                "fiberglass",
+                "lime",
+                "joinery",
+                "built-in cabinetry",
+                "pillars",
+                "roof garden",
+                "pitched roofs",
+                "black cladding",
+                "screens",
+                "arches",
+                "flooring",
+                "natural light",
                 "led lighting",
                 "solar panels",
                 "white walls",
@@ -77,10 +124,43 @@ def test_second_pass_maps_common_unmapped_materials_and_extra_noise():
         )
     )
 
-    assert cleaned["material_visual"] == ["metal", "terrazzo", "stone", "paving", "plaster"]
-    assert cleaned["architectural_elements"] == ["Roof"]
-    assert change["removed_noise"] == ["led lighting", "solar panels"]
-    assert change["moved_to_elements"] == {"roof": "Roof"}
+    assert cleaned["material_visual"] == [
+        "metal",
+        "terrazzo",
+        "stone",
+        "paving",
+        "timber",
+        "fabric",
+        "paper",
+        "plaster",
+        "concrete",
+        "tile",
+        "masonry",
+        "cork",
+        "membrane",
+        "linoleum",
+        "corten",
+        "composite",
+        "rubber",
+        "earth",
+        "lime",
+    ]
+    assert cleaned["architectural_elements"] == ["Canopy", "Column", "Facade", "Garden", "Roof", "Stair", "Terrace"]
+    assert change["removed_noise"] == ["arches", "flooring", "led lighting", "natural light", "screens", "solar panels"]
+    assert change["moved_to_elements"] == {
+        "black cladding": "Facade",
+        "canopy": "Canopy",
+        "facades": "Facade",
+        "perforated facade": "Facade",
+        "pergola": "Canopy",
+        "pillars": "Column",
+        "roof": "Roof",
+        "roof garden": "Garden",
+        "roof terrace": "Terrace",
+        "roofing": "Roof",
+        "pitched roofs": "Roof",
+        "staircase": "Stair",
+    }
 
 
 def test_apply_cleanup_writes_artifact_sidecar_and_report(tmp_path):
@@ -94,6 +174,7 @@ def test_apply_cleanup_writes_artifact_sidecar_and_report(tmp_path):
         _row(),
         _row(canonical_bld_id="bld_000002", is_publishable=False),
         _row(canonical_bld_id="bld_000003", material_visual=["water"], architectural_elements=[]),
+        _row(canonical_bld_id="bld_000004", material_visual=["unknown finish"], architectural_elements=[]),
     ]}))
 
     report = sq.apply_cleanup(
@@ -106,10 +187,12 @@ def test_apply_cleanup_writes_artifact_sidecar_and_report(tmp_path):
     )
 
     assert report["status"] == "PASS"
-    assert report["rows_total"] == 3
-    assert report["publishable_rows"] == 2
+    assert report["rows_total"] == 4
+    assert report["publishable_rows"] == 3
     assert report["material_noise_rows_after"] == 0
     assert report["material_unmapped_review_rows"] == 1
+    assert report["material_unmapped_publishable_review_rows"] == 1
+    assert report["material_unspecified_publishable_rows"] == 2
     assert report["search_keywords_publishable_coverage_pct"] == 100.0
     assert report["controlled_oov_counts"] == {}
     assert report["facet_distributions"]["program"]["distinct"] == 1
@@ -120,10 +203,11 @@ def test_apply_cleanup_writes_artifact_sidecar_and_report(tmp_path):
     keyword_rows = [json.loads(line) for line in keyword_path.read_text().splitlines()]
     assert keyword_rows[0] == {"canonical_bld_id": "bld_000001", "search_keywords": sq.build_search_keywords(changed)}
     review_rows = [json.loads(line) for line in review_path.read_text().splitlines()]
-    assert review_rows[0]["canonical_bld_id"] == "bld_000003"
-    assert review_rows[0]["raw_material_visual"] == ["water"]
+    assert review_rows[0]["canonical_bld_id"] == "bld_000004"
+    assert review_rows[0]["raw_material_visual"] == ["unknown finish"]
     changed_rows = json.loads(output_path.read_text())["buildings"]
     assert changed_rows[2]["material_visual"] == ["unspecified"]
+    assert changed_rows[3]["material_visual"] == ["unspecified"]
     mapping = json.loads(mapping_path.read_text())
     assert mapping["controlled_materials"]
     assert mapping["noise_terms"]["water"]["category"] == "landscape_context"
