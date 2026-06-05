@@ -243,9 +243,62 @@ def _brief_target(item: dict[str, Any], cid: str | None) -> dict[str, Any]:
         "location_city": first.get("city") or first.get("location_city") or item.get("row_city"),
         "project_year": first.get("year") or first.get("project_year") or item.get("row_year"),
         "source_refs": first.get("source_refs") or item.get("source_refs") or {},
+        "source_urls": first.get("source_urls") or item.get("source_urls") or {},
         "display_cover_url": first.get("display_cover_url") or item.get("display_cover_url"),
         "images": first.get("images") or item.get("images") or [],
     }
+
+
+def _target_from_artifact_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "canonical_bld_id": row.get("canonical_bld_id"),
+        "name": row.get("name"),
+        "architect_names": row.get("architect_names") or [],
+        "location_country": row.get("location_country"),
+        "location_city": row.get("location_city"),
+        "project_year": row.get("project_year"),
+        "year_kind": row.get("year_kind"),
+        "program": row.get("program"),
+        "typology_primary": row.get("typology_primary"),
+        "source_refs": row.get("source_refs") or {},
+        "source_urls": row.get("source_urls") or {},
+        "display_cover_url": row.get("display_cover_url"),
+        "images": row.get("all_images") or [],
+    }
+
+
+def _merge_target_context(existing: dict[str, Any], artifact_target: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(artifact_target)
+    for key, value in (existing or {}).items():
+        if value not in (None, "", [], {}):
+            merged[key] = value
+    for key in ("source_urls", "images", "display_cover_url"):
+        if artifact_target.get(key) not in (None, "", [], {}):
+            merged[key] = artifact_target[key]
+    return merged
+
+
+def enrich_cases_from_artifact(cases: list[dict[str, Any]], artifact_path: Path) -> None:
+    needed = {
+        str(case.get("target_canonical_bld_id") or "")
+        for case in cases
+        if case.get("target_canonical_bld_id")
+    }
+    if not needed or not artifact_path.exists():
+        return
+    rows: dict[str, dict[str, Any]] = {}
+    for row in iter_buildings(artifact_path):
+        cid = str(row.get("canonical_bld_id") or "")
+        if cid in needed:
+            rows[cid] = _target_from_artifact_row(row)
+            if len(rows) == len(needed):
+                break
+    for case in cases:
+        cid = str(case.get("target_canonical_bld_id") or "")
+        artifact_target = rows.get(cid)
+        if not artifact_target:
+            continue
+        case["target"] = _merge_target_context(case.get("target") or {}, artifact_target)
 
 
 def normalize_ambiguous_item(
@@ -1033,6 +1086,7 @@ def build_snapshot(
     for case in cases:
         deduped[case["case_id"]] = case
     ordered = sorted(deduped.values(), key=lambda c: (c["tab"], c["issue_code"], c.get("target_canonical_bld_id") or "", c["case_id"]))
+    enrich_cases_from_artifact(ordered, source_artifact)
     counts = Counter(c["tab"] for c in ordered)
     by_issue = Counter(c["issue_code"] for c in ordered)
     snapshot = {
@@ -1864,6 +1918,9 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .image { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fafafa; }
 .image img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#eceee8; }
 .image button { width:100%; border:0; border-top:1px solid var(--line); border-radius:0; }
+.image .cap { padding:7px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.links { display:grid; gap:7px; }
+.links a { color:#07525f; overflow-wrap:anywhere; }
 pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#f7f7f5; border:1px solid var(--line); border-radius:8px; padding:10px; max-height:250px; overflow:auto; }
 select, input { width:100%; border:1px solid var(--line); border-radius:7px; padding:9px; background:white; }
 .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:12px; }
@@ -1906,11 +1963,12 @@ function current(){const cards=filtered(); return cards.find(c=>c.card_id===acti
 function renderStats(){const c=state?.counts||{}; $('#done').textContent=c.decided??0; $('#todo').textContent=c.undecided??0; $('#meta').textContent=`${c.total_cards??0} cards · cases ${c.case_cards??0} · terms ${c.term_cards??0}`;}
 function renderTabs(){const counts=state?.counts?.by_tab||{}; const names=['all',...Object.keys(counts).sort()]; $('#tabs').innerHTML=names.map(n=>`<button data-tab="${esc(n)}" class="${n===activeTab?'active':''}">${esc(n)} ${n==='all'?state.counts.total_cards:counts[n]}</button>`).join(''); document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab; activeCardId=null; render();});}
 function targetMeta(c){const t=c.target||{}; return [t.name||c.title,t.location_country,t.location_city,t.project_year,(t.architect_names||[]).join(', ')].filter(Boolean).join(' · ');}
+function sourceLinks(c){const urls=c.target?.source_urls||{}; const refs=c.target?.source_refs||{}; const links=[]; Object.entries(urls).forEach(([source,items])=>(items||[]).forEach((url,i)=>links.push({source,url,ref:(refs[source]||[])[i]}))); if(!links.length)return '<div class="card"><h3>원본 링크</h3><div class="muted">원본 URL 없음. source_refs만 확인하세요.</div><pre>'+esc(JSON.stringify(refs,null,2))+'</pre></div>'; return `<div class="card"><h3>원본 링크</h3><div class="links">${links.map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.source)} ${esc(l.ref||'')} · ${esc(l.url)}</a>`).join('')}</div></div>`;}
 function renderExamples(c){return `<div class="card"><h3>예시 건물</h3><div class="examples">${(c.examples||[]).map(e=>`<div class="example"><b>${esc(e.name||e.canonical_bld_id)}</b><div class="muted">${esc([e.program,e.typology_primary].filter(Boolean).join(' · '))}</div><div class="mono">${esc((e.raw_material_visual||[]).join(', '))}</div></div>`).join('')}</div></div>`;}
 function selectOptions(values, selected){return `<option value="">선택</option>${values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}`;}
 function renderTerm(c){const s=c.suggestions||{}; return `<div class="hero card"><span class="badge">material term · ${esc(c.occurrence_count)}회</span><h2>${esc(c.question_ko)}</h2><div class="muted">이 단어를 material facet에 남길지, 다른 검색 신호로 옮길지 결정하세요.</div></div><div class="grid"><div>${renderExamples(c)}<div class="card"><h3>분류 선택</h3><div class="controls"><label>건축요소<select id="elementValue">${selectOptions(state.actions.architectural_elements,s.architectural_element)}</select></label><label>용도/타입 필드<select id="typeField"><option value="typology_tags">typology_tags</option><option value="program">program</option></select></label><label>용도/타입 값<select id="typeValue">${selectOptions(state.actions.typology,s.typology)}</select></label></div></div></div><div><div class="card"><h3>결정</h3><div class="actions"><button class="action primary" data-term-action="material">1 재료<small>material_visual 유지</small></button><button class="action" data-term-action="architectural_element">2 건축요소<small>선택한 element로 이동</small></button><button class="action" data-term-action="typology">3 용도/타입<small>typology/program으로 이동</small></button><button class="action" data-term-action="search_keyword">4 검색어만<small>material에서 제거, 검색 보존</small></button><button class="action danger" data-term-action="delete">5 삭제<small>검색에서도 제거</small></button><button class="action" data-term-action="unsure">6 보류<small>나중에 다시 보기</small></button></div></div></div></div>`;}
-function imageCards(c){if(!(c.images||[]).length)return ''; return `<div class="card"><h3>이미지 선택</h3><div class="images">${c.images.map((im,i)=>`<div class="image"><img src="${esc(im.url)}" loading="lazy"><button data-case-action="${i}">이 이미지 선택</button></div>`).join('')}</div></div>`;}
-function renderCase(c){return `<div class="hero card"><span class="badge">${esc(c.tab)} · ${esc(c.issue_code)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">${esc(targetMeta(c))}</div></div><div class="grid"><div>${imageCards(c)}<div class="card"><h3>Evidence</h3><pre>${esc(JSON.stringify(c.evidence,null,2))}</pre></div></div><div><div class="card"><h3>결정</h3><input id="textValue" value="${esc(c.title||'')}" placeholder="수정 값"><div class="actions">${(c.actions||[]).map((a,i)=>`<button class="action ${a.decision==='unpublish'?'danger':''}" data-case-action="${i}">${i+1} ${esc(a.label_ko)}</button>`).join('')}</div></div></div></div>`;}
+function imageCards(c){if(!(c.images||[]).length)return '<div class="card"><h3>사진</h3><div class="muted">사진 없음</div></div>'; return `<div class="card"><h3>사진</h3><div class="images">${c.images.map((im,i)=>`<div class="image"><img src="${esc(im.url)}" loading="lazy"><div class="cap">${esc(im.kind||im.type||'image')} · ${esc(im.source||'')}</div><button data-case-action="${i}">이 이미지 선택</button></div>`).join('')}</div></div>`;}
+function renderCase(c){return `<div class="hero card"><span class="badge">${esc(c.tab)} · ${esc(c.issue_code)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">${esc(targetMeta(c))}</div></div><div class="grid"><div>${sourceLinks(c)}${imageCards(c)}<div class="card"><h3>Evidence</h3><pre>${esc(JSON.stringify(c.evidence,null,2))}</pre></div></div><div><div class="card"><h3>결정</h3><input id="textValue" value="${esc(c.title||'')}" placeholder="수정 값"><div class="actions">${(c.actions||[]).map((a,i)=>`<button class="action ${a.decision==='unpublish'?'danger':''}" data-case-action="${i}">${i+1} ${esc(a.label_ko)}</button>`).join('')}</div></div></div></div>`;}
 function bindCard(c){document.querySelectorAll('[data-term-action]').forEach(b=>b.onclick=()=>saveTerm(c,b.dataset.termAction)); document.querySelectorAll('[data-case-action]').forEach(b=>b.onclick=()=>saveCase(c,Number(b.dataset.caseAction))); const tf=$('#typeField'); const tv=$('#typeValue'); if(tf&&tv){tf.onchange=()=>{tv.innerHTML=selectOptions(tf.value==='program'?state.actions.program:state.actions.typology,'');};}}
 function render(){renderStats(); renderTabs(); const c=current(); if(!c){$('#view').innerHTML='<div class="empty">모든 검토 완료</div>'; return;} activeCardId=c.card_id; $('#view').innerHTML=c.kind==='term'?renderTerm(c):renderCase(c); bindCard(c);}
 async function postDecision(payload){const r=await fetch('/api/fast-decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!r.ok){toast(await r.text()); return false;} state=await r.json(); lastCardId=payload.card_id; const cards=filtered(); const oldIndex=cards.findIndex(c=>c.card_id===payload.card_id); activeCardId=(cards.slice(oldIndex+1).find(c=>!c.decision)||cards.find(c=>!c.decision)||cards[oldIndex+1]||cards[0]||{}).card_id; toast('저장됨'); render(); return true;}

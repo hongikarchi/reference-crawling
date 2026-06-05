@@ -209,6 +209,50 @@ def test_build_fast_snapshot_groups_material_terms_uniquely_and_orders_small_cas
     assert [example["canonical_bld_id"] for example in public_square["examples"]] == ["bld_000001", "bld_000002"]
 
 
+def test_enrich_cases_from_artifact_adds_source_urls_and_images(tmp_path):
+    artifact_path = tmp_path / "artifact.json"
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "buildings": [
+                    _sample_row(
+                        canonical_bld_id="bld_000404",
+                        name="Element House",
+                        location_country="South Korea",
+                        source_refs={"divisare": ["17833"]},
+                        source_urls={"divisare": ["https://divisare.com/projects/17833-element-house"]},
+                        display_cover_url="https://img.test/element.jpg",
+                        all_images=[{"url": "https://img.test/element.jpg", "kind": "cover"}],
+                    )
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    cases = [
+        workflow.normalize_ambiguous_item(
+            source_path="country.jsonl",
+            issue_code="country_conflict",
+            item={
+                "cid": "bld_000404",
+                "name": "Element House",
+                "row_country": "Korea, Democratic People's Republic of",
+                "normalized": ["North Korea", "South Korea"],
+                "source_refs": {"divisare": ["17833"]},
+            },
+            index=0,
+        )
+    ]
+
+    workflow.enrich_cases_from_artifact(cases, artifact_path)
+    fast = workflow.build_fast_snapshot({"version": 1, "cases": cases}, {"decisions": {}, "term_decisions": {}})
+    card = fast["queue"][0]
+
+    assert card["target"]["source_urls"] == {"divisare": ["https://divisare.com/projects/17833-element-house"]}
+    assert card["target"]["images"] == [{"url": "https://img.test/element.jpg", "kind": "cover"}]
+    assert card["images"] == [{"url": "https://img.test/element.jpg", "kind": "cover"}]
+
+
 def test_save_fast_term_decision_preserves_existing_case_decisions(tmp_path):
     old_case = workflow.normalize_ambiguous_item(
         source_path="country.jsonl",
