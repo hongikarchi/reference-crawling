@@ -253,6 +253,40 @@ def test_enrich_cases_from_artifact_adds_source_urls_and_images(tmp_path):
     assert card["images"] == [{"url": "https://img.test/element.jpg", "kind": "cover"}]
 
 
+def test_fast_image_actions_only_enabled_for_cover_cards():
+    country_case = workflow.normalize_ambiguous_item(
+        source_path="country.jsonl",
+        issue_code="country_conflict",
+        item={
+            "cid": "bld_000404",
+            "name": "Element House",
+            "row_country": "North Korea",
+            "normalized": ["North Korea", "South Korea"],
+            "images": [{"url": "https://img.test/element.jpg", "kind": "cover"}],
+        },
+        index=0,
+    )
+    cover_case = workflow.normalize_ambiguous_item(
+        source_path="cover.json",
+        issue_code="cover_phash",
+        item={
+            "cid": "bld_000405",
+            "name": "Cover House",
+            "images": [{"url": "https://img.test/cover.jpg", "kind": "cover"}],
+        },
+        index=0,
+    )
+
+    fast = workflow.build_fast_snapshot(
+        {"version": 1, "cases": [country_case, cover_case]},
+        {"decisions": {}, "term_decisions": {}},
+    )
+    cards = {card["issue_code"]: card for card in fast["queue"]}
+
+    assert cards["country_conflict"]["image_actions_enabled"] is False
+    assert cards["cover_phash"]["image_actions_enabled"] is True
+
+
 def test_save_fast_term_decision_preserves_existing_case_decisions(tmp_path):
     old_case = workflow.normalize_ambiguous_item(
         source_path="country.jsonl",
