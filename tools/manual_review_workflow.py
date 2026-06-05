@@ -65,8 +65,27 @@ DEFAULT_ACTIONS = [
     "unpublish",
     "merge",
     "split",
+    "needs_fix",
     "unsure",
 ]
+FAST_TERM_ACTIONS = [
+    "material",
+    "architectural_element",
+    "typology",
+    "search_keyword",
+    "delete",
+    "unsure",
+]
+FAST_CASE_PRIORITY = {
+    "country": 0,
+    "year": 1,
+    "cover": 2,
+    "seo": 3,
+    "architect": 4,
+    "series": 5,
+    "crawl": 6,
+}
+FAST_TERM_EXAMPLE_LIMIT = 5
 SAFE_UPDATE_FIELDS = {
     "name",
     "location_country",
@@ -99,6 +118,7 @@ ISSUE_TABS = {
     "name_quality": "seo",
     "architect_unknown": "architect",
     "material_noise": "material",
+    "material_unmapped": "material",
     "d1_uncertainty": "d1",
     "d2_oov": "d2",
     "source_url_gap": "crawl",
@@ -157,6 +177,20 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
             if isinstance(value, dict):
                 rows.append(value)
     return rows
+
+
+def parse_extra_issue_path(value: str) -> tuple[str, Path]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError("expected ISSUE_CODE=PATH")
+    issue_code, raw_path = value.split("=", 1)
+    issue_code = issue_code.strip()
+    if not issue_code:
+        raise argparse.ArgumentTypeError("issue code is required")
+    return issue_code, Path(raw_path)
+
+
+def normalize_review_term(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().casefold())
 
 
 def _stable_hash(value: Any) -> str:
@@ -258,7 +292,13 @@ def normalize_ambiguous_item(
     }
 
 
-def _case_from_row(row: dict[str, Any], issue_code: str, evidence: dict[str, Any]) -> dict[str, Any]:
+def _case_from_row(
+    row: dict[str, Any],
+    issue_code: str,
+    evidence: dict[str, Any],
+    *,
+    source_artifact: Path = C23_EMBEDDED,
+) -> dict[str, Any]:
     item = {
         "cid": row.get("canonical_bld_id"),
         "name": row.get("name"),
@@ -272,7 +312,7 @@ def _case_from_row(row: dict[str, Any], issue_code: str, evidence: dict[str, Any
         **evidence,
     }
     return normalize_ambiguous_item(
-        source_path=str(C23_EMBEDDED.relative_to(ROOT)),
+        source_path=_rel(source_artifact),
         issue_code=issue_code,
         item=item,
         index=int(hashlib.sha1(str(row.get("canonical_bld_id")).encode()).hexdigest()[:8], 16),
@@ -434,7 +474,12 @@ def audit_buildings_artifact(path: Path = C23_EMBEDDED) -> tuple[dict[str, Any],
             if ids and not urls.get(source):
                 counters["source_url_gap"] += 1
                 generated_cases.append(
-                    _case_from_row(row, "source_url_gap", {"source": source, "source_ids": ids})
+                    _case_from_row(
+                        row,
+                        "source_url_gap",
+                        {"source": source, "source_ids": ids},
+                        source_artifact=path,
+                    )
                 )
         arch_ids = row.get("architect_canonical_ids") or []
         arch_names = row.get("architect_names") or []
@@ -443,7 +488,9 @@ def audit_buildings_artifact(path: Path = C23_EMBEDDED) -> tuple[dict[str, Any],
         arch_text = " ".join(str(x) for x in arch_names) + " " + str(row.get("architects_text") or "")
         if is_pub and (not arch_ids or re.search(r"\b(n/?a|unknown|anonymous)\b", arch_text, re.I)):
             counters["architect_unknown_publishable"] += 1
-            generated_cases.append(_case_from_row(row, "architect_unknown", {"architect_text": arch_text.strip()}))
+            generated_cases.append(
+                _case_from_row(row, "architect_unknown", {"architect_text": arch_text.strip()}, source_artifact=path)
+            )
         raw_material = row.get("material_visual") or []
         bad_material = sorted(
             {
@@ -454,11 +501,15 @@ def audit_buildings_artifact(path: Path = C23_EMBEDDED) -> tuple[dict[str, Any],
         )
         if bad_material:
             counters["material_noise_rows"] += 1
-            generated_cases.append(_case_from_row(row, "material_noise", {"material_noise": bad_material}))
+            generated_cases.append(
+                _case_from_row(row, "material_noise", {"material_noise": bad_material}, source_artifact=path)
+            )
         d2_oov = _image_derived_oov(row.get("image_derived"))
         if d2_oov:
             counters["d2_oov_rows"] += 1
-            generated_cases.append(_case_from_row(row, "d2_oov", {"image_derived_oov": d2_oov}))
+            generated_cases.append(
+                _case_from_row(row, "d2_oov", {"image_derived_oov": d2_oov}, source_artifact=path)
+            )
         cover = row.get("display_cover_url")
         if is_pub and cover:
             display_cover_owners[str(cover)].append(cid)
@@ -946,6 +997,8 @@ def build_snapshot(
     *,
     output_path: Path = SNAPSHOT_PATH,
     decisions_path: Path = DECISIONS_PATH,
+    source_artifact: Path = C23_EMBEDDED,
+    extra_issue_paths: list[tuple[str, Path]] | None = None,
     audit_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
@@ -959,9 +1012,19 @@ def build_snapshot(
                     index=idx,
                 )
             )
+    for issue_code, path in extra_issue_paths or []:
+        for idx, item in enumerate(load_jsonl(path)):
+            cases.append(
+                normalize_ambiguous_item(
+                    source_path=_rel(path),
+                    issue_code=issue_code,
+                    item=item,
+                    index=idx,
+                )
+            )
     cases.extend(_load_cover_review_cases())
     if audit_result is None:
-        _, artifact_index = audit_buildings_artifact(C23_EMBEDDED)
+        _, artifact_index = audit_buildings_artifact(source_artifact)
         cases.extend(artifact_index["generated_cases"])
     else:
         cases.extend(audit_result.get("generated_cases") or [])
@@ -975,7 +1038,8 @@ def build_snapshot(
     snapshot = {
         "version": 1,
         "generated_at": now_iso(),
-        "source_artifact": _rel(C23_EMBEDDED),
+        "snapshot_path": _rel(output_path),
+        "source_artifact": _rel(source_artifact),
         "db_writes": "none",
         "counts": {
             "total_cases": len(ordered),
@@ -1024,11 +1088,12 @@ def ensure_decisions(snapshot: dict[str, Any], path: Path = DECISIONS_PATH) -> d
     old = existing.get("decisions") or {}
     merged = {
         "version": 1,
-        "snapshot_path": _rel(SNAPSHOT_PATH),
+        "snapshot_path": snapshot.get("snapshot_path") or _rel(SNAPSHOT_PATH),
         "updated_at": existing.get("updated_at") or now_iso(),
         "db_writes": "none",
         "summary": {},
         "decisions": {},
+        "term_decisions": existing.get("term_decisions") or {},
     }
     for case in snapshot.get("cases") or []:
         item = blank_decision(case)
@@ -1042,6 +1107,291 @@ def ensure_decisions(snapshot: dict[str, Any], path: Path = DECISIONS_PATH) -> d
     if merged != existing:
         atomic_write_json(path, merged)
     return merged
+
+
+def _case_target(case: dict[str, Any]) -> dict[str, Any]:
+    evidence = case.get("evidence") or {}
+    nested = evidence.get("target")
+    if isinstance(nested, dict):
+        return nested
+    return case.get("target") or {}
+
+
+def _case_title(case: dict[str, Any]) -> str:
+    target = _case_target(case)
+    return str(target.get("name") or case.get("title") or case.get("case_id"))
+
+
+def _case_images(case: dict[str, Any]) -> list[dict[str, Any]]:
+    target = _case_target(case)
+    images = target.get("images") or case.get("target", {}).get("images") or []
+    return [im for im in images if isinstance(im, dict) and im.get("url")]
+
+
+def _candidate_values(case: dict[str, Any]) -> list[Any]:
+    evidence = case.get("evidence") or {}
+    issue = case.get("issue_code")
+    if issue == "country_conflict":
+        return list(dict.fromkeys(evidence.get("normalized") or evidence.get("source_countries_extracted") or []))
+    if issue == "year_conflict":
+        return list(dict.fromkeys(evidence.get("source_years") or []))
+    return []
+
+
+def _fast_case_question(case: dict[str, Any]) -> str:
+    title = _case_title(case)
+    issue = case.get("issue_code")
+    if issue == "country_conflict":
+        return f"이 건물의 국가를 골라주세요: {title}"
+    if issue == "year_conflict":
+        return f"이 건물의 연도를 골라주세요: {title}"
+    if issue in {"cover_phash", "gallery_image", "gallery_phash"}:
+        return f"대표 이미지가 맞는지 골라주세요: {title}"
+    if issue == "seo_name":
+        return f"검색에 방해되는 이름인지 판단해주세요: {title}"
+    if issue == "architect_unknown":
+        return f"건축가 정보가 충분한지 판단해주세요: {title}"
+    if issue == "series_pavilion":
+        return f"같은 건물로 합칠지, 별도 건물로 둘지 판단해주세요: {title}"
+    if issue == "source_url_gap":
+        return f"소스 URL 누락을 수정 대상으로 표시할지 판단해주세요: {title}"
+    return f"이 항목을 어떻게 처리할지 판단해주세요: {title}"
+
+
+def _fast_case_actions(case: dict[str, Any]) -> list[dict[str, Any]]:
+    issue = case.get("issue_code")
+    actions: list[dict[str, Any]] = []
+    if issue == "country_conflict":
+        for value in _candidate_values(case):
+            actions.append(
+                {
+                    "label_ko": str(value),
+                    "decision": "update_field",
+                    "payload": {"field": "location_country", "value": value},
+                }
+            )
+    elif issue == "year_conflict":
+        for value in _candidate_values(case):
+            actions.append(
+                {
+                    "label_ko": str(value),
+                    "decision": "update_field",
+                    "payload": {"field": "project_year", "value": value},
+                }
+            )
+    elif issue in {"cover_phash", "gallery_image", "gallery_phash"}:
+        for image in _case_images(case)[:12]:
+            actions.append(
+                {
+                    "label_ko": "이 이미지",
+                    "decision": "set_cover_to_image",
+                    "payload": {"image_url": image.get("url"), "image_id": image.get("image_id")},
+                    "image_url": image.get("url"),
+                    "image_id": image.get("image_id"),
+                }
+            )
+    elif issue == "seo_name":
+        actions.extend(
+            [
+                {"label_ko": "유지", "decision": "keep", "payload": {}},
+                {"label_ko": "이름 수정", "decision": "update_field", "payload": {"field": "name", "value": _case_title(case)}},
+                {"label_ko": "비공개", "decision": "unpublish", "payload": {"reason": "manual_review_seo_name"}},
+            ]
+        )
+    elif issue == "architect_unknown":
+        actions.extend(
+            [
+                {"label_ko": "유지", "decision": "keep", "payload": {}},
+                {
+                    "label_ko": "건축가 수정",
+                    "decision": "update_field",
+                    "payload": {"field": "architects_text", "value": ""},
+                    "requires_text": True,
+                },
+                {"label_ko": "비공개", "decision": "unpublish", "payload": {"reason": "architect_unknown"}},
+            ]
+        )
+    elif issue == "series_pavilion":
+        evidence = case.get("evidence") or {}
+        rows = [r for r in evidence.get("rows") or [] if isinstance(r, dict)]
+        survivor = case.get("target_canonical_bld_id")
+        losers = [str(r.get("cid")) for r in rows if r.get("cid") and str(r.get("cid")) != str(survivor)]
+        actions.extend(
+            [
+                {"label_ko": "별도 유지", "decision": "keep", "payload": {}},
+                {"label_ko": "합치기 후보", "decision": "merge", "payload": {"survivor_cid": survivor, "loser_cids": losers}},
+            ]
+        )
+    elif issue == "source_url_gap":
+        actions.extend(
+            [
+                {"label_ko": "유지", "decision": "keep", "payload": {}},
+                {"label_ko": "수정 필요", "decision": "needs_fix", "payload": {"reason": "source_url_gap"}},
+            ]
+        )
+    else:
+        actions.append({"label_ko": "유지", "decision": "keep", "payload": {}})
+    actions.append({"label_ko": "보류", "decision": "unsure", "payload": {}})
+    return actions
+
+
+def _fast_case_card(case: dict[str, Any], decisions: dict[str, Any]) -> dict[str, Any]:
+    item = (decisions.get("decisions") or {}).get(case["case_id"]) or {}
+    return {
+        "kind": "case",
+        "card_id": f"case:{case['case_id']}",
+        "case_id": case["case_id"],
+        "tab": case.get("tab"),
+        "issue_code": case.get("issue_code"),
+        "title": _case_title(case),
+        "question_ko": _fast_case_question(case),
+        "target_canonical_bld_id": case.get("target_canonical_bld_id"),
+        "target": _case_target(case),
+        "evidence": case.get("evidence") or {},
+        "images": _case_images(case),
+        "actions": _fast_case_actions(case),
+        "decision": item.get("decision"),
+        "payload": item.get("payload") or {},
+        "notes": item.get("notes") or "",
+    }
+
+
+def _material_terms_from_case(case: dict[str, Any]) -> list[str]:
+    evidence = case.get("evidence") or {}
+    terms = evidence.get("unmapped_material_terms") or evidence.get("material_noise") or []
+    return [str(term) for term in terms if normalize_review_term(term)]
+
+
+def _term_suggestions(term_key: str) -> dict[str, Any]:
+    element_patterns = [
+        ("Stair", r"stair|step"),
+        ("Facade", r"facade|cladding|envelope|skin|frontage|opening"),
+        ("Roof", r"roof|eave"),
+        ("Courtyard", r"courtyard|court"),
+        ("Entrance", r"entrance|entry"),
+        ("Corridor", r"corridor|hallway"),
+        ("Atrium", r"atrium|void"),
+        ("Terrace", r"terrace|deck"),
+        ("Balcony", r"balcon"),
+        ("Garden", r"garden|landscape|plant|tree|lawn"),
+        ("Column", r"column"),
+        ("Canopy", r"canopy"),
+        ("Skylight", r"skylight"),
+    ]
+    typology_patterns = [
+        ("Apartment", r"apartment|residential block"),
+        ("Housing", r"housing|residential"),
+        ("Office", r"office"),
+        ("Retail", r"retail|shop|store"),
+        ("Restaurant", r"restaurant|cafe"),
+        ("Hotel", r"hotel|resort"),
+        ("Gallery", r"gallery|exhibition"),
+        ("Museum", r"museum"),
+        ("University", r"university|campus"),
+        ("School", r"school"),
+        ("Theatre", r"theatre|theater|auditorium"),
+        ("Car Park", r"parking"),
+        ("Bridge", r"bridge"),
+        ("Park", r"park|public square|plaza"),
+        ("Memorial", r"memorial|cemetery|monument"),
+    ]
+    element = next((value for value, pattern in element_patterns if re.search(pattern, term_key)), None)
+    typology = next((value for value, pattern in typology_patterns if re.search(pattern, term_key)), None)
+    return {"architectural_element": element, "typology": typology}
+
+
+def _fast_term_card(term_key: str, group: dict[str, Any], decisions: dict[str, Any]) -> dict[str, Any]:
+    item = (decisions.get("term_decisions") or {}).get(term_key) or {}
+    display_term = group["display_term"]
+    suggestions = _term_suggestions(term_key)
+    return {
+        "kind": "term",
+        "card_id": f"term:{term_key}",
+        "term_key": term_key,
+        "display_term": display_term,
+        "tab": "material",
+        "issue_code": "material_unmapped",
+        "title": display_term,
+        "question_ko": f"이 표현은 재료인가요? '{display_term}'",
+        "occurrence_count": group["occurrence_count"],
+        "building_count": len(group["building_ids"]),
+        "examples": group["examples"],
+        "suggestions": suggestions,
+        "allowed_actions": list(FAST_TERM_ACTIONS),
+        "decision": item.get("decision"),
+        "payload": item.get("payload") or {},
+        "notes": item.get("notes") or "",
+    }
+
+
+def build_fast_snapshot(snapshot: dict[str, Any], decisions: dict[str, Any] | None = None) -> dict[str, Any]:
+    decisions = decisions or {"decisions": {}, "term_decisions": {}}
+    case_cards = []
+    term_groups: dict[str, dict[str, Any]] = {}
+    for case in snapshot.get("cases") or []:
+        if case.get("issue_code") == "material_unmapped":
+            evidence = case.get("evidence") or {}
+            for term in _material_terms_from_case(case):
+                term_key = normalize_review_term(term)
+                group = term_groups.setdefault(
+                    term_key,
+                    {
+                        "display_term": str(term),
+                        "occurrence_count": 0,
+                        "building_ids": set(),
+                        "examples": [],
+                    },
+                )
+                group["occurrence_count"] += 1
+                cid = case.get("target_canonical_bld_id") or evidence.get("canonical_bld_id")
+                if cid:
+                    group["building_ids"].add(str(cid))
+                if len(group["examples"]) < FAST_TERM_EXAMPLE_LIMIT:
+                    group["examples"].append(
+                        {
+                            "canonical_bld_id": cid,
+                            "name": evidence.get("name") or _case_title(case),
+                            "program": evidence.get("program"),
+                            "typology_primary": evidence.get("typology_primary"),
+                            "raw_material_visual": evidence.get("raw_material_visual") or [],
+                            "source_refs": evidence.get("source_refs") or {},
+                        }
+                    )
+            continue
+        case_cards.append(_fast_case_card(case, decisions))
+
+    case_cards.sort(
+        key=lambda c: (
+            FAST_CASE_PRIORITY.get(str(c.get("tab")), 99),
+            str(c.get("issue_code") or ""),
+            str(c.get("target_canonical_bld_id") or ""),
+            str(c.get("case_id") or ""),
+        )
+    )
+    term_cards = [_fast_term_card(term_key, term_groups[term_key], decisions) for term_key in sorted(term_groups)]
+    queue = case_cards + term_cards
+    done = sum(1 for card in queue if card.get("decision"))
+    counts = Counter(str(card.get("tab") or "unknown") for card in queue)
+    return {
+        "version": 1,
+        "source_snapshot": snapshot.get("snapshot_path") or snapshot.get("source_artifact"),
+        "generated_at": now_iso(),
+        "counts": {
+            "total_cards": len(queue),
+            "case_cards": len(case_cards),
+            "term_cards": len(term_cards),
+            "decided": done,
+            "undecided": len(queue) - done,
+            "by_tab": dict(sorted(counts.items())),
+        },
+        "actions": {
+            "term": list(FAST_TERM_ACTIONS),
+            "architectural_elements": sorted(vocab.ARCHITECTURAL_ELEMENT),
+            "typology": sorted(vocab.TYPOLOGY),
+            "program": sorted(vocab.PROGRAM),
+        },
+        "queue": queue,
+    }
 
 
 def _validate_decision_payload(
@@ -1114,10 +1464,81 @@ def validate_decision(snapshot: dict[str, Any], payload: dict[str, Any]) -> dict
     }
 
 
+def validate_term_decision(payload: dict[str, Any]) -> dict[str, Any]:
+    card_id = str(payload.get("card_id") or "")
+    if not card_id.startswith("term:"):
+        raise ValueError("term decision card_id must start with term:")
+    term_key = normalize_review_term(card_id.removeprefix("term:"))
+    if not term_key:
+        raise ValueError("term decision requires a term key")
+    decision = str(payload.get("decision") or "")
+    if decision not in FAST_TERM_ACTIONS:
+        raise ValueError(f"term decision must be one of {FAST_TERM_ACTIONS}")
+    raw_payload = payload.get("payload") or {}
+    if not isinstance(raw_payload, dict):
+        raise ValueError("payload must be an object")
+    clean_payload = dict(raw_payload)
+    clean_payload["term"] = clean_payload.get("term") or term_key
+    if decision == "architectural_element":
+        value = clean_payload.get("canonical_value")
+        if value not in vocab.ARCHITECTURAL_ELEMENT:
+            raise ValueError("payload.canonical_value must be a valid architectural element")
+    if decision == "typology":
+        field = clean_payload.get("field") or "typology_tags"
+        value = clean_payload.get("canonical_value")
+        if field == "program":
+            if value not in vocab.PROGRAM:
+                raise ValueError("payload.canonical_value must be a valid program")
+        elif field == "typology_tags":
+            if value not in vocab.TYPOLOGY:
+                raise ValueError("payload.canonical_value must be a valid typology")
+        else:
+            raise ValueError("payload.field must be program or typology_tags")
+        clean_payload["field"] = field
+    return {
+        "term_key": term_key,
+        "decision": decision,
+        "payload": clean_payload,
+        "notes": str(payload.get("notes") or "")[:2000],
+        "updated_at": now_iso(),
+    }
+
+
 def save_decision(snapshot: dict[str, Any], payload: dict[str, Any], path: Path = DECISIONS_PATH) -> dict[str, Any]:
     decisions = ensure_decisions(snapshot, path)
     item = validate_decision(snapshot, payload)
     decisions["decisions"][item["case_id"]] = item
+    decisions["updated_at"] = now_iso()
+    decisions["summary"] = summarize_decisions(snapshot, decisions)
+    atomic_write_json(path, decisions)
+    return decisions
+
+
+def save_fast_decision(snapshot: dict[str, Any], payload: dict[str, Any], path: Path = DECISIONS_PATH) -> dict[str, Any]:
+    decisions = ensure_decisions(snapshot, path)
+    card_id = str(payload.get("card_id") or "")
+    if payload.get("undo"):
+        if card_id.startswith("term:"):
+            decisions.setdefault("term_decisions", {}).pop(normalize_review_term(card_id.removeprefix("term:")), None)
+        elif card_id.startswith("case:"):
+            case_id = card_id.removeprefix("case:")
+            cases = {c["case_id"]: c for c in snapshot.get("cases") or []}
+            if case_id in cases:
+                decisions.setdefault("decisions", {})[case_id] = blank_decision(cases[case_id])
+        decisions["updated_at"] = now_iso()
+        decisions["summary"] = summarize_decisions(snapshot, decisions)
+        atomic_write_json(path, decisions)
+        return decisions
+    if card_id.startswith("term:"):
+        item = validate_term_decision(payload)
+        decisions.setdefault("term_decisions", {})[item["term_key"]] = item
+    elif card_id.startswith("case:"):
+        case_payload = dict(payload)
+        case_payload["case_id"] = card_id.removeprefix("case:")
+        item = validate_decision(snapshot, case_payload)
+        decisions.setdefault("decisions", {})[item["case_id"]] = item
+    else:
+        raise ValueError("card_id must start with term: or case:")
     decisions["updated_at"] = now_iso()
     decisions["summary"] = summarize_decisions(snapshot, decisions)
     atomic_write_json(path, decisions)
@@ -1148,6 +1569,33 @@ def _validated_decision_items(decisions: dict[str, Any]) -> tuple[list[dict[str,
             continue
         valid.append({**item, "case_id": case_id, "decision": decision, "payload": clean_payload})
     return valid, invalid
+
+
+def _validated_term_decision_items(decisions: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    valid = {}
+    invalid = []
+    for term_key, item in (decisions.get("term_decisions") or {}).items():
+        if not isinstance(item, dict) or not item.get("decision"):
+            continue
+        payload = {
+            "card_id": f"term:{term_key}",
+            "decision": item.get("decision"),
+            "payload": item.get("payload") or {"term": term_key},
+            "notes": item.get("notes") or "",
+        }
+        try:
+            clean = validate_term_decision(payload)
+        except Exception as exc:  # noqa: BLE001
+            invalid.append({"term_key": term_key, "reason": str(exc)})
+            continue
+        valid[clean["term_key"]] = clean
+    return valid, invalid
+
+
+def _append_unique(values: list[str], value: str) -> list[str]:
+    if value in values:
+        return values
+    return values + [value]
 
 
 def _apply_to_row(row: dict[str, Any], decisions: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -1191,6 +1639,77 @@ def _apply_to_row(row: dict[str, Any], decisions: list[dict[str, Any]]) -> tuple
     return changed, changes
 
 
+def _apply_term_decisions_to_row(
+    row: dict[str, Any],
+    term_decisions: dict[str, dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str], list[str]]:
+    if not term_decisions:
+        return row, [], [], []
+    changed = dict(row)
+    material = [v for v in (changed.get("material_visual") or []) if isinstance(v, str)]
+    old_material = list(material)
+    elements = [v for v in (changed.get("architectural_elements") or []) if isinstance(v, str)]
+    typology_tags = [v for v in (changed.get("typology_tags") or []) if isinstance(v, str)]
+    keyword_additions: list[str] = []
+    keyword_removals: list[str] = []
+    changes: list[dict[str, Any]] = []
+    kept_material: list[str] = []
+
+    for term in material:
+        key = normalize_review_term(term)
+        item = term_decisions.get(key)
+        if not item:
+            kept_material.append(term)
+            continue
+        action = item["decision"]
+        payload = item.get("payload") or {}
+        if action == "material" or action == "unsure":
+            kept_material.append(term)
+            continue
+        if action == "search_keyword":
+            keyword_additions = _append_unique(keyword_additions, payload.get("term") or key)
+        elif action == "delete":
+            keyword_removals = _append_unique(keyword_removals, payload.get("term") or key)
+        elif action == "architectural_element":
+            elements = _append_unique(elements, str(payload["canonical_value"]))
+        elif action == "typology":
+            if payload.get("field") == "program":
+                old = changed.get("program")
+                new = payload["canonical_value"]
+                if old != new:
+                    changed["program"] = new
+                    changes.append({"action": action, "field": "program", "old": old, "new": new, "term_key": key})
+            else:
+                typology_tags = _append_unique(typology_tags, str(payload["canonical_value"]))
+
+    if kept_material != old_material:
+        if changed.get("is_publishable") and not kept_material and not elements:
+            kept_material = ["unspecified"]
+        changed["material_visual"] = kept_material
+        changes.append({"action": "term_material_cleanup", "field": "material_visual", "old": old_material, "new": kept_material})
+    if elements != (row.get("architectural_elements") or []):
+        changed["architectural_elements"] = elements
+        changes.append(
+            {
+                "action": "term_material_cleanup",
+                "field": "architectural_elements",
+                "old": row.get("architectural_elements") or [],
+                "new": elements,
+            }
+        )
+    if typology_tags != (row.get("typology_tags") or []):
+        changed["typology_tags"] = typology_tags
+        changes.append(
+            {
+                "action": "term_material_cleanup",
+                "field": "typology_tags",
+                "old": row.get("typology_tags") or [],
+                "new": typology_tags,
+            }
+        )
+    return changed, changes, keyword_additions, keyword_removals
+
+
 def apply_decisions(
     *,
     input_path: Path = C23_EMBEDDED,
@@ -1201,6 +1720,8 @@ def apply_decisions(
 ) -> dict[str, Any]:
     decisions = read_json(decisions_path)
     valid, invalid = _validated_decision_items(decisions)
+    term_decisions, term_invalid = _validated_term_decision_items(decisions)
+    invalid.extend(term_invalid)
     structural = [d for d in valid if d["decision"] in {"merge", "split"}]
     row_actions = [d for d in valid if d["decision"] in {"update_field", "set_cover_to_image", "unpublish"}]
     by_cid: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -1220,11 +1741,14 @@ def apply_decisions(
             )
 
     action_counts = Counter(d["decision"] for d in valid)
+    term_action_counts = Counter(d["decision"] for d in term_decisions.values())
     changed_rows = []
     rows_in = 0
     rows_out = 0
     publishable_before = 0
     publishable_after = 0
+    keyword_additions_by_cid: dict[str, list[str]] = {}
+    keyword_removals_by_cid: dict[str, list[str]] = {}
 
     if write_artifact and invalid:
         write_artifact = False
@@ -1244,8 +1768,19 @@ def apply_decisions(
             row_changes: list[dict[str, Any]] = []
             if cid in by_cid and not invalid:
                 changed, row_changes = _apply_to_row(row, by_cid[cid])
-                if row_changes:
-                    changed_rows.append({"canonical_bld_id": cid, "changes": row_changes})
+            if term_decisions and not invalid:
+                changed, term_changes, keyword_additions, keyword_removals = _apply_term_decisions_to_row(
+                    changed,
+                    term_decisions,
+                )
+                if term_changes:
+                    row_changes.extend(term_changes)
+                if keyword_additions:
+                    keyword_additions_by_cid[cid] = keyword_additions
+                if keyword_removals:
+                    keyword_removals_by_cid[cid] = keyword_removals
+            if row_changes:
+                changed_rows.append({"canonical_bld_id": cid, "changes": row_changes})
             if changed.get("is_publishable"):
                 publishable_after += 1
             if writer:
@@ -1272,6 +1807,11 @@ def apply_decisions(
         "publishable_after": publishable_after if not invalid else publishable_before,
         "publishable_delta": (publishable_after - publishable_before) if not invalid else 0,
         "action_counts": dict(action_counts),
+        "term_action_counts": dict(term_action_counts),
+        "search_keyword_patch": {
+            "additions": keyword_additions_by_cid if not invalid else {},
+            "removals": keyword_removals_by_cid if not invalid else {},
+        },
         "invalid_decisions": invalid,
         "structural_actions": structural,
         "changes": changed_rows,
@@ -1284,7 +1824,107 @@ def apply_decisions(
     return report
 
 
-APP_HTML = r"""<!doctype html>
+FAST_APP_HTML = r"""<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fast Review</title>
+<style>
+:root { --bg:#f5f6f2; --panel:#fff; --line:#d7d9d2; --text:#1f2428; --muted:#66737f; --accent:#0b7285; --accent2:#e6f6f8; --danger:#b42318; --ok:#177245; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+button, select, input { font:inherit; }
+.app { min-height:100vh; display:grid; grid-template-columns:280px minmax(0,1fr); }
+.side { border-right:1px solid var(--line); background:#fbfbf8; padding:16px; position:sticky; top:0; height:100vh; overflow:auto; }
+.main { padding:22px; max-width:1120px; width:100%; margin:0 auto; }
+h1 { margin:0 0 6px; font-size:19px; }
+h2 { margin:0; font-size:28px; line-height:1.25; }
+h3 { margin:0 0 8px; font-size:16px; }
+.muted { color:var(--muted); }
+.mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
+.stats { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:14px 0; }
+.stat { border:1px solid var(--line); background:white; border-radius:8px; padding:9px; }
+.stat b { display:block; font-size:22px; }
+.tabs { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+button { border:1px solid var(--line); background:white; border-radius:7px; padding:8px 10px; cursor:pointer; }
+button.active, button.primary { border-color:var(--accent); background:var(--accent2); color:#07525f; }
+button.danger { color:var(--danger); border-color:#efb6b0; }
+button:disabled { opacity:.5; cursor:not-allowed; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; margin-bottom:14px; }
+.hero { display:grid; gap:10px; }
+.badge { display:inline-flex; width:max-content; gap:6px; align-items:center; border:1px solid var(--line); border-radius:999px; padding:4px 9px; background:#f9faf7; color:var(--muted); font-size:13px; }
+.actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:16px; }
+.action { min-height:58px; font-weight:700; font-size:16px; }
+.action small { display:block; font-weight:500; color:var(--muted); margin-top:2px; }
+.grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.7fr); gap:14px; }
+.examples { display:grid; gap:8px; }
+.example { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fbfbf8; }
+.images { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+.image { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fafafa; }
+.image img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#eceee8; }
+.image button { width:100%; border:0; border-top:1px solid var(--line); border-radius:0; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#f7f7f5; border:1px solid var(--line); border-radius:8px; padding:10px; max-height:250px; overflow:auto; }
+select, input { width:100%; border:1px solid var(--line); border-radius:7px; padding:9px; background:white; }
+.controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:12px; }
+.toast { position:fixed; right:18px; bottom:18px; background:#17212b; color:white; padding:10px 13px; border-radius:7px; opacity:0; transform:translateY(8px); transition:.18s ease; pointer-events:none; }
+.toast.show { opacity:1; transform:translateY(0); }
+.empty { padding:50px; text-align:center; color:var(--muted); }
+@media (max-width:900px) { .app{grid-template-columns:1fr;} .side{position:relative;height:auto;} .grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <h1>Fast Review</h1>
+  <div class="muted">판단 버튼을 누르면 다음 항목으로 넘어갑니다.</div>
+  <div class="stats">
+    <div class="stat"><b id="done">0</b><span>Done</span></div>
+    <div class="stat"><b id="todo">0</b><span>Todo</span></div>
+  </div>
+  <div id="tabs" class="tabs"></div>
+  <button id="allQueue" class="active">전체 자동순서</button>
+  <button id="undo">이전 결정 취소</button>
+  <p class="muted mono" id="meta"></p>
+  <p class="muted mono">단축키: 1-6</p>
+  <p><a href="/debug">debug list</a></p>
+</aside>
+<main class="main">
+  <div id="view" class="empty">Loading</div>
+</main>
+</div>
+<div id="toast" class="toast"></div>
+<script>
+let state=null, activeTab='all', activeCardId=null, lastCardId=null;
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function loadFast(){const r=await fetch('/api/fast-snapshot'); if(!r.ok) throw new Error(await r.text()); state=await r.json();}
+function toast(t){const el=$('#toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),1400);}
+function filtered(){const q=state?.queue||[]; return q.filter(c=>activeTab==='all'||c.tab===activeTab);}
+function firstTodo(cards){return cards.find(c=>!c.decision)||cards[0]||null;}
+function current(){const cards=filtered(); return cards.find(c=>c.card_id===activeCardId)||firstTodo(cards);}
+function renderStats(){const c=state?.counts||{}; $('#done').textContent=c.decided??0; $('#todo').textContent=c.undecided??0; $('#meta').textContent=`${c.total_cards??0} cards · cases ${c.case_cards??0} · terms ${c.term_cards??0}`;}
+function renderTabs(){const counts=state?.counts?.by_tab||{}; const names=['all',...Object.keys(counts).sort()]; $('#tabs').innerHTML=names.map(n=>`<button data-tab="${esc(n)}" class="${n===activeTab?'active':''}">${esc(n)} ${n==='all'?state.counts.total_cards:counts[n]}</button>`).join(''); document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab; activeCardId=null; render();});}
+function targetMeta(c){const t=c.target||{}; return [t.name||c.title,t.location_country,t.location_city,t.project_year,(t.architect_names||[]).join(', ')].filter(Boolean).join(' · ');}
+function renderExamples(c){return `<div class="card"><h3>예시 건물</h3><div class="examples">${(c.examples||[]).map(e=>`<div class="example"><b>${esc(e.name||e.canonical_bld_id)}</b><div class="muted">${esc([e.program,e.typology_primary].filter(Boolean).join(' · '))}</div><div class="mono">${esc((e.raw_material_visual||[]).join(', '))}</div></div>`).join('')}</div></div>`;}
+function selectOptions(values, selected){return `<option value="">선택</option>${values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}`;}
+function renderTerm(c){const s=c.suggestions||{}; return `<div class="hero card"><span class="badge">material term · ${esc(c.occurrence_count)}회</span><h2>${esc(c.question_ko)}</h2><div class="muted">이 단어를 material facet에 남길지, 다른 검색 신호로 옮길지 결정하세요.</div></div><div class="grid"><div>${renderExamples(c)}<div class="card"><h3>분류 선택</h3><div class="controls"><label>건축요소<select id="elementValue">${selectOptions(state.actions.architectural_elements,s.architectural_element)}</select></label><label>용도/타입 필드<select id="typeField"><option value="typology_tags">typology_tags</option><option value="program">program</option></select></label><label>용도/타입 값<select id="typeValue">${selectOptions(state.actions.typology,s.typology)}</select></label></div></div></div><div><div class="card"><h3>결정</h3><div class="actions"><button class="action primary" data-term-action="material">1 재료<small>material_visual 유지</small></button><button class="action" data-term-action="architectural_element">2 건축요소<small>선택한 element로 이동</small></button><button class="action" data-term-action="typology">3 용도/타입<small>typology/program으로 이동</small></button><button class="action" data-term-action="search_keyword">4 검색어만<small>material에서 제거, 검색 보존</small></button><button class="action danger" data-term-action="delete">5 삭제<small>검색에서도 제거</small></button><button class="action" data-term-action="unsure">6 보류<small>나중에 다시 보기</small></button></div></div></div></div>`;}
+function imageCards(c){if(!(c.images||[]).length)return ''; return `<div class="card"><h3>이미지 선택</h3><div class="images">${c.images.map((im,i)=>`<div class="image"><img src="${esc(im.url)}" loading="lazy"><button data-case-action="${i}">이 이미지 선택</button></div>`).join('')}</div></div>`;}
+function renderCase(c){return `<div class="hero card"><span class="badge">${esc(c.tab)} · ${esc(c.issue_code)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">${esc(targetMeta(c))}</div></div><div class="grid"><div>${imageCards(c)}<div class="card"><h3>Evidence</h3><pre>${esc(JSON.stringify(c.evidence,null,2))}</pre></div></div><div><div class="card"><h3>결정</h3><input id="textValue" value="${esc(c.title||'')}" placeholder="수정 값"><div class="actions">${(c.actions||[]).map((a,i)=>`<button class="action ${a.decision==='unpublish'?'danger':''}" data-case-action="${i}">${i+1} ${esc(a.label_ko)}</button>`).join('')}</div></div></div></div>`;}
+function bindCard(c){document.querySelectorAll('[data-term-action]').forEach(b=>b.onclick=()=>saveTerm(c,b.dataset.termAction)); document.querySelectorAll('[data-case-action]').forEach(b=>b.onclick=()=>saveCase(c,Number(b.dataset.caseAction))); const tf=$('#typeField'); const tv=$('#typeValue'); if(tf&&tv){tf.onchange=()=>{tv.innerHTML=selectOptions(tf.value==='program'?state.actions.program:state.actions.typology,'');};}}
+function render(){renderStats(); renderTabs(); const c=current(); if(!c){$('#view').innerHTML='<div class="empty">모든 검토 완료</div>'; return;} activeCardId=c.card_id; $('#view').innerHTML=c.kind==='term'?renderTerm(c):renderCase(c); bindCard(c);}
+async function postDecision(payload){const r=await fetch('/api/fast-decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!r.ok){toast(await r.text()); return false;} state=await r.json(); lastCardId=payload.card_id; const cards=filtered(); const oldIndex=cards.findIndex(c=>c.card_id===payload.card_id); activeCardId=(cards.slice(oldIndex+1).find(c=>!c.decision)||cards.find(c=>!c.decision)||cards[oldIndex+1]||cards[0]||{}).card_id; toast('저장됨'); render(); return true;}
+function saveTerm(c, action){const payload={term:c.display_term}; if(action==='architectural_element'){const v=$('#elementValue').value; if(!v){toast('건축요소를 선택하세요'); return;} payload.canonical_value=v;} if(action==='typology'){const field=$('#typeField').value; const v=$('#typeValue').value; if(!v){toast('용도/타입 값을 선택하세요'); return;} payload.field=field; payload.canonical_value=v;} postDecision({card_id:c.card_id,decision:action,payload});}
+function saveCase(c, idx){const action=(c.actions||[])[idx]; if(!action)return; const payload=JSON.parse(JSON.stringify(action.payload||{})); if(action.requires_text||payload.field==='name'||payload.field==='architects_text'){payload.value=$('#textValue').value;} postDecision({card_id:c.card_id,decision:action.decision,payload});}
+$('#undo').onclick=async()=>{if(!lastCardId){toast('취소할 결정 없음');return;} const r=await fetch('/api/fast-decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_id:lastCardId,undo:true})}); if(!r.ok){toast(await r.text());return;} state=await r.json(); activeCardId=lastCardId; lastCardId=null; toast('취소됨'); render();};
+document.addEventListener('keydown',e=>{if(!/^[1-6]$/.test(e.key))return; const n=Number(e.key)-1; const c=current(); if(!c)return; const buttons=[...document.querySelectorAll(c.kind==='term'?'[data-term-action]':'[data-case-action]')]; if(buttons[n])buttons[n].click();});
+(async()=>{await loadFast(); render();})().catch(e=>{$('#view').textContent=e.message;});
+</script>
+</body></html>
+"""
+
+
+DEBUG_APP_HTML = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1397,7 +2037,10 @@ class ManualReviewHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path in ("/", "/index.html"):
-            self._send_text(APP_HTML, content_type="text/html")
+            self._send_text(FAST_APP_HTML, content_type="text/html")
+            return
+        if self.path in ("/debug", "/debug.html"):
+            self._send_text(DEBUG_APP_HTML, content_type="text/html")
             return
         if self.path == "/api/snapshot":
             self._send_json(read_json(self.snapshot_path))
@@ -1406,18 +2049,27 @@ class ManualReviewHandler(BaseHTTPRequestHandler):
             snapshot = read_json(self.snapshot_path)
             self._send_json(ensure_decisions(snapshot, self.decisions_path))
             return
+        if self.path == "/api/fast-snapshot":
+            snapshot = read_json(self.snapshot_path)
+            decisions = ensure_decisions(snapshot, self.decisions_path)
+            self._send_json(build_fast_snapshot(snapshot, decisions))
+            return
         self._send_text("not found", HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/api/decision":
+        if self.path not in ("/api/decision", "/api/fast-decision"):
             self._send_text("not found", HTTPStatus.NOT_FOUND)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             snapshot = read_json(self.snapshot_path)
-            decisions = save_decision(snapshot, payload, self.decisions_path)
-            self._send_json(decisions)
+            if self.path == "/api/fast-decision":
+                decisions = save_fast_decision(snapshot, payload, self.decisions_path)
+                self._send_json(build_fast_snapshot(snapshot, decisions))
+            else:
+                decisions = save_decision(snapshot, payload, self.decisions_path)
+                self._send_json(decisions)
         except Exception as exc:  # noqa: BLE001
             self._send_text(str(exc), HTTPStatus.BAD_REQUEST)
 
@@ -1451,6 +2103,8 @@ def main() -> int:
     p_snapshot = sub.add_parser("snapshot")
     p_snapshot.add_argument("--output", type=Path, default=SNAPSHOT_PATH)
     p_snapshot.add_argument("--decisions", type=Path, default=DECISIONS_PATH)
+    p_snapshot.add_argument("--source-artifact", type=Path, default=C23_EMBEDDED)
+    p_snapshot.add_argument("--extra-jsonl", type=parse_extra_issue_path, action="append", default=[])
     p_snapshot.add_argument("--with-audit", action="store_true")
     p_snapshot.add_argument("--no-neon", action="store_true")
 
@@ -1478,7 +2132,13 @@ def main() -> int:
         return 0
     if args.cmd == "snapshot":
         audit_result = run_audit(include_neon=not args.no_neon, output_dir=args.output.parent) if args.with_audit else None
-        snapshot = build_snapshot(output_path=args.output, decisions_path=args.decisions, audit_result=audit_result)
+        snapshot = build_snapshot(
+            output_path=args.output,
+            decisions_path=args.decisions,
+            source_artifact=args.source_artifact,
+            extra_issue_paths=args.extra_jsonl,
+            audit_result=audit_result,
+        )
         print(json.dumps({"snapshot": _rel(args.output), "decisions": _rel(args.decisions), "counts": snapshot["counts"]}, ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "serve":
