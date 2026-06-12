@@ -39,7 +39,9 @@ from tools.canonical_v2_c23_final import _KNOWN_COUNTRIES  # noqa: E402
 from tools.canonical_v2_upload_validator import (  # noqa: E402
     MATERIAL_TAXONOMY_NOISE as _MATERIAL_NOISE,
     iter_buildings,
+    reclassify_material,
 )
+from tools.strip_material_noise_neon import PLACEHOLDERS as _ARCHITECT_PLACEHOLDERS  # noqa: E402
 
 # Phase A-2 — social-link brand leak filter
 _SOURCE_BRAND_RE = re.compile(r"archello|architizer|divisare|metalocus",
@@ -363,6 +365,29 @@ def _merge_metadata(source_refs, src_data, arch_name_set, sanitize_counts):
     }
 
 
+def _apply_reclassify_view(row):
+    """Mirror the Neon reclassify migration on an artifact row (in place).
+
+    The local c23_final artifact predates the material-noise reclassify
+    (strip_material_noise_neon.py), so apply the same shared logic here to
+    keep this build consistent with the post-migration Neon state:
+    noise moves into architectural_elements / drops, rows whose material
+    empties with no salvaged element are unpublished, and placeholder-only
+    architect names are unpublished (R2).
+    """
+    mat = list(row.get("material_visual") or [])
+    elem = list(row.get("architectural_elements") or [])
+    new_mat, new_elem, gained = reclassify_material(mat, elem)
+    row["material_visual"] = new_mat
+    row["architectural_elements"] = new_elem
+    if mat and not new_mat and not gained:
+        row["is_publishable"] = False
+    names = [str(n).strip().lower() for n in row.get("architect_names") or []]
+    if names and any(n in _ARCHITECT_PLACEHOLDERS for n in names):
+        row["is_publishable"] = False
+    return row
+
+
 # --- Aggregate building features ---
 def _aggregate_buildings(rows):
     """rows: list of full building dicts. Returns aggregate dict."""
@@ -508,6 +533,7 @@ def main() -> int:
     n_rows = 0
     for row in iter_buildings(BUILDINGS):
         n_rows += 1
+        _apply_reclassify_view(row)
         for arch_id in row.get("architect_canonical_ids") or []:
             arch_to_rows[arch_id].append(row)
     print(f"  scanned {n_rows} buildings, {len(arch_to_rows)} architects "
