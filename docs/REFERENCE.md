@@ -151,6 +151,27 @@ GIN on `top_programs/top_typologies/countries`; HNSW (`vector_cosine_ops`) on
 **Coverage at C-A3**: 14,216 firms / 4,357 recommendable / 86 distinct countries.
 25,417 registry firms without ≥1 building in canonical are not loaded.
 
+## 2c. Schema — Neon tag precompute tables (make_web algo support)
+
+Three sibling tables derived from publishable `canonical_v2_buildings` rows,
+rebuilt in one transaction every crawl by `tools/canonical_v2_tag_stats_build.py`
+(in-txn QC, FAIL → ROLLBACK). 6 axes: program / style / color_tone /
+atmosphere / material_visual / architectural_elements. Contract + make_web
+query crib: `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md`.
+
+```sql
+canonical_v2_tag_stats      (axis, tag) PK → doc_freq, total_n, idf, corpus_version, computed_at
+canonical_v2_tag_centroids  (axis, tag) PK → centroid VECTOR(384) L2-normalized, n_buildings, …
+canonical_v2_tag_vocabulary (axis, tag) PK → display_ko, display_en, is_generic, sort_rank
+```
+
+- `idf = ln(total_n/(doc_freq+1))`; R1 keys == R2 keys; R1 ⊆ R3 (LEFT JOIN).
+- Labels/is_generic source: `data/canonical/tag_vocabulary_labels.json`,
+  reviewed via `manual_review_workflow.py serve` vocab cards →
+  `apply-vocab-labels`.
+- material_visual is free-text: ~18.6k distinct tags, ~13k singletons —
+  consumers should filter `doc_freq` or weight by `n_buildings`.
+
 ## 3. Controlled vocabularies
 
 `core/vocab.py` is the source of truth (`VOCAB_VERSION = "v2"`). Never edit it
@@ -207,6 +228,11 @@ Artifacts live under `data/canonical/country_conflict_refresh/`.
   `e1_phash_dedup.py`, `e2_vision_5type.py`, `image_dedup_5type.py`
 - **Audit:** `audit_canonical_data_integrity.py`,
   `canonical_v2_full_reaudit.py`, `canonical_v2_architects_audit.py`
+- **make_web precompute:** `canonical_v2_tag_stats_build.py` (tag stats /
+  centroids / vocabulary, --discover/--dry-run/--build), `r4_axis_smoke.py`
+  (proposed-axis LLM smoke)
+- **Manual review:** `manual_review_workflow.py` (audit/snapshot/serve
+  dashboard/apply; case + term + vocab_label cards), `cover_review_app.py`
 - **Dashboard:** `build_dashboard.py`
 
 `run.py` is the legacy metalocus-pipeline dispatcher. `tools/` has accumulated

@@ -22,6 +22,13 @@ This file is the operating manual. For schema/vocab/tool detail see
     `id_registry_architects.json` + 3 source firm DBs + buildings reverse-index;
     portfolio embedding = mean of publishable building embeddings (384-dim, same
     space). See `docs/ARCHITECT_RECOMMENDATION.md`.
+  - Tag precompute siblings (make_web algo support, 2026-06): built + dry-run
+    PASS, **deploy pending final user gate** — `canonical_v2_tag_stats` /
+    `_tag_centroids` / `_tag_vocabulary` via
+    `tools/canonical_v2_tag_stats_build.py` (rebuild every crawl, one txn).
+    Bundled with the held material reclassify (publishable 36,864→36,673).
+    See `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md` + job card
+    `20260612_makeweb_algo_support_tables.md`.
   - Mental model: **`archi_data` = architecture data** (only 2 tables above);
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
     make_web. As of 2026-05-24, all 23 user/app tables + legacy
