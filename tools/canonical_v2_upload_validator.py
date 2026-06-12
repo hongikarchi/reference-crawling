@@ -58,6 +58,49 @@ def filter_material_noise(values: Any) -> list[str]:
         return []
     return [v for v in values if isinstance(v, str) and v.strip().lower() not in MATERIAL_TAXONOMY_NOISE]
 
+
+# Subset of MATERIAL_TAXONOMY_NOISE that are genuine architectural ELEMENTS
+# (not materials). These are not dropped — they move into
+# `architectural_elements` (controlled vocab core.vocab.ARCHITECTURAL_ELEMENT)
+# so they stay searchable. The remaining noise terms (water, vegetation,
+# lighting, walls, windows, …) have no element-vocab slot and are dropped:
+# either scenery/decor, or under-specified building parts whose real value
+# (the material) is already captured by the row's specific material terms.
+ELEMENT_MAP = {
+    "balconies": "Balcony", "columns": "Column",
+    "courtyard": "Courtyard", "courtyards": "Courtyard",
+    "facade": "Facade", "facade cladding": "Facade",
+    "garden": "Garden", "green roof": "Roof",
+    "skylights": "Skylight", "stairs": "Stair",
+    "terrace": "Terrace", "terraces": "Terrace",
+}
+
+
+def reclassify_material(raw_material: Any, existing_elements: Any) -> tuple[list[str], list[str], list[str]]:
+    """Strip noise from material_visual; salvage element-type noise into elements.
+
+    Returns (new_material, new_architectural_elements, gained_elements):
+    - new_material: material_visual with all MATERIAL_TAXONOMY_NOISE removed
+    - new_architectural_elements: existing elements + salvaged ones (canonical
+      vocab values, order-preserved, deduped)
+    - gained_elements: the elements salvaged from material noise this call
+    """
+    raw_material = raw_material if isinstance(raw_material, list) else []
+    existing = [e for e in (existing_elements if isinstance(existing_elements, list) else []) if isinstance(e, str)]
+    new_material: list[str] = []
+    gained: list[str] = []
+    for v in raw_material:
+        if not isinstance(v, str):
+            continue
+        low = v.strip().lower()
+        if low in MATERIAL_TAXONOMY_NOISE:
+            mapped = ELEMENT_MAP.get(low)
+            if mapped and mapped not in existing and mapped not in gained:
+                gained.append(mapped)
+        else:
+            new_material.append(v)
+    return new_material, existing + gained, gained
+
 GENERIC_NAME_TOKENS = {
     "a",
     "an",
@@ -115,11 +158,15 @@ EMPTY_MATERIAL_REASON = "material_noise_only"
 def map_row(row: dict[str, Any]) -> dict[str, Any]:
     """Return the exact row shape proposed for canonical_v2_buildings."""
     raw_material = row.get("material_visual") or []
-    material_visual = filter_material_noise(raw_material)
+    material_visual, architectural_elements, gained = reclassify_material(
+        raw_material, row.get("architectural_elements") or []
+    )
     publishability_reasons = list(row.get("publishability_reasons") or [])
     is_publishable = bool(row.get("is_publishable"))
-    if raw_material and not material_visual:
-        # Building had only noise terms for material — unpublish + flag reason.
+    if raw_material and not material_visual and not gained:
+        # Material was only noise AND nothing salvaged into elements — the row
+        # has no descriptive material data, so unpublish + flag reason. A row
+        # that lost its material but gained an element stays publishable.
         is_publishable = False
         if EMPTY_MATERIAL_REASON not in publishability_reasons:
             publishability_reasons.append(EMPTY_MATERIAL_REASON)
@@ -156,7 +203,7 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "typology_primary": row.get("typology_primary"),
         "typology_primary_source": row.get("typology_primary_source"),
         "typology_tags": row.get("typology_tags") or [],
-        "architectural_elements": row.get("architectural_elements") or [],
+        "architectural_elements": architectural_elements,
         "source_categories": row.get("source_categories") or {},
         "year_kind": row.get("year_kind") or "unknown",
         "embedding": row.get("embedding"),
@@ -275,10 +322,13 @@ def validate_rows(rows: Iterable[dict[str, Any]], *, sample_limit: int = 5) -> d
             failures["invalid_confidence_tier"] += 1
         if not isinstance(mapped.get("material_visual"), list):
             failures["bad_material_visual"] += 1
-        elif not mapped["material_visual"] and EMPTY_MATERIAL_REASON not in (mapped.get("publishability_reasons") or []):
-            # Allow empty material_visual only when the row is flagged as
-            # noise-only (auto-unpublished). All other empties remain failures.
-            failures["bad_material_visual"] += 1
+        elif not mapped["material_visual"]:
+            # Empty material_visual is allowed when the row is flagged noise-only
+            # (auto-unpublished) OR it salvaged architectural elements from the
+            # noise (still has descriptive data). All other empties are failures.
+            reasons = mapped.get("publishability_reasons") or []
+            if EMPTY_MATERIAL_REASON not in reasons and not (mapped.get("architectural_elements") or []):
+                failures["bad_material_visual"] += 1
         if not _covers_are_valid(mapped.get("covers_by_type")):
             failures["bad_covers_by_type"] += 1
         if not _source_refs_are_valid(mapped.get("source_refs")):

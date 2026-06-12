@@ -78,3 +78,27 @@ publishable delta is −208 (36,864 → 36,656).
 ## Result
 
 (pending user approval to commit)
+
+## UPDATE 2026-06-05 — superseded by move-not-delete (reclassify)
+
+User feedback: architectural elements must stay searchable, not be deleted.
+`strip_material_noise_neon.py` rewritten from plain strip → **reclassify**:
+- 12 element-type noise terms (terrace, balcony, courtyard, skylight, column,
+  facade, garden, green roof, stairs) MOVE into `architectural_elements`
+  (controlled vocab, deduped); the other 17 (water, vegetation, lighting,
+  walls, windows, …) are dropped from `material_visual`.
+- Unpublish only when material empties AND no element salvaged.
+- Shared helper `reclassify_material()` in `canonical_v2_upload_validator.py`
+  drives BOTH the loader (`map_row`) and this migration → idempotent on reload.
+- Bundles R2: unpublish 2 placeholder-architect rows (`architect_unknown`).
+
+Dry-run (2026-06-05): 9,606 rows changed · 1,962 gain elements
+(Terrace 541, Courtyard 342, Roof 271, Garden 252, Balcony 224, Skylight 158,
+Facade 158, Column 135, Stair 87) · 189 unpublished · 19 saved-by-element ·
+R2 2 rows · is_publishable 36,864 → 36,673 (−191) · noise residual 0 ·
+architects.top_materials 3,782 cleaned.
+
+**HELD: user paused the Neon write (`--apply`) on 2026-06-05.** Script + loader
+ready; run `tools/strip_material_noise_neon.py --apply --confirm-db-write` when
+approved. Follow-up: rebuild architects (`canonical_v2_architects_build.py`) to
+refresh `top_arch_elements` with the moved elements.

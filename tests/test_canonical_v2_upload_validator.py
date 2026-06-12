@@ -85,7 +85,14 @@ def test_validate_rows_tracks_duplicate_names_without_failing():
     report = validator.validate_rows(
         [
             _sample_row(canonical_bld_id="bld_000001", location_country="Sweden"),
-            _sample_row(canonical_bld_id="bld_000002", location_country="Thailand"),
+            _sample_row(
+                canonical_bld_id="bld_000002",
+                location_country="Thailand",
+                # distinct cover so this test isolates duplicate-NAME behavior
+                # and does not trip the reused-cover check
+                display_cover_url="https://example.test/2.jpg",
+                cover_image_url_default="https://example.test/2.jpg",
+            ),
         ]
     )
 
