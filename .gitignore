@@ -1,11 +1,11 @@
-# Crawled data (regenerable)
+# Crawled data (regenerable; anchored to repo root)
 data/
 # exception: curated (NOT regenerable) tag labels — user-reviewed source of truth
-!data/
-data/*
-!data/canonical/
-data/canonical/*
-!data/canonical/tag_vocabulary_labels.json
+!/data/
+/data/*
+!/data/canonical/
+/data/canonical/*
+!/data/canonical/tag_vocabulary_labels.json
 images/
 
 # Logs
