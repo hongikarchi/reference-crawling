@@ -82,6 +82,11 @@ FAST_VOCAB_ACTIONS = [
     "unsure",
 ]
 VOCAB_LABELS_PATH = ROOT / "data/canonical/tag_vocabulary_labels.json"
+VOCAB_EXAMPLES_PATH = ROOT / "data/reports/vocab_label_examples.json"
+VOCAB_AXES = (
+    "program", "style", "color_tone", "atmosphere",
+    "material_visual", "architectural_elements",
+)
 FAST_CASE_PRIORITY = {
     "country": 0,
     "year": 1,
@@ -1387,9 +1392,82 @@ def _fast_term_card(term_key: str, group: dict[str, Any], decisions: dict[str, A
     }
 
 
-def _fast_vocab_card(axis: str, tag: str, entry: dict[str, Any], decisions: dict[str, Any]) -> dict[str, Any]:
+def build_vocab_label_examples(
+    labels_path: Path = VOCAB_LABELS_PATH,
+    output_path: Path = VOCAB_EXAMPLES_PATH,
+    per_tag: int = 3,
+) -> dict[str, Any]:
+    """Sample example buildings (+ source links, cover) per labeled tag.
+
+    One read-only Neon pass; sidecar JSON consumed by the vocab cards so the
+    reviewer sees where each tag actually comes from.
+    """
+    from tools.canonical_v2_neon_loader import _connect
+
+    axes = (read_json(labels_path) or {}).get("axes") or {}
+    conn = _connect()
+    cur = conn.cursor()
+    out: dict[str, Any] = {}
+    for axis, tags in axes.items():
+        if axis not in VOCAB_AXES:
+            raise ValueError(f"unknown axis in labels file: {axis}")
+        tag_list = sorted(tags)
+        if axis in ("material_visual", "architectural_elements"):
+            cur.execute(
+                f"""
+                SELECT tag, name, source_urls, display_cover_url, doc_freq FROM (
+                    SELECT t.tag, b.name, b.source_urls, b.display_cover_url,
+                           COUNT(*) OVER (PARTITION BY t.tag) AS doc_freq,
+                           ROW_NUMBER() OVER (PARTITION BY t.tag
+                                              ORDER BY md5(b.canonical_bld_id)) AS rn
+                    FROM canonical_v2_buildings b
+                    CROSS JOIN LATERAL (SELECT DISTINCT u AS tag FROM unnest(b.{axis}) u) t
+                    WHERE b.is_publishable AND t.tag = ANY(%s)
+                ) s WHERE rn <= %s
+                """,
+                (tag_list, per_tag),
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT tag, name, source_urls, display_cover_url, doc_freq FROM (
+                    SELECT {axis} AS tag, name, source_urls, display_cover_url,
+                           COUNT(*) OVER (PARTITION BY {axis}) AS doc_freq,
+                           ROW_NUMBER() OVER (PARTITION BY {axis}
+                                              ORDER BY md5(canonical_bld_id)) AS rn
+                    FROM canonical_v2_buildings
+                    WHERE is_publishable AND {axis} = ANY(%s)
+                ) s WHERE rn <= %s
+                """,
+                (tag_list, per_tag),
+            )
+        for tag, name, source_urls, cover, doc_freq in cur.fetchall():
+            links = []
+            for source, urls in (source_urls or {}).items():
+                if isinstance(urls, list) and urls:
+                    links.append({"source": source, "url": urls[0]})
+                elif isinstance(urls, str) and urls:
+                    links.append({"source": source, "url": urls})
+            entry = out.setdefault(axis, {}).setdefault(
+                tag, {"doc_freq": int(doc_freq), "examples": []})
+            entry["examples"].append({"name": name, "cover": cover, "links": links[:3]})
+    conn.rollback()
+    conn.close()
+    payload = {"generated_at": now_iso(), "per_tag": per_tag, "axes": out}
+    atomic_write_json(output_path, payload)
+    return payload
+
+
+def _fast_vocab_card(
+    axis: str,
+    tag: str,
+    entry: dict[str, Any],
+    decisions: dict[str, Any],
+    example_axes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     key = f"{axis}|{tag}"
     item = (decisions.get("vocab_decisions") or {}).get(key) or {}
+    ex = ((example_axes or {}).get(axis) or {}).get(tag) or {}
     return {
         "kind": "vocab",
         "card_id": f"vocab:{key}",
@@ -1405,6 +1483,8 @@ def _fast_vocab_card(axis: str, tag: str, entry: dict[str, Any], decisions: dict
             "en": entry.get("en") or tag,
             "is_generic": bool(entry.get("is_generic")),
         },
+        "doc_freq": ex.get("doc_freq"),
+        "examples": ex.get("examples") or [],
         "allowed_actions": list(FAST_VOCAB_ACTIONS),
         "decision": item.get("decision"),
         "payload": item.get("payload") or {},
@@ -1416,10 +1496,13 @@ def build_vocab_cards(decisions: dict[str, Any], labels_path: Path = VOCAB_LABEL
     if not labels_path.exists():
         return []
     axes = (read_json(labels_path) or {}).get("axes") or {}
+    example_axes = {}
+    if VOCAB_EXAMPLES_PATH.exists():
+        example_axes = (read_json(VOCAB_EXAMPLES_PATH) or {}).get("axes") or {}
     cards = []
     for axis in sorted(axes):
         for tag in sorted(axes[axis]):
-            cards.append(_fast_vocab_card(axis, tag, axes[axis][tag] or {}, decisions))
+            cards.append(_fast_vocab_card(axis, tag, axes[axis][tag] or {}, decisions, example_axes))
     return cards
 
 
@@ -2053,7 +2136,7 @@ function sourceLinks(c){const urls=c.target?.source_urls||{}; const refs=c.targe
 function renderExamples(c){return `<div class="card"><h3>예시 건물</h3><div class="examples">${(c.examples||[]).map(e=>`<div class="example"><b>${esc(e.name||e.canonical_bld_id)}</b><div class="muted">${esc([e.program,e.typology_primary].filter(Boolean).join(' · '))}</div><div class="mono">${esc((e.raw_material_visual||[]).join(', '))}</div></div>`).join('')}</div></div>`;}
 function selectOptions(values, selected){return `<option value="">선택</option>${values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}`;}
 function renderTerm(c){const s=c.suggestions||{}; return `<div class="hero card"><span class="badge">material term · ${esc(c.occurrence_count)}회</span><h2>${esc(c.question_ko)}</h2><div class="muted">이 단어를 material facet에 남길지, 다른 검색 신호로 옮길지 결정하세요.</div></div><div class="grid"><div>${renderExamples(c)}<div class="card"><h3>분류 선택</h3><div class="controls"><label>건축요소<select id="elementValue">${selectOptions(state.actions.architectural_elements,s.architectural_element)}</select></label><label>용도/타입 필드<select id="typeField"><option value="typology_tags">typology_tags</option><option value="program">program</option></select></label><label>용도/타입 값<select id="typeValue">${selectOptions(state.actions.typology,s.typology)}</select></label></div></div></div><div><div class="card"><h3>결정</h3><div class="actions"><button class="action primary" data-term-action="material">1 재료<small>material_visual 유지</small></button><button class="action" data-term-action="architectural_element">2 건축요소<small>선택한 element로 이동</small></button><button class="action" data-term-action="typology">3 용도/타입<small>typology/program으로 이동</small></button><button class="action" data-term-action="search_keyword">4 검색어만<small>material에서 제거, 검색 보존</small></button><button class="action danger" data-term-action="delete">5 삭제<small>검색에서도 제거</small></button><button class="action" data-term-action="unsure">6 보류<small>나중에 다시 보기</small></button></div></div></div></div>`;}
-function renderVocab(c){const d=c.draft||{}; return `<div class="hero card"><span class="badge">vocab label · ${esc(c.axis)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">태그 원문: <span class="mono">${esc(c.tag)}</span> — 라벨을 확인하고 승인하거나 고쳐주세요. generic = 변별력 없어 질문 키워드에서 제외.</div></div><div class="grid"><div><div class="card"><h3>라벨 편집</h3><div class="controls"><label>한글 라벨<input id="vocabKo" value="${esc(d.ko)}"></label><label>영문 라벨<input id="vocabEn" value="${esc(d.en)}"></label><label><input type="checkbox" id="vocabGeneric" style="width:auto" ${d.is_generic?'checked':''}> generic (질문 제외)</label></div></div></div><div><div class="card"><h3>결정</h3><div class="actions"><button class="action primary" data-vocab-action="approve">1 승인<small>초안 그대로</small></button><button class="action" data-vocab-action="edit">2 수정 저장<small>입력값으로 갱신</small></button><button class="action" data-vocab-action="unsure">3 보류<small>나중에 다시</small></button></div></div></div></div>`;}
+function renderVocab(c){const d=c.draft||{}; const ex=(c.examples||[]).map(e=>`<div class="example" style="display:flex;gap:10px;align-items:center">${e.cover?`<img src="${esc(e.cover)}" loading="lazy" style="width:120px;height:90px;object-fit:cover;border-radius:6px;background:#eceee8;flex:none">`:''}<div><b>${esc(e.name)}</b><div class="links" style="display:flex;gap:10px">${(e.links||[]).map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.source)} ↗</a>`).join('')}</div></div></div>`).join(''); return `<div class="hero card"><span class="badge">vocab · ${esc(c.axis)}${c.doc_freq!=null?` · ${esc(c.doc_freq)}개 건물`:''}</span><h2>${esc(c.tag)}</h2><div class="muted">라벨 확인 후 승인/수정. generic = 변별력 없는 범용 태그 → 질문 키워드에서 제외.</div><div class="controls"><label>한글 라벨<input id="vocabKo" value="${esc(d.ko)}"></label><label>영문 라벨<input id="vocabEn" value="${esc(d.en)}"></label><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="vocabGeneric" style="width:auto" ${d.is_generic?'checked':''}> generic (질문 제외)</label></div><div class="actions"><button class="action primary" data-vocab-action="approve">1 승인<small>초안 그대로</small></button><button class="action" data-vocab-action="edit">2 수정 저장<small>입력값으로 갱신</small></button><button class="action" data-vocab-action="unsure">3 보류<small>나중에 다시</small></button></div></div>${ex?`<div class="card"><h3>예시 건물 — 원본 출처</h3><div class="examples">${ex}</div></div>`:'<div class="card muted">예시 없음 — vocab-examples 미생성 또는 미관측 태그</div>'}`;}
 function imageCards(c){const title=c.image_actions_enabled?'대표 이미지 선택':'판단 참고 사진'; if(!(c.images||[]).length)return `<div class="card"><h3>${title}</h3><div class="muted">사진 없음</div></div>`; return `<div class="card"><h3>${title}</h3><div class="images">${c.images.map((im,i)=>`<div class="image"><img src="${esc(im.url)}" loading="lazy"><div class="cap">${esc(im.kind||im.type||'image')} · ${esc(im.source||'')}</div>${c.image_actions_enabled?`<button data-case-action="${i}">이 이미지 선택</button>`:''}</div>`).join('')}</div></div>`;}
 function renderCase(c){return `<div class="hero card"><span class="badge">${esc(c.tab)} · ${esc(c.issue_code)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">${esc(targetMeta(c))}</div></div><div class="grid"><div>${sourceLinks(c)}${imageCards(c)}<div class="card"><h3>Evidence</h3><pre>${esc(JSON.stringify(c.evidence,null,2))}</pre></div></div><div><div class="card"><h3>결정</h3><input id="textValue" value="${esc(c.title||'')}" placeholder="수정 값"><div class="actions">${(c.actions||[]).map((a,i)=>`<button class="action ${a.decision==='unpublish'?'danger':''}" data-case-action="${i}">${i+1} ${esc(a.label_ko)}</button>`).join('')}</div></div></div></div>`;}
 function bindCard(c){document.querySelectorAll('[data-term-action]').forEach(b=>b.onclick=()=>saveTerm(c,b.dataset.termAction)); document.querySelectorAll('[data-vocab-action]').forEach(b=>b.onclick=()=>saveVocab(c,b.dataset.vocabAction)); document.querySelectorAll('[data-case-action]').forEach(b=>b.onclick=()=>saveCase(c,Number(b.dataset.caseAction))); const tf=$('#typeField'); const tv=$('#typeValue'); if(tf&&tv){tf.onchange=()=>{tv.innerHTML=selectOptions(tf.value==='program'?state.actions.program:state.actions.typology,'');};}}
@@ -2164,6 +2247,12 @@ document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.da
 class ManualReviewHandler(BaseHTTPRequestHandler):
     snapshot_path = SNAPSHOT_PATH
     decisions_path = DECISIONS_PATH
+    vocab_only = False
+
+    def _snapshot(self) -> dict[str, Any]:
+        if self.vocab_only:
+            return {"cases": [], "snapshot_path": "(vocab-only)"}
+        return read_json(self.snapshot_path)
 
     def _send_json(self, payload: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False, default=json_default).encode("utf-8")
@@ -2189,14 +2278,14 @@ class ManualReviewHandler(BaseHTTPRequestHandler):
             self._send_text(DEBUG_APP_HTML, content_type="text/html")
             return
         if self.path == "/api/snapshot":
-            self._send_json(read_json(self.snapshot_path))
+            self._send_json(self._snapshot())
             return
         if self.path == "/api/decisions":
-            snapshot = read_json(self.snapshot_path)
+            snapshot = self._snapshot()
             self._send_json(ensure_decisions(snapshot, self.decisions_path))
             return
         if self.path == "/api/fast-snapshot":
-            snapshot = read_json(self.snapshot_path)
+            snapshot = self._snapshot()
             decisions = ensure_decisions(snapshot, self.decisions_path)
             self._send_json(build_fast_snapshot(snapshot, decisions))
             return
@@ -2209,7 +2298,7 @@ class ManualReviewHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            snapshot = read_json(self.snapshot_path)
+            snapshot = self._snapshot()
             if self.path == "/api/fast-decision":
                 decisions = save_fast_decision(snapshot, payload, self.decisions_path)
                 self._send_json(build_fast_snapshot(snapshot, decisions))
@@ -2258,17 +2347,23 @@ def apply_vocab_labels(decisions_path: Path = DECISIONS_PATH, labels_path: Path 
     return report
 
 
-def serve(snapshot_path: Path = SNAPSHOT_PATH, decisions_path: Path = DECISIONS_PATH, host: str = "127.0.0.1", port: int = 8765) -> None:
-    if not snapshot_path.exists():
+def serve(
+    snapshot_path: Path = SNAPSHOT_PATH,
+    decisions_path: Path = DECISIONS_PATH,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    vocab_only: bool = False,
+) -> None:
+    if not vocab_only and not snapshot_path.exists():
         build_snapshot(output_path=snapshot_path, decisions_path=decisions_path)
     handler = type(
         "ConfiguredManualReviewHandler",
         (ManualReviewHandler,),
-        {"snapshot_path": snapshot_path, "decisions_path": decisions_path},
+        {"snapshot_path": snapshot_path, "decisions_path": decisions_path, "vocab_only": vocab_only},
     )
     server = ThreadingHTTPServer((host, port), handler)
-    print(f"Manual review dashboard: http://{host}:{port}")
-    print(f"Snapshot: {_rel(snapshot_path)}")
+    print(f"Manual review dashboard: http://{host}:{port}" + (" (vocab-only)" if vocab_only else ""))
+    print(f"Snapshot: {'(none — vocab-only)' if vocab_only else _rel(snapshot_path)}")
     print(f"Decisions: {_rel(decisions_path)}")
     server.serve_forever()
 
@@ -2291,9 +2386,11 @@ def main() -> int:
 
     p_serve = sub.add_parser("serve")
     p_serve.add_argument("--snapshot", type=Path, default=SNAPSHOT_PATH)
-    p_serve.add_argument("--decisions", type=Path, default=DECISIONS_PATH)
+    p_serve.add_argument("--decisions", type=Path, default=None)
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8765)
+    p_serve.add_argument("--vocab-only", action="store_true",
+                         help="vocab label cards only — no audit snapshot, no case cards")
 
     p_validate = sub.add_parser("validate-decisions")
     p_validate.add_argument("--snapshot", type=Path, default=SNAPSHOT_PATH)
@@ -2307,8 +2404,13 @@ def main() -> int:
     p_apply.add_argument("--write-artifact", action="store_true")
 
     p_vocab = sub.add_parser("apply-vocab-labels")
-    p_vocab.add_argument("--decisions", type=Path, default=DECISIONS_PATH)
+    p_vocab.add_argument("--decisions", type=Path, default=REPORT_DIR / "vocab_label_decisions.json")
     p_vocab.add_argument("--labels", type=Path, default=VOCAB_LABELS_PATH)
+
+    p_vocab_ex = sub.add_parser("vocab-examples")
+    p_vocab_ex.add_argument("--labels", type=Path, default=VOCAB_LABELS_PATH)
+    p_vocab_ex.add_argument("--output", type=Path, default=VOCAB_EXAMPLES_PATH)
+    p_vocab_ex.add_argument("--per-tag", type=int, default=3)
 
     args = parser.parse_args()
     if args.cmd == "audit":
@@ -2327,7 +2429,12 @@ def main() -> int:
         print(json.dumps({"snapshot": _rel(args.output), "decisions": _rel(args.decisions), "counts": snapshot["counts"]}, ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "serve":
-        serve(args.snapshot, args.decisions, args.host, args.port)
+        # vocab-only uses its own decisions file: ensure_decisions rebuilds the
+        # case map from the (empty) snapshot, which would drop prior case
+        # decisions if pointed at a shared file.
+        decisions = args.decisions or (
+            REPORT_DIR / "vocab_label_decisions.json" if args.vocab_only else DECISIONS_PATH)
+        serve(args.snapshot, decisions, args.host, args.port, vocab_only=args.vocab_only)
         return 0
     if args.cmd == "validate-decisions":
         snapshot = read_json(args.snapshot)
@@ -2355,6 +2462,13 @@ def main() -> int:
     if args.cmd == "apply-vocab-labels":
         report = apply_vocab_labels(decisions_path=args.decisions, labels_path=args.labels)
         print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+    if args.cmd == "vocab-examples":
+        payload = build_vocab_label_examples(
+            labels_path=args.labels, output_path=args.output, per_tag=args.per_tag)
+        n_tags = sum(len(v) for v in payload["axes"].values())
+        print(json.dumps({"output": _rel(args.output), "tags_with_examples": n_tags,
+                          "per_tag": args.per_tag}, ensure_ascii=False, indent=2))
         return 0
     return 2
 
