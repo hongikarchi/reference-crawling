@@ -16,18 +16,19 @@ This file is the operating manual. For schema/vocab/tool detail see
   data artifacts, `.claude/ops/jobs/` job cards, and the dashboard. Re-derive
   state by reading those — never assume in-memory continuity between sessions.
 - **Current production dataset (Neon `archi_data`):**
-  - `canonical_v2_buildings`: 39,478 rows / 36,864 publishable, artifact
+  - `canonical_v2_buildings`: 39,478 rows / 36,673 publishable, artifact
     `completeness_c23_final`, schema includes `year_kind`.
-  - `canonical_v2_architects`: 14,216 rows / 4,357 recommendable, derived from
+  - `canonical_v2_architects`: 14,216 rows / 4,348 recommendable, derived from
     `id_registry_architects.json` + 3 source firm DBs + buildings reverse-index;
     portfolio embedding = mean of publishable building embeddings (384-dim, same
     space). See `docs/ARCHITECT_RECOMMENDATION.md`.
-  - Tag precompute siblings (make_web algo support, 2026-06): built + dry-run
-    PASS, **deploy pending final user gate** — `canonical_v2_tag_stats` /
-    `_tag_centroids` / `_tag_vocabulary` via
-    `tools/canonical_v2_tag_stats_build.py` (rebuild every crawl, one txn).
-    Bundled with the held material reclassify (publishable 36,864→36,673).
-    See `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md` + job card
+  - Tag precompute siblings (make_web algo support, **deployed 2026-06-12**):
+    `canonical_v2_tag_stats` / `_tag_centroids` / `_tag_vocabulary` (18,621
+    rows each; 6 axes) via `tools/canonical_v2_tag_stats_build.py` — rebuild
+    every crawl, one txn, in-txn QC. Material reclassify applied in the same
+    commit: publishable now **36,673**, architects recommendable **4,348**.
+    External QC benchmark post-deploy: 10 PASS / 0 FAIL. Contract:
+    `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md`; job card
     `20260612_makeweb_algo_support_tables.md`.
   - Mental model: **`archi_data` = architecture data** (only 2 tables above);
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for

@@ -98,7 +98,8 @@ Facade 158, Column 135, Stair 87) · 189 unpublished · 19 saved-by-element ·
 R2 2 rows · is_publishable 36,864 → 36,673 (−191) · noise residual 0 ·
 architects.top_materials 3,782 cleaned.
 
-**HELD: user paused the Neon write (`--apply`) on 2026-06-05.** Script + loader
-ready; run `tools/strip_material_noise_neon.py --apply --confirm-db-write` when
-approved. Follow-up: rebuild architects (`canonical_v2_architects_build.py`) to
-refresh `top_arch_elements` with the moved elements.
+**APPLIED 2026-06-12** — committed inside the tag-precompute deploy
+transaction (`canonical_v2_tag_stats_build.py --build --with-reclassify`,
+job card `20260612_makeweb_algo_support_tables.md`). publishable 36,864 →
+36,673; architects rebuilt + upserted (recommendable 4,348). External QC
+benchmark after: R5 material noise FAIL → PASS.

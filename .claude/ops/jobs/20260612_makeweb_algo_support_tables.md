@@ -53,16 +53,23 @@ gate** — "deploy는 맨 마지막에... 중간에 하다가 문제가 생기�
   serial. era = 99% coverage from project_year (no LLM).
 - pytest: 93 passed, 0 failed.
 
-## Pending — FINAL DEPLOY (single user gate, not yet run)
+## EXECUTED — FINAL DEPLOY (2026-06-12, user-approved)
 
-1. User reviews labels: `manual_review_workflow.py serve` → vocab tab →
-   `apply-vocab-labels`.
-2. `tools/canonical_v2_tag_stats_build.py --build --with-reclassify
-   --confirm-db-write --corpus-version c23_final+matstrip`
-   (one txn: reclassify 9,606 rows / publishable 36,864→36,673 / 3 tables).
-3. `tools/canonical_v2_architects_neon_loader.py --upsert --confirm-db-write`
-   (14,216 rows, recommendable 4,348).
-4. Post: `--inspect-tables`, dashboard regen, notify make_web.
+1. Label review done on `serve --vocab-only` dashboard (UX reworked per user
+   feedback: vocab-only queue, actions on top, per-tag example buildings with
+   source links via new `vocab-examples` subcommand). 147/147 decided:
+   125 approve / 22 edit / 0 unsure → `apply-vocab-labels` PASS. Notable user
+   calls: style/Contemporary generic LIFTED, elements/Roof generic SET.
+2. `tag_stats_build --build --with-reclassify --confirm-db-write
+   --corpus-version c23_final+matstrip` → **COMMIT, 19/19 QC PASS**.
+   Reclassify applied (9,606 rows, publishable 36,864→36,673); live tables:
+   stats/centroids/vocabulary each 18,621 rows (material 18,561 + 60).
+3. Architects upsert → **COMMIT PASS**: 14,216 rows, recommendable 4,348,
+   86 countries.
+4. Post-verify: `--inspect-tables` OK; external QC benchmark re-run →
+   **10 PASS / 0 WARN / 0 FAIL** (R5 material noise FAIL→PASS, R2 N/A
+   architects WARN→PASS). Generic candidates surfaced to make_web in response
+   doc: Housing / Contemporary / glass (>25% share, intentionally not generic).
 
 ## Cost
 
