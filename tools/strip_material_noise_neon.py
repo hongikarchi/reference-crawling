@@ -46,10 +46,13 @@ PLACEHOLDERS = ["unknown", "n/a", "na", "-", "--", "", "tbd", "unknown architect
 ARCHITECT_UNKNOWN_REASON = "architect_unknown"
 
 
-def run(apply: bool) -> int:
-    conn = _connect()
-    cur = conn.cursor()
+def execute(cur) -> dict:
+    """Run the full reclassify migration on an open cursor.
 
+    No connect/commit/rollback here — the caller owns the transaction, so this
+    composes atomically with other steps (e.g. the tag-stats build). Returns a
+    stats dict.
+    """
     cur.execute("SELECT count(*) FROM canonical_v2_buildings WHERE is_publishable")
     pub_before = cur.fetchone()[0]
 
@@ -168,7 +171,23 @@ def run(apply: bool) -> int:
     print(f"architects still containing noise (want 0): {cur.fetchone()[0]}")
     print("NOTE: architects.top_arch_elements is NOT re-aggregated here; rebuild "
           "via canonical_v2_architects_build.py to reflect moved elements.")
+    return {
+        "rows_changed": len(updates),
+        "rows_gained_elements": n_elements_moved_rows,
+        "rows_unpublished": n_unpublished,
+        "rows_empty_kept": n_empty_kept,
+        "elements_added": dict(elements_added.most_common()),
+        "r2_unpublished": r2_count,
+        "publishable_before": pub_before,
+        "publishable_after": pub_after,
+        "architects_top_materials_cleaned": arch_before,
+    }
 
+
+def run(apply: bool) -> int:
+    conn = _connect()
+    cur = conn.cursor()
+    execute(cur)
     if apply:
         conn.commit()
         print("COMMIT")
