@@ -76,6 +76,12 @@ FAST_TERM_ACTIONS = [
     "delete",
     "unsure",
 ]
+FAST_VOCAB_ACTIONS = [
+    "approve",
+    "edit",
+    "unsure",
+]
+VOCAB_LABELS_PATH = ROOT / "data/canonical/tag_vocabulary_labels.json"
 FAST_CASE_PRIORITY = {
     "country": 0,
     "year": 1,
@@ -1148,6 +1154,7 @@ def ensure_decisions(snapshot: dict[str, Any], path: Path = DECISIONS_PATH) -> d
         "summary": {},
         "decisions": {},
         "term_decisions": existing.get("term_decisions") or {},
+        "vocab_decisions": existing.get("vocab_decisions") or {},
     }
     for case in snapshot.get("cases") or []:
         item = blank_decision(case)
@@ -1380,8 +1387,44 @@ def _fast_term_card(term_key: str, group: dict[str, Any], decisions: dict[str, A
     }
 
 
+def _fast_vocab_card(axis: str, tag: str, entry: dict[str, Any], decisions: dict[str, Any]) -> dict[str, Any]:
+    key = f"{axis}|{tag}"
+    item = (decisions.get("vocab_decisions") or {}).get(key) or {}
+    return {
+        "kind": "vocab",
+        "card_id": f"vocab:{key}",
+        "vocab_key": key,
+        "axis": axis,
+        "tag": tag,
+        "tab": "vocab",
+        "issue_code": "vocab_label",
+        "title": f"{axis} · {tag}",
+        "question_ko": f"라벨과 generic 여부를 확인해주세요: [{axis}] {tag}",
+        "draft": {
+            "ko": entry.get("ko") or "",
+            "en": entry.get("en") or tag,
+            "is_generic": bool(entry.get("is_generic")),
+        },
+        "allowed_actions": list(FAST_VOCAB_ACTIONS),
+        "decision": item.get("decision"),
+        "payload": item.get("payload") or {},
+        "notes": item.get("notes") or "",
+    }
+
+
+def build_vocab_cards(decisions: dict[str, Any], labels_path: Path = VOCAB_LABELS_PATH) -> list[dict[str, Any]]:
+    if not labels_path.exists():
+        return []
+    axes = (read_json(labels_path) or {}).get("axes") or {}
+    cards = []
+    for axis in sorted(axes):
+        for tag in sorted(axes[axis]):
+            cards.append(_fast_vocab_card(axis, tag, axes[axis][tag] or {}, decisions))
+    return cards
+
+
 def build_fast_snapshot(snapshot: dict[str, Any], decisions: dict[str, Any] | None = None) -> dict[str, Any]:
-    decisions = decisions or {"decisions": {}, "term_decisions": {}}
+    decisions = decisions or {"decisions": {}, "term_decisions": {}, "vocab_decisions": {}}
     case_cards = []
     term_groups: dict[str, dict[str, Any]] = {}
     for case in snapshot.get("cases") or []:
@@ -1425,7 +1468,8 @@ def build_fast_snapshot(snapshot: dict[str, Any], decisions: dict[str, Any] | No
         )
     )
     term_cards = [_fast_term_card(term_key, term_groups[term_key], decisions) for term_key in sorted(term_groups)]
-    queue = case_cards + term_cards
+    vocab_cards = build_vocab_cards(decisions)
+    queue = case_cards + term_cards + vocab_cards
     done = sum(1 for card in queue if card.get("decision"))
     counts = Counter(str(card.get("tab") or "unknown") for card in queue)
     return {
@@ -1436,12 +1480,14 @@ def build_fast_snapshot(snapshot: dict[str, Any], decisions: dict[str, Any] | No
             "total_cards": len(queue),
             "case_cards": len(case_cards),
             "term_cards": len(term_cards),
+            "vocab_cards": len(vocab_cards),
             "decided": done,
             "undecided": len(queue) - done,
             "by_tab": dict(sorted(counts.items())),
         },
         "actions": {
             "term": list(FAST_TERM_ACTIONS),
+            "vocab": list(FAST_VOCAB_ACTIONS),
             "architectural_elements": sorted(vocab.ARCHITECTURAL_ELEMENT),
             "typology": sorted(vocab.TYPOLOGY),
             "program": sorted(vocab.PROGRAM),
@@ -1560,6 +1606,39 @@ def validate_term_decision(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def validate_vocab_decision(payload: dict[str, Any]) -> dict[str, Any]:
+    card_id = str(payload.get("card_id") or "")
+    if not card_id.startswith("vocab:"):
+        raise ValueError("vocab decision card_id must start with vocab:")
+    key = card_id.removeprefix("vocab:")
+    axis, sep, tag = key.partition("|")
+    if not sep or not axis or not tag:
+        raise ValueError("vocab card_id must be vocab:<axis>|<tag>")
+    decision = str(payload.get("decision") or "")
+    if decision not in FAST_VOCAB_ACTIONS:
+        raise ValueError(f"vocab decision must be one of {FAST_VOCAB_ACTIONS}")
+    raw_payload = payload.get("payload") or {}
+    if not isinstance(raw_payload, dict):
+        raise ValueError("payload must be an object")
+    clean_payload: dict[str, Any] = {}
+    if decision == "edit":
+        ko = str(raw_payload.get("ko") or "").strip()
+        en = str(raw_payload.get("en") or "").strip()
+        if not ko and not en and "is_generic" not in raw_payload:
+            raise ValueError("edit requires at least one of payload.ko/en/is_generic")
+        clean_payload = {"ko": ko or None, "en": en or None,
+                         "is_generic": bool(raw_payload.get("is_generic"))}
+    return {
+        "vocab_key": key,
+        "axis": axis,
+        "tag": tag,
+        "decision": decision,
+        "payload": clean_payload,
+        "notes": str(payload.get("notes") or "")[:2000],
+        "updated_at": now_iso(),
+    }
+
+
 def save_decision(snapshot: dict[str, Any], payload: dict[str, Any], path: Path = DECISIONS_PATH) -> dict[str, Any]:
     decisions = ensure_decisions(snapshot, path)
     item = validate_decision(snapshot, payload)
@@ -1576,6 +1655,8 @@ def save_fast_decision(snapshot: dict[str, Any], payload: dict[str, Any], path: 
     if payload.get("undo"):
         if card_id.startswith("term:"):
             decisions.setdefault("term_decisions", {}).pop(normalize_review_term(card_id.removeprefix("term:")), None)
+        elif card_id.startswith("vocab:"):
+            decisions.setdefault("vocab_decisions", {}).pop(card_id.removeprefix("vocab:"), None)
         elif card_id.startswith("case:"):
             case_id = card_id.removeprefix("case:")
             cases = {c["case_id"]: c for c in snapshot.get("cases") or []}
@@ -1588,13 +1669,16 @@ def save_fast_decision(snapshot: dict[str, Any], payload: dict[str, Any], path: 
     if card_id.startswith("term:"):
         item = validate_term_decision(payload)
         decisions.setdefault("term_decisions", {})[item["term_key"]] = item
+    elif card_id.startswith("vocab:"):
+        item = validate_vocab_decision(payload)
+        decisions.setdefault("vocab_decisions", {})[item["vocab_key"]] = item
     elif card_id.startswith("case:"):
         case_payload = dict(payload)
         case_payload["case_id"] = card_id.removeprefix("case:")
         item = validate_decision(snapshot, case_payload)
         decisions.setdefault("decisions", {})[item["case_id"]] = item
     else:
-        raise ValueError("card_id must start with term: or case:")
+        raise ValueError("card_id must start with term:, vocab: or case:")
     decisions["updated_at"] = now_iso()
     decisions["summary"] = summarize_decisions(snapshot, decisions)
     atomic_write_json(path, decisions)
@@ -1962,22 +2046,24 @@ function toast(t){const el=$('#toast'); el.textContent=t; el.classList.add('show
 function filtered(){const q=state?.queue||[]; return q.filter(c=>activeTab==='all'||c.tab===activeTab);}
 function firstTodo(cards){return cards.find(c=>!c.decision)||cards[0]||null;}
 function current(){const cards=filtered(); return cards.find(c=>c.card_id===activeCardId)||firstTodo(cards);}
-function renderStats(){const c=state?.counts||{}; $('#done').textContent=c.decided??0; $('#todo').textContent=c.undecided??0; $('#meta').textContent=`${c.total_cards??0} cards · cases ${c.case_cards??0} · terms ${c.term_cards??0}`;}
+function renderStats(){const c=state?.counts||{}; $('#done').textContent=c.decided??0; $('#todo').textContent=c.undecided??0; $('#meta').textContent=`${c.total_cards??0} cards · cases ${c.case_cards??0} · terms ${c.term_cards??0} · vocab ${c.vocab_cards??0}`;}
 function renderTabs(){const counts=state?.counts?.by_tab||{}; const names=['all',...Object.keys(counts).sort()]; $('#tabs').innerHTML=names.map(n=>`<button data-tab="${esc(n)}" class="${n===activeTab?'active':''}">${esc(n)} ${n==='all'?state.counts.total_cards:counts[n]}</button>`).join(''); document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab; activeCardId=null; render();});}
 function targetMeta(c){const t=c.target||{}; return [t.name||c.title,t.location_country,t.location_city,t.project_year,(t.architect_names||[]).join(', ')].filter(Boolean).join(' · ');}
 function sourceLinks(c){const urls=c.target?.source_urls||{}; const refs=c.target?.source_refs||{}; const links=[]; Object.entries(urls).forEach(([source,items])=>(items||[]).forEach((url,i)=>links.push({source,url,ref:(refs[source]||[])[i]}))); if(!links.length)return '<div class="card"><h3>원본 링크</h3><div class="muted">원본 URL 없음. source_refs만 확인하세요.</div><pre>'+esc(JSON.stringify(refs,null,2))+'</pre></div>'; return `<div class="card"><h3>원본 링크</h3><div class="links">${links.map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noreferrer">${esc(l.source)} ${esc(l.ref||'')} · ${esc(l.url)}</a>`).join('')}</div></div>`;}
 function renderExamples(c){return `<div class="card"><h3>예시 건물</h3><div class="examples">${(c.examples||[]).map(e=>`<div class="example"><b>${esc(e.name||e.canonical_bld_id)}</b><div class="muted">${esc([e.program,e.typology_primary].filter(Boolean).join(' · '))}</div><div class="mono">${esc((e.raw_material_visual||[]).join(', '))}</div></div>`).join('')}</div></div>`;}
 function selectOptions(values, selected){return `<option value="">선택</option>${values.map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join('')}`;}
 function renderTerm(c){const s=c.suggestions||{}; return `<div class="hero card"><span class="badge">material term · ${esc(c.occurrence_count)}회</span><h2>${esc(c.question_ko)}</h2><div class="muted">이 단어를 material facet에 남길지, 다른 검색 신호로 옮길지 결정하세요.</div></div><div class="grid"><div>${renderExamples(c)}<div class="card"><h3>분류 선택</h3><div class="controls"><label>건축요소<select id="elementValue">${selectOptions(state.actions.architectural_elements,s.architectural_element)}</select></label><label>용도/타입 필드<select id="typeField"><option value="typology_tags">typology_tags</option><option value="program">program</option></select></label><label>용도/타입 값<select id="typeValue">${selectOptions(state.actions.typology,s.typology)}</select></label></div></div></div><div><div class="card"><h3>결정</h3><div class="actions"><button class="action primary" data-term-action="material">1 재료<small>material_visual 유지</small></button><button class="action" data-term-action="architectural_element">2 건축요소<small>선택한 element로 이동</small></button><button class="action" data-term-action="typology">3 용도/타입<small>typology/program으로 이동</small></button><button class="action" data-term-action="search_keyword">4 검색어만<small>material에서 제거, 검색 보존</small></button><button class="action danger" data-term-action="delete">5 삭제<small>검색에서도 제거</small></button><button class="action" data-term-action="unsure">6 보류<small>나중에 다시 보기</small></button></div></div></div></div>`;}
+function renderVocab(c){const d=c.draft||{}; return `<div class="hero card"><span class="badge">vocab label · ${esc(c.axis)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">태그 원문: <span class="mono">${esc(c.tag)}</span> — 라벨을 확인하고 승인하거나 고쳐주세요. generic = 변별력 없어 질문 키워드에서 제외.</div></div><div class="grid"><div><div class="card"><h3>라벨 편집</h3><div class="controls"><label>한글 라벨<input id="vocabKo" value="${esc(d.ko)}"></label><label>영문 라벨<input id="vocabEn" value="${esc(d.en)}"></label><label><input type="checkbox" id="vocabGeneric" style="width:auto" ${d.is_generic?'checked':''}> generic (질문 제외)</label></div></div></div><div><div class="card"><h3>결정</h3><div class="actions"><button class="action primary" data-vocab-action="approve">1 승인<small>초안 그대로</small></button><button class="action" data-vocab-action="edit">2 수정 저장<small>입력값으로 갱신</small></button><button class="action" data-vocab-action="unsure">3 보류<small>나중에 다시</small></button></div></div></div></div>`;}
 function imageCards(c){const title=c.image_actions_enabled?'대표 이미지 선택':'판단 참고 사진'; if(!(c.images||[]).length)return `<div class="card"><h3>${title}</h3><div class="muted">사진 없음</div></div>`; return `<div class="card"><h3>${title}</h3><div class="images">${c.images.map((im,i)=>`<div class="image"><img src="${esc(im.url)}" loading="lazy"><div class="cap">${esc(im.kind||im.type||'image')} · ${esc(im.source||'')}</div>${c.image_actions_enabled?`<button data-case-action="${i}">이 이미지 선택</button>`:''}</div>`).join('')}</div></div>`;}
 function renderCase(c){return `<div class="hero card"><span class="badge">${esc(c.tab)} · ${esc(c.issue_code)}</span><h2>${esc(c.question_ko)}</h2><div class="muted">${esc(targetMeta(c))}</div></div><div class="grid"><div>${sourceLinks(c)}${imageCards(c)}<div class="card"><h3>Evidence</h3><pre>${esc(JSON.stringify(c.evidence,null,2))}</pre></div></div><div><div class="card"><h3>결정</h3><input id="textValue" value="${esc(c.title||'')}" placeholder="수정 값"><div class="actions">${(c.actions||[]).map((a,i)=>`<button class="action ${a.decision==='unpublish'?'danger':''}" data-case-action="${i}">${i+1} ${esc(a.label_ko)}</button>`).join('')}</div></div></div></div>`;}
-function bindCard(c){document.querySelectorAll('[data-term-action]').forEach(b=>b.onclick=()=>saveTerm(c,b.dataset.termAction)); document.querySelectorAll('[data-case-action]').forEach(b=>b.onclick=()=>saveCase(c,Number(b.dataset.caseAction))); const tf=$('#typeField'); const tv=$('#typeValue'); if(tf&&tv){tf.onchange=()=>{tv.innerHTML=selectOptions(tf.value==='program'?state.actions.program:state.actions.typology,'');};}}
-function render(){renderStats(); renderTabs(); const c=current(); if(!c){$('#view').innerHTML='<div class="empty">모든 검토 완료</div>'; return;} activeCardId=c.card_id; $('#view').innerHTML=c.kind==='term'?renderTerm(c):renderCase(c); bindCard(c);}
+function bindCard(c){document.querySelectorAll('[data-term-action]').forEach(b=>b.onclick=()=>saveTerm(c,b.dataset.termAction)); document.querySelectorAll('[data-vocab-action]').forEach(b=>b.onclick=()=>saveVocab(c,b.dataset.vocabAction)); document.querySelectorAll('[data-case-action]').forEach(b=>b.onclick=()=>saveCase(c,Number(b.dataset.caseAction))); const tf=$('#typeField'); const tv=$('#typeValue'); if(tf&&tv){tf.onchange=()=>{tv.innerHTML=selectOptions(tf.value==='program'?state.actions.program:state.actions.typology,'');};}}
+function render(){renderStats(); renderTabs(); const c=current(); if(!c){$('#view').innerHTML='<div class="empty">모든 검토 완료</div>'; return;} activeCardId=c.card_id; $('#view').innerHTML=c.kind==='term'?renderTerm(c):(c.kind==='vocab'?renderVocab(c):renderCase(c)); bindCard(c);}
 async function postDecision(payload){const r=await fetch('/api/fast-decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!r.ok){toast(await r.text()); return false;} state=await r.json(); lastCardId=payload.card_id; const cards=filtered(); const oldIndex=cards.findIndex(c=>c.card_id===payload.card_id); activeCardId=(cards.slice(oldIndex+1).find(c=>!c.decision)||cards.find(c=>!c.decision)||cards[oldIndex+1]||cards[0]||{}).card_id; toast('저장됨'); render(); return true;}
 function saveTerm(c, action){const payload={term:c.display_term}; if(action==='architectural_element'){const v=$('#elementValue').value; if(!v){toast('건축요소를 선택하세요'); return;} payload.canonical_value=v;} if(action==='typology'){const field=$('#typeField').value; const v=$('#typeValue').value; if(!v){toast('용도/타입 값을 선택하세요'); return;} payload.field=field; payload.canonical_value=v;} postDecision({card_id:c.card_id,decision:action,payload});}
+function saveVocab(c, action){let payload={}; if(action==='edit'){payload={ko:$('#vocabKo').value,en:$('#vocabEn').value,is_generic:$('#vocabGeneric').checked};} postDecision({card_id:c.card_id,decision:action,payload});}
 function saveCase(c, idx){const action=(c.actions||[])[idx]; if(!action)return; const payload=JSON.parse(JSON.stringify(action.payload||{})); if(action.requires_text||payload.field==='name'||payload.field==='architects_text'){payload.value=$('#textValue').value;} postDecision({card_id:c.card_id,decision:action.decision,payload});}
 $('#undo').onclick=async()=>{if(!lastCardId){toast('취소할 결정 없음');return;} const r=await fetch('/api/fast-decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_id:lastCardId,undo:true})}); if(!r.ok){toast(await r.text());return;} state=await r.json(); activeCardId=lastCardId; lastCardId=null; toast('취소됨'); render();};
-document.addEventListener('keydown',e=>{if(!/^[1-6]$/.test(e.key))return; const n=Number(e.key)-1; const c=current(); if(!c)return; const buttons=[...document.querySelectorAll(c.kind==='term'?'[data-term-action]':'[data-case-action]')]; if(buttons[n])buttons[n].click();});
+document.addEventListener('keydown',e=>{if(!/^[1-6]$/.test(e.key))return; const n=Number(e.key)-1; const c=current(); if(!c)return; const buttons=[...document.querySelectorAll(c.kind==='term'?'[data-term-action]':(c.kind==='vocab'?'[data-vocab-action]':'[data-case-action]'))]; if(buttons[n])buttons[n].click();});
 (async()=>{await loadFast(); render();})().catch(e=>{$('#view').textContent=e.message;});
 </script>
 </body></html>
@@ -2137,6 +2223,41 @@ class ManualReviewHandler(BaseHTTPRequestHandler):
         sys.stderr.write("manual_review_app: " + (fmt % args) + "\n")
 
 
+def apply_vocab_labels(decisions_path: Path = DECISIONS_PATH, labels_path: Path = VOCAB_LABELS_PATH) -> dict[str, Any]:
+    """Patch tag_vocabulary_labels.json with reviewed vocab decisions (local only)."""
+    decisions = read_json(decisions_path) if decisions_path.exists() else {}
+    vocab_decisions = decisions.get("vocab_decisions") or {}
+    labels = read_json(labels_path)
+    axes = labels.get("axes") or {}
+    counts = Counter()
+    unsure = []
+    for key, item in sorted(vocab_decisions.items()):
+        axis, _, tag = key.partition("|")
+        decision = item.get("decision")
+        counts[decision] += 1
+        if decision == "unsure":
+            unsure.append(key)
+            continue
+        entry = axes.setdefault(axis, {}).setdefault(tag, {})
+        entry["reviewed"] = True
+        if decision == "edit":
+            payload = item.get("payload") or {}
+            if payload.get("ko"):
+                entry["ko"] = payload["ko"]
+            if payload.get("en"):
+                entry["en"] = payload["en"]
+            entry["is_generic"] = bool(payload.get("is_generic"))
+    atomic_write_json(labels_path, labels)
+    report = {
+        "status": "PASS",
+        "labels_path": _rel(labels_path),
+        "decision_counts": dict(counts),
+        "unsure": unsure,
+        "total_decided": sum(counts.values()),
+    }
+    return report
+
+
 def serve(snapshot_path: Path = SNAPSHOT_PATH, decisions_path: Path = DECISIONS_PATH, host: str = "127.0.0.1", port: int = 8765) -> None:
     if not snapshot_path.exists():
         build_snapshot(output_path=snapshot_path, decisions_path=decisions_path)
@@ -2185,6 +2306,10 @@ def main() -> int:
     p_apply.add_argument("--patch", type=Path, default=PATCH_PATH)
     p_apply.add_argument("--write-artifact", action="store_true")
 
+    p_vocab = sub.add_parser("apply-vocab-labels")
+    p_vocab.add_argument("--decisions", type=Path, default=DECISIONS_PATH)
+    p_vocab.add_argument("--labels", type=Path, default=VOCAB_LABELS_PATH)
+
     args = parser.parse_args()
     if args.cmd == "audit":
         result = run_audit(include_neon=not args.no_neon, output_dir=args.output_dir)
@@ -2227,6 +2352,10 @@ def main() -> int:
         )
         print(json.dumps({k: report[k] for k in ("status", "changed_rows", "publishable_delta", "invalid_decisions", "patch_path")}, ensure_ascii=False, indent=2))
         return 0 if report["status"] == "PASS" else 1
+    if args.cmd == "apply-vocab-labels":
+        report = apply_vocab_labels(decisions_path=args.decisions, labels_path=args.labels)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
     return 2
 
 
