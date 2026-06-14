@@ -895,6 +895,186 @@
         "is_generic": false,
         "reviewed": true
       }
+    },
+    "era": {
+      "Pre-1900": {
+        "ko": "1900년 이전",
+        "en": "Pre-1900",
+        "is_generic": false
+      },
+      "1900-1945": {
+        "ko": "1900–1945",
+        "en": "1900-1945",
+        "is_generic": false
+      },
+      "1945-1980": {
+        "ko": "1945–1980",
+        "en": "1945-1980",
+        "is_generic": false
+      },
+      "1980-2000": {
+        "ko": "1980–2000",
+        "en": "1980-2000",
+        "is_generic": false
+      },
+      "2000-2015": {
+        "ko": "2000–2015",
+        "en": "2000-2015",
+        "is_generic": false
+      },
+      "2015+": {
+        "ko": "2015년 이후",
+        "en": "2015+",
+        "is_generic": false
+      }
+    },
+    "scale": {
+      "XS": {
+        "ko": "초소형 (파빌리온)",
+        "en": "XS — Pavilion",
+        "is_generic": false
+      },
+      "S": {
+        "ko": "소형 (주택 규모)",
+        "en": "S — House",
+        "is_generic": false
+      },
+      "M": {
+        "ko": "중형",
+        "en": "M — Mid-size",
+        "is_generic": false
+      },
+      "L": {
+        "ko": "대형 (복합시설)",
+        "en": "L — Large Complex",
+        "is_generic": false
+      },
+      "XL": {
+        "ko": "초대형 (도시 스케일)",
+        "en": "XL — Urban Scale",
+        "is_generic": false
+      }
+    },
+    "structural_system": {
+      "Masonry": {
+        "ko": "조적조",
+        "en": "Masonry",
+        "is_generic": false
+      },
+      "Reinforced Concrete": {
+        "ko": "철근콘크리트조",
+        "en": "Reinforced Concrete",
+        "is_generic": false
+      },
+      "Steel Frame": {
+        "ko": "철골조",
+        "en": "Steel Frame",
+        "is_generic": false
+      },
+      "Timber Frame": {
+        "ko": "목구조",
+        "en": "Timber Frame",
+        "is_generic": false
+      },
+      "Hybrid": {
+        "ko": "혼합 구조",
+        "en": "Hybrid",
+        "is_generic": false
+      },
+      "Shell/Membrane": {
+        "ko": "쉘·막 구조",
+        "en": "Shell/Membrane",
+        "is_generic": false
+      },
+      "Earth": {
+        "ko": "흙 구조",
+        "en": "Earth",
+        "is_generic": false
+      }
+    },
+    "roof_type": {
+      "Flat": {
+        "ko": "평지붕",
+        "en": "Flat",
+        "is_generic": false
+      },
+      "Gabled": {
+        "ko": "박공지붕",
+        "en": "Gabled",
+        "is_generic": false
+      },
+      "Hipped": {
+        "ko": "모임지붕",
+        "en": "Hipped",
+        "is_generic": false
+      },
+      "Shed": {
+        "ko": "외쪽지붕",
+        "en": "Shed",
+        "is_generic": false
+      },
+      "Curved": {
+        "ko": "곡면 지붕",
+        "en": "Curved",
+        "is_generic": false
+      },
+      "Green Roof": {
+        "ko": "녹화 지붕",
+        "en": "Green Roof",
+        "is_generic": false
+      },
+      "Vaulted/Domed": {
+        "ko": "볼트·돔",
+        "en": "Vaulted/Domed",
+        "is_generic": false
+      },
+      "Sawtooth": {
+        "ko": "톱날지붕",
+        "en": "Sawtooth",
+        "is_generic": false
+      }
+    },
+    "facade_pattern": {
+      "Grid": {
+        "ko": "그리드 입면",
+        "en": "Grid",
+        "is_generic": false
+      },
+      "Louvered": {
+        "ko": "루버 입면",
+        "en": "Louvered",
+        "is_generic": false
+      },
+      "Solid/Mass": {
+        "ko": "통벽 매스",
+        "en": "Solid/Mass",
+        "is_generic": false
+      },
+      "Glazed Curtain": {
+        "ko": "유리 커튼월",
+        "en": "Glazed Curtain",
+        "is_generic": false
+      },
+      "Perforated": {
+        "ko": "타공 입면",
+        "en": "Perforated",
+        "is_generic": false
+      },
+      "Organic": {
+        "ko": "유기적 입면",
+        "en": "Organic",
+        "is_generic": false
+      },
+      "Layered": {
+        "ko": "레이어드 입면",
+        "en": "Layered",
+        "is_generic": false
+      },
+      "Rhythmic Openings": {
+        "ko": "리듬감 있는 개구부",
+        "en": "Rhythmic Openings",
+        "is_generic": false
+      }
     }
   }
 }

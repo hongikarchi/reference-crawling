@@ -17,19 +17,26 @@ This file is the operating manual. For schema/vocab/tool detail see
   state by reading those — never assume in-memory continuity between sessions.
 - **Current production dataset (Neon `archi_data`):**
   - `canonical_v2_buildings`: 39,478 rows / 36,673 publishable, artifact
-    `completeness_c23_final`, schema includes `year_kind`.
+    `completeness_c23_final`, schema includes `year_kind` + R4 discriminative
+    axes `era`/`scale`/`structural_system`/`roof_type`/`facade_pattern`
+    (deployed 2026-06-14; `NULL` = unresolved, not `'Unknown'`).
   - `canonical_v2_architects`: 14,216 rows / 4,348 recommendable, derived from
     `id_registry_architects.json` + 3 source firm DBs + buildings reverse-index;
     portfolio embedding = mean of publishable building embeddings (384-dim, same
     space). See `docs/ARCHITECT_RECOMMENDATION.md`.
-  - Tag precompute siblings (make_web algo support, **deployed 2026-06-12**):
-    `canonical_v2_tag_stats` / `_tag_centroids` / `_tag_vocabulary` (18,621
-    rows each; 6 axes) via `tools/canonical_v2_tag_stats_build.py` — rebuild
-    every crawl, one txn, in-txn QC. Material reclassify applied in the same
-    commit: publishable now **36,673**, architects recommendable **4,348**.
-    External QC benchmark post-deploy: 10 PASS / 0 FAIL. Contract:
-    `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md`; job card
-    `20260612_makeweb_algo_support_tables.md`.
+  - Tag precompute siblings (make_web algo support, R1-R3 **deployed
+    2026-06-12**, R4 axes **deployed 2026-06-14**):
+    `canonical_v2_tag_stats` / `_tag_centroids` / `_tag_vocabulary` (**18,655
+    rows each; 11 axes**, `corpus_version c23_final+matstrip+r4`) via
+    `tools/canonical_v2_tag_stats_build.py --with-r4` — rebuild every crawl, one
+    txn, in-txn QC. Material reclassify applied in the R1-R3 commit: publishable
+    **36,673**, architects recommendable **4,348**. R4 = 5 new axes (era derived
+    from `project_year`; scale/structural/roof/facade LLM-tagged text+vision,
+    merged via `tools/r4_axis_merge.py`; G3 review ≥90%/axis). External QC
+    benchmark post-deploy: 10 PASS / 0 FAIL. Contract:
+    `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md`; job cards
+    `20260612_makeweb_algo_support_tables.md`,
+    `20260614_r4_discriminative_axes.md`.
   - Mental model: **`archi_data` = architecture data** (only 2 tables above);
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
     make_web. As of 2026-05-24, all 23 user/app tables + legacy

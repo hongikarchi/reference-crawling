@@ -82,6 +82,12 @@ CREATE TABLE canonical_v2_buildings (
   architectural_elements        TEXT[]      NOT NULL DEFAULT '{}',
   source_categories             JSONB       NOT NULL DEFAULT '{}',    -- raw source taxonomy
   year_kind                     TEXT        NOT NULL DEFAULT 'unknown', -- completed | future | unknown (derived from project_year vs current_year)
+  -- R4 discriminative axes (2026-06-14; NULL = unresolved, never 'Unknown'):
+  era                           TEXT,       -- derived from project_year buckets
+  scale                         TEXT,       -- XS / S / M / L / XL
+  structural_system             TEXT,       -- Masonry / Reinforced Concrete / Steel Frame / Timber Frame / Hybrid / Shell/Membrane / Earth
+  roof_type                     TEXT,       -- Flat / Gabled / Hipped / Shed / Curved / Green Roof / Vaulted/Domed / Sawtooth
+  facade_pattern                TEXT,       -- Grid / Louvered / Solid/Mass / Glazed Curtain / Perforated / Organic / Layered / Rhythmic Openings
   embedding                     VECTOR(384) NOT NULL,
   created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -155,8 +161,9 @@ GIN on `top_programs/top_typologies/countries`; HNSW (`vector_cosine_ops`) on
 
 Three sibling tables derived from publishable `canonical_v2_buildings` rows,
 rebuilt in one transaction every crawl by `tools/canonical_v2_tag_stats_build.py`
-(in-txn QC, FAIL → ROLLBACK). 6 axes: program / style / color_tone /
-atmosphere / material_visual / architectural_elements. Contract + make_web
+(`--with-r4`; in-txn QC, FAIL → ROLLBACK). **11 axes**: program / style /
+color_tone / atmosphere / material_visual / architectural_elements + R4 era /
+scale / structural_system / roof_type / facade_pattern. Contract + make_web
 query crib: `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md`.
 
 ```sql
@@ -171,6 +178,9 @@ canonical_v2_tag_vocabulary (axis, tag) PK → display_ko, display_en, is_generi
   `apply-vocab-labels`.
 - material_visual is free-text: ~18.6k distinct tags, ~13k singletons —
   consumers should filter `doc_freq` or weight by `n_buildings`.
+- R4 axes are NULL-bearing: `sum(doc_freq)` per R4 axis equals the **non-NULL**
+  row count, not `total_n` (roof_type ~63% covered). QC enforces
+  `sum_doc_freq == non_null` (hard) + a per-axis coverage floor (WARN only).
 
 ## 3. Controlled vocabularies
 

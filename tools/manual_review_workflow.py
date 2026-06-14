@@ -86,6 +86,7 @@ VOCAB_EXAMPLES_PATH = ROOT / "data/reports/vocab_label_examples.json"
 VOCAB_AXES = (
     "program", "style", "color_tone", "atmosphere",
     "material_visual", "architectural_elements",
+    "era", "scale", "structural_system", "roof_type", "facade_pattern",
 )
 FAST_CASE_PRIORITY = {
     "country": 0,

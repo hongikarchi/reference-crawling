@@ -35,45 +35,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from core import vocab  # noqa: E402
 from tools.canonical_v2_neon_loader import _connect  # noqa: E402
 from tools.d1_enrich_codex import extract_json, run_codex  # noqa: E402
+from tools.r4_axis_merge import era_from_year  # noqa: E402
 
 REPORT_DIR = ROOT / "data/reports/r4_smoke"
 
-# --- PROPOSED vocabularies (user decision pending; NOT in core/vocab.py) ----
-SCALE = ("XS", "S", "M", "L", "XL")
-STRUCTURAL_SYSTEM = (
-    "Masonry", "Reinforced Concrete", "Steel Frame", "Timber Frame",
-    "Hybrid", "Shell/Membrane", "Earth", "Unknown",
-)
-ROOF_TYPE = (
-    "Flat", "Gabled", "Hipped", "Shed", "Curved", "Green Roof",
-    "Vaulted/Domed", "Sawtooth", "Unknown",
-)
-FACADE_PATTERN = (
-    "Grid", "Louvered", "Solid/Mass", "Glazed Curtain", "Perforated",
-    "Organic", "Layered", "Rhythmic Openings", "Unknown",
-)
+# Prompt vocab = canonical vocab (user-approved, core/vocab.py) + Unknown.
+# "Unknown" is a valid LLM answer but never reaches Neon (stored as NULL).
+SCALE = tuple(sorted(vocab.SCALE, key=("XS", "S", "M", "L", "XL").index))
+STRUCTURAL_SYSTEM = tuple(sorted(vocab.STRUCTURAL_SYSTEM)) + ("Unknown",)
+ROOF_TYPE = tuple(sorted(vocab.ROOF_TYPE)) + ("Unknown",)
+FACADE_PATTERN = tuple(sorted(vocab.FACADE_PATTERN)) + ("Unknown",)
 AXES = {
     "scale": SCALE,
     "structural_system": STRUCTURAL_SYSTEM,
     "roof_type": ROOF_TYPE,
     "facade_pattern": FACADE_PATTERN,
 }
-
-ERA_BUCKETS = (
-    (1900, "Pre-1900"), (1945, "1900-1945"), (1980, "1945-1980"),
-    (2000, "1980-2000"), (2015, "2000-2015"), (9999, "2015+"),
-)
-
-
-def era_from_year(year) -> str | None:
-    if not isinstance(year, int):
-        return None
-    for upper, label in ERA_BUCKETS:
-        if year < upper:
-            return label
-    return None
 
 
 def fetch_sample(n: int, seed: str) -> list[dict]:
@@ -150,7 +130,33 @@ def validate(obj: dict) -> list[str]:
     return errors
 
 
-def run_one(row: dict) -> dict:
+CLAUDE_FALLBACK_MODEL = "claude-haiku-4-5-20251001"  # closed-vocab classification tier
+CLAUDE_TIMEOUT_SECONDS = 180
+
+
+def run_claude(prompt: str) -> str:
+    """Subscription-quota fallback engine: headless `claude -p` (no API key).
+
+    Haiku 4.5, no thinking — the task is closed-vocab JSON classification,
+    same tier rationale as codex's reasoning_effort=low.
+    """
+    import subprocess
+    proc = subprocess.run(
+        ["claude", "-p", "--model", CLAUDE_FALLBACK_MODEL, prompt],
+        capture_output=True,
+        text=True,
+        timeout=CLAUDE_TIMEOUT_SECONDS,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude exit {proc.returncode}: {(proc.stderr or proc.stdout).strip()[:300]}")
+    return proc.stdout
+
+
+ENGINES = {"codex": run_codex, "claude": run_claude}
+
+
+def run_one(row: dict, engine: str = "codex") -> dict:
     t0 = time.time()
     prompt = build_prompt(row)
     out: dict = {
@@ -158,12 +164,14 @@ def run_one(row: dict) -> dict:
         "name": row["name"],
         "era": era_from_year(row.get("project_year")),
         "prompt_chars": len(prompt),
+        "engine": engine,
     }
+    call = ENGINES[engine]
     retry_note = None
     for attempt in (1, 2):
         try:
-            stdout = run_codex(build_prompt(row, retry_note) if retry_note else prompt)
-        except RuntimeError as exc:
+            stdout = call(build_prompt(row, retry_note) if retry_note else prompt)
+        except Exception as exc:  # noqa: BLE001  (RuntimeError / TimeoutExpired)
             out.update(status="codex_error", error=str(exc)[:300])
             break
         out["output_chars"] = len(stdout)

@@ -43,11 +43,15 @@ from psycopg2.extras import execute_values  # noqa: E402
 
 from core import vocab  # noqa: E402  (read-only import; vocab is user-owned)
 from tools.canonical_v2_neon_loader import _connect, _vec_literal  # noqa: E402
+from tools.r4_axis_merge import ERA_VALUES  # noqa: E402
 from tools import strip_material_noise_neon  # noqa: E402
 
 TEXT_AXES = ("program", "style", "color_tone", "atmosphere")
+# R4 axes: TEXT columns that may be NULL (unresolved). Aggregated over
+# non-NULL rows only; sum(doc_freq) == count of non-NULL rows, not total_n.
+NULLABLE_TEXT_AXES = ("era", "scale", "structural_system", "roof_type", "facade_pattern")
 ARRAY_AXES = ("material_visual", "architectural_elements")
-ALL_AXES = TEXT_AXES + ARRAY_AXES
+ALL_AXES = TEXT_AXES + NULLABLE_TEXT_AXES + ARRAY_AXES
 
 CONTROLLED = {
     "program": frozenset(vocab.PROGRAM),
@@ -55,6 +59,18 @@ CONTROLLED = {
     "color_tone": frozenset(vocab.COLOR_TONE),
     "atmosphere": frozenset(vocab.ATMOSPHERE),
     "architectural_elements": frozenset(vocab.ARCHITECTURAL_ELEMENT),
+    "era": frozenset(ERA_VALUES),  # derived axis — not in vocab.py by design
+    "scale": frozenset(vocab.SCALE),
+    "structural_system": frozenset(vocab.STRUCTURAL_SYSTEM),
+    "roof_type": frozenset(vocab.ROOF_TYPE),
+    "facade_pattern": frozenset(vocab.FACADE_PATTERN),
+}
+
+# Minimum expected coverage (non-NULL share of publishable rows) per R4 axis,
+# from the N=100 smoke; WARN below floor (vision merge should only raise them).
+COVERAGE_FLOORS = {
+    "era": 0.95, "scale": 0.95, "facade_pattern": 0.70,
+    "structural_system": 0.45, "roof_type": 0.28,
 }
 
 EMBED_DIM = 384
@@ -117,9 +133,10 @@ def _l2norm(vec: np.ndarray, key: str) -> np.ndarray:
     return vec / norm
 
 
-def _axes(skip_elements: bool) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _axes(skip_elements: bool, with_r4_axes: bool = True) -> tuple[tuple[str, ...], tuple[str, ...]]:
     arr = tuple(a for a in ARRAY_AXES if not (skip_elements and a == "architectural_elements"))
-    return TEXT_AXES, arr
+    text = TEXT_AXES + (NULLABLE_TEXT_AXES if with_r4_axes else ())
+    return text, arr
 
 
 def probe_avg_vector(conn) -> bool:
@@ -143,12 +160,12 @@ def fetch_total_n(cur) -> int:
 
 def fetch_axis_stats(cur, axis: str) -> list[tuple[str, int, np.ndarray]]:
     """One server-side pass: (tag, doc_freq, mean embedding) for one axis."""
-    if axis in TEXT_AXES:
+    if axis in TEXT_AXES or axis in NULLABLE_TEXT_AXES:
         cur.execute(
             f"""
             SELECT {axis} AS tag, COUNT(*)::int AS doc_freq, AVG(embedding)::text AS mean_vec
             FROM canonical_v2_buildings
-            WHERE is_publishable
+            WHERE is_publishable AND {axis} IS NOT NULL
             GROUP BY 1
             """
         )
@@ -304,6 +321,22 @@ def qc(cur, r1, r2, r3, total_n: int, label_warnings, generic_candidates) -> lis
     for axis in TEXT_AXES:
         s = sum(r1_by_axis.get(axis, {}).values())
         add(f"sum_doc_freq[{axis}]", s == total_n, f"sum={s}, total_n={total_n}")
+    # nullable (R4) axes: doc_freq sums to the non-NULL row count, and
+    # coverage must not regress below the smoke-measured floor (WARN).
+    for axis in NULLABLE_TEXT_AXES:
+        if axis not in r1_by_axis:
+            continue
+        cur.execute(
+            f"SELECT count(*) FROM canonical_v2_buildings "
+            f"WHERE is_publishable AND {axis} IS NOT NULL"
+        )
+        non_null = int(cur.fetchone()[0])
+        s = sum(r1_by_axis[axis].values())
+        add(f"sum_doc_freq[{axis}]", s == non_null, f"sum={s}, non_null={non_null}")
+        coverage = non_null / total_n if total_n else 0.0
+        floor = COVERAGE_FLOORS.get(axis, 0.0)
+        add(f"coverage[{axis}]", coverage >= floor,
+            f"{coverage:.1%} of publishable (floor {floor:.0%})", warn=True)
     for axis, controlled in CONTROLLED.items():
         oov = sorted(set(r1_by_axis.get(axis, {})) - controlled)
         add(f"oov[{axis}]", not oov, f"out-of-vocab tags: {oov or 'none'}")
@@ -384,8 +417,22 @@ def run_build(args) -> int:
     if args.with_reclassify:
         reclassify_stats = strip_material_noise_neon.execute(cur)
 
+    r4_backfill_stats = None
+    if args.with_r4:
+        # DDL (columns) must already exist — run r4_deploy_neon.py Txn A first.
+        from tools.r4_deploy_neon import backfill_execute
+        r4_backfill_stats = backfill_execute(cur)
+
     total_n = fetch_total_n(cur)
-    text_axes, array_axes = _axes(args.skip_elements_axis)
+    cur.execute(
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_name = 'canonical_v2_buildings' AND column_name = ANY(%s)",
+        (list(NULLABLE_TEXT_AXES),),
+    )
+    with_r4_axes = int(cur.fetchone()[0]) == len(NULLABLE_TEXT_AXES)
+    if not with_r4_axes:
+        print("NOTE: R4 columns absent -> building 6-axis tables (pre-R4 mode)")
+    text_axes, array_axes = _axes(args.skip_elements_axis, with_r4_axes)
     axes = text_axes + array_axes
     if server_side:
         stats = {axis: fetch_axis_stats(cur, axis) for axis in axes}
@@ -427,6 +474,7 @@ def run_build(args) -> int:
             axis: len(tag_stats) for axis, tag_stats in stats.items()
         },
         "reclassify": reclassify_stats,
+        "r4_backfill": r4_backfill_stats,
         "qc": checks,
         "result": "FAIL" if failed else "PASS",
     }
@@ -553,6 +601,9 @@ def main() -> int:
     ap.add_argument("--report", default=str(REPORT_PATH))
     ap.add_argument("--with-reclassify", action="store_true",
                     help="run the material reclassify migration first, same transaction")
+    ap.add_argument("--with-r4", action="store_true",
+                    help="run the R4 axis backfill first, same transaction "
+                         "(requires r4_deploy_neon.py DDL applied)")
     ap.add_argument("--client-side", action="store_true",
                     help="force client-side numpy aggregation (no AVG(vector))")
     ap.add_argument("--skip-elements-axis", action="store_true",

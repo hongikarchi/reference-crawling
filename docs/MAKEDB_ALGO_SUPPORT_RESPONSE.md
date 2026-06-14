@@ -4,7 +4,7 @@
 |---|---|
 | **From** | Make DB (`archi_data` owner) |
 | **To** | Make Web (discovery-algorithm-dev) |
-| **Status** | R1-R3 **BUILT — dry-run PASS**, deploy pending one user gate · R4 **smoke-tested** · R5 deferred |
+| **Status** | R1-R3 **DEPLOYED 2026-06-12** · R4 **DEPLOYED 2026-06-14** (5 new axes live on `canonical_v2_buildings`, tag tables now 11-axis) · R5 deferred |
 | **Re** | Make Web request "추천 알고리즘 토대 강화 (Corpus Precompute)" |
 | **Tooling** | `tools/canonical_v2_tag_stats_build.py` (build/QC), `data/canonical/tag_vocabulary_labels.json` (labels) |
 
@@ -91,7 +91,7 @@ is_generic BOOLEAN, sort_rank INTEGER, PRIMARY KEY (axis, tag)
 |---|---|
 | Source invariant | all stats computed over `is_publishable = true` only |
 | Refresh | every crawl/canonical reload, one transaction (`DELETE` + `INSERT` + in-txn QC; FAIL → full ROLLBACK). Readers never see a partial state (MVCC). |
-| `corpus_version` | `c23_final+matstrip` for the first deploy |
+| `corpus_version` | `c23_final+matstrip+r4` (current; was `c23_final+matstrip` at the R1-R3 deploy) |
 | Grants | `make_web` gets SELECT automatically (ALTER DEFAULT PRIVILEGES, 2026-05-24) — verified live in dry-run |
 | Tag normalization | tags stored exactly as in `canonical_v2_buildings` columns (controlled axes Title Case, material lowercase free-text) — three tables join with buildings as-is |
 | QC gate | 19 checks: total_n parity, per-axis doc_freq sums, OOV=0, idf formula, R1==R2 key parity, centroid norms, label coverage, grant probe |
@@ -110,53 +110,56 @@ The same gated transaction applies the material-noise reclassify migration
 
 All R1-R3 stats above are computed on the post-migration state.
 
-## 5. R4 — new discriminative axes (smoke-tested, full run = separate scope)
+## 5. R4 — new discriminative axes (SHIPPED 2026-06-14)
 
-- **era needs no LLM.** It derives deterministically from `project_year`
-  (Pre-1900 / 1900-1945 / 1945-1980 / 1980-2000 / 2000-2015 / 2015+; coverage
-  ≥ 99% of publishable rows since year presence is 99.67%). We can ship it as
-  a generated column at near-zero cost whenever you want.
-- The four visual/textual axes (scale / structural_system / roof_type /
-  facade_pattern) were smoke-tested text-only through the same codex-exec
-  path as D-1, with **proposed** vocabularies (pending owner approval — not
-  yet in `core/vocab.py`):
-  - scale: XS / S / M / L / XL
-  - structural_system: Masonry / Reinforced Concrete / Steel Frame / Timber
-    Frame / Hybrid / Shell-Membrane / Earth / Unknown
-  - roof_type: Flat / Gabled / Hipped / Shed / Curved / Green Roof /
-    Vaulted-Domed / Sawtooth / Unknown
-  - facade_pattern: Grid / Louvered / Solid-Mass / Glazed Curtain /
-    Perforated / Organic / Layered / Rhythmic Openings / Unknown
+Five new axes are live as columns on `canonical_v2_buildings` and as tag rows
+in all three precompute tables (now **11 axes**, 18,655 rows each,
+`corpus_version = c23_final+matstrip+r4`). Vocabularies are owner-approved and
+in `core/vocab.py`. **`Unknown` is stored as `NULL`** — never the string
+`'Unknown'`.
 
-**Smoke results (N=100, text-only, seed-deterministic sample;
-`data/reports/r4_smoke/report.N100.json`):**
+```sql
+era               TEXT  -- Pre-1900 / 1900-1945 / 1945-1980 / 1980-2000 / 2000-2015 / 2015+
+scale             TEXT  -- XS / S / M / L / XL
+structural_system TEXT  -- Masonry / Reinforced Concrete / Steel Frame / Timber Frame / Hybrid / Shell/Membrane / Earth
+roof_type         TEXT  -- Flat / Gabled / Hipped / Shed / Curved / Green Roof / Vaulted/Domed / Sawtooth
+facade_pattern    TEXT  -- Grid / Louvered / Solid/Mass / Glazed Curtain / Perforated / Organic / Layered / Rhythmic Openings
+```
 
-| Metric | scale | structural_system | roof_type | facade_pattern |
-|---|---|---|---|---|
-| Unknown rate | **0%** | 52% | **69%** | 23% |
-| Top values | S 38 · M 38 · XS 16 | Masonry 15 · RC 10 · Timber 9 | Flat 14 · Gabled 7 | Solid/Mass 31 · Layered 20 |
+**How they were produced.** `era` is derived deterministically from
+`project_year` (zero LLM cost). The other four were LLM-tagged: a full
+text pass over all 39,478 rows, then a vision pass over cover images for the
+three visually-resolvable axes. The two signals were merged per axis:
 
-- Reliability: ok_rate 100/100, retry 0%, mean 4.8 s/item, ~482 in / 24 out
-  tokens per item.
-- Full-39k extrapolation (text-only, all 4 axes in one call): **~19M input
-  tokens, ~53 h serial** (parallelizes like D-1 batches).
-- era: 99% coverage from `project_year` alone.
+| axis | merge policy | rationale (validated in review §below) |
+|---|---|---|
+| `scale` | text only | text sees the program; one photo doesn't |
+| `structural_system` | text wins, vision fills gaps | prose ("CLT structure") beats a photo guess — review: text 86% vs vision 14% on disagreements |
+| `facade_pattern` | text wins, vision fills gaps | review: text 90% vs vision 10% on disagreements |
+| `roof_type` | vision wins, text fills gaps | purely visual — review: vision 67% vs text 33% on disagreements |
 
-**Verdict per axis:**
-- `scale` — **ship text-only** (0% Unknown, sane distribution).
-- `facade_pattern` — viable text-only (77% resolved); acceptable launch
-  quality, top-up later.
-- `structural_system` — marginal (52% Unknown): text + material heuristics
-  could lift it, but expect sparse coverage.
-- `roof_type` — **text fails (69% Unknown)**: needs a D-2-style vision pass
-  over cover images, which is a different (order-of-magnitude larger) cost
-  envelope.
+**Deployed coverage (publishable, 36,673 rows; `NULL` = could not resolve):**
 
-Recommended R4 path: phase 1 = era (free) + scale + facade_pattern text run
-(~2 of 4 axes at ~19M-token budget shared); phase 2 = vision pass for
-roof_type/structural_system, costed separately. Full run starts only after a
-separate cost approval and vocab sign-off (vocabularies above are proposals;
-`core/vocab.py` is owner-gated).
+| axis | era | scale | structural_system | roof_type | facade_pattern |
+|---|---|---|---|---|---|
+| non-NULL | 99.7% | 100% | 91.6% | **63.2%** | 90.9% |
+
+**Quality gate (human review, N=200 sample, deterministic seed;
+`data/reports/r4_review/accuracy.json`):** per-axis approve rate on the random
+stratum — scale 100%, roof_type 100%, structural_system 96.4%, facade_pattern
+94.9%. All four clear the ≥90% gate.
+
+**Contract notes for make_web:**
+- These axes behave like the other controlled axes in the tag tables — same
+  `tag_stats` / `tag_centroids` / `tag_vocabulary` schema, same join key.
+- **`sum(doc_freq)` for an R4 axis equals the non-NULL row count, NOT
+  `total_n`** (36,673). roof_type especially: ~37% of publishable rows are
+  NULL. Do not assume every row contributes to every axis.
+- Labels (ko/en) for all 34 new tag values are in `tag_vocabulary`; none are
+  `is_generic`. Generic-share INFO candidates (corpus share > 25%) surfaced at
+  build: `era/2015+`, `scale/S`, `scale/M`, `structural_system/Reinforced
+  Concrete`, `roof_type/Flat`, `facade_pattern/Solid/Mass` — left
+  non-generic pending an owner call, flag them in your weighting if needed.
 
 ## 6. R5 — multi-label confidence distributions: deferred
 
@@ -185,4 +188,9 @@ FROM canonical_v2_tag_vocabulary;
 -- freshness probe
 SELECT DISTINCT corpus_version, max(computed_at) OVER ()
 FROM canonical_v2_tag_stats LIMIT 1;
+
+-- R4 per-building axes (NULL = unresolved; filter, don't COALESCE to a fake value)
+SELECT canonical_bld_id, era, scale, structural_system, roof_type, facade_pattern
+FROM canonical_v2_buildings
+WHERE is_publishable AND facade_pattern = %s;   -- any R4 axis is a plain WHERE filter
 ```

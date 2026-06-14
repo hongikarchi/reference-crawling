@@ -155,8 +155,17 @@ def is_genericish_name(value: str) -> bool:
 EMPTY_MATERIAL_REASON = "material_noise_only"
 
 
-def map_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Return the exact row shape proposed for canonical_v2_buildings."""
+def map_row(row: dict[str, Any], *, r4_overlay: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return the exact row shape proposed for canonical_v2_buildings.
+
+    r4_overlay: optional per-cid entry from the R4 merged sidecar
+    (tools/r4_axis_merge.load_merged) carrying the LLM-tagged axes. era is
+    always derived from project_year here so artifact reloads reproduce the
+    deployed Neon state even without the sidecar.
+    """
+    from tools.r4_axis_merge import LLM_AXES, era_from_year
+
+    r4 = r4_overlay or {}
     raw_material = row.get("material_visual") or []
     material_visual, architectural_elements, gained = reclassify_material(
         raw_material, row.get("architectural_elements") or []
@@ -206,6 +215,8 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
         "architectural_elements": architectural_elements,
         "source_categories": row.get("source_categories") or {},
         "year_kind": row.get("year_kind") or "unknown",
+        "era": era_from_year(row.get("project_year")),
+        **{axis: r4.get(axis) or row.get(axis) for axis in LLM_AXES},
         "embedding": row.get("embedding"),
     }
 

@@ -78,6 +78,27 @@ ARCHITECTURAL_ELEMENT = frozenset({
     "Canopy", "Skylight",
 })
 
+# R4 discriminative axes (2026-06, make_web algo support — user-approved).
+# LLM-tagged (text + vision); "Unknown" is NOT a member — unresolved values are
+# stored as NULL. `era` is intentionally absent: it derives from project_year
+# (tools/r4_axis_merge.ERA_BUCKETS), enforced by DB CHECK only.
+SCALE = frozenset({"XS", "S", "M", "L", "XL"})
+
+STRUCTURAL_SYSTEM = frozenset({
+    "Masonry", "Reinforced Concrete", "Steel Frame", "Timber Frame",
+    "Hybrid", "Shell/Membrane", "Earth",
+})
+
+ROOF_TYPE = frozenset({
+    "Flat", "Gabled", "Hipped", "Shed", "Curved", "Green Roof",
+    "Vaulted/Domed", "Sawtooth",
+})
+
+FACADE_PATTERN = frozenset({
+    "Grid", "Louvered", "Solid/Mass", "Glazed Curtain", "Perforated",
+    "Organic", "Layered", "Rhythmic Openings",
+})
+
 # material_visual is suggested, not strict. Kept here for prompt-side hints.
 MATERIAL_VISUAL_HINTS = (
     "concrete", "glass", "timber", "brick", "stone", "steel", "corten",
@@ -92,6 +113,10 @@ _VALID_SETS = {
     "atmosphere": ATMOSPHERE,
     "typology": TYPOLOGY,
     "architectural_element": ARCHITECTURAL_ELEMENT,
+    "scale": SCALE,
+    "structural_system": STRUCTURAL_SYSTEM,
+    "roof_type": ROOF_TYPE,
+    "facade_pattern": FACADE_PATTERN,
 }
 
 # ---------------------------------------------------------------------------

@@ -121,7 +121,12 @@ ALTER TABLE {TABLE}
     ADD COLUMN IF NOT EXISTS typology_tags TEXT[] NOT NULL DEFAULT '{{}}',
     ADD COLUMN IF NOT EXISTS architectural_elements TEXT[] NOT NULL DEFAULT '{{}}',
     ADD COLUMN IF NOT EXISTS source_categories JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-    ADD COLUMN IF NOT EXISTS year_kind TEXT NOT NULL DEFAULT 'unknown';
+    ADD COLUMN IF NOT EXISTS year_kind TEXT NOT NULL DEFAULT 'unknown',
+    ADD COLUMN IF NOT EXISTS era TEXT,
+    ADD COLUMN IF NOT EXISTS scale TEXT,
+    ADD COLUMN IF NOT EXISTS structural_system TEXT,
+    ADD COLUMN IF NOT EXISTS roof_type TEXT,
+    ADD COLUMN IF NOT EXISTS facade_pattern TEXT;
 
 DO $$
 BEGIN
@@ -131,6 +136,48 @@ BEGIN
         ALTER TABLE {TABLE}
             ADD CONSTRAINT {TABLE}_year_kind_check
             CHECK (year_kind IN ('completed','future','unknown'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = '{TABLE}_era_check'
+    ) THEN
+        ALTER TABLE {TABLE}
+            ADD CONSTRAINT {TABLE}_era_check
+            CHECK (era IS NULL OR era IN
+                ('Pre-1900','1900-1945','1945-1980','1980-2000','2000-2015','2015+'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = '{TABLE}_scale_check'
+    ) THEN
+        ALTER TABLE {TABLE}
+            ADD CONSTRAINT {TABLE}_scale_check
+            CHECK (scale IS NULL OR scale IN ('XS','S','M','L','XL'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = '{TABLE}_structural_system_check'
+    ) THEN
+        ALTER TABLE {TABLE}
+            ADD CONSTRAINT {TABLE}_structural_system_check
+            CHECK (structural_system IS NULL OR structural_system IN
+                ('Masonry','Reinforced Concrete','Steel Frame','Timber Frame',
+                 'Hybrid','Shell/Membrane','Earth'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = '{TABLE}_roof_type_check'
+    ) THEN
+        ALTER TABLE {TABLE}
+            ADD CONSTRAINT {TABLE}_roof_type_check
+            CHECK (roof_type IS NULL OR roof_type IN
+                ('Flat','Gabled','Hipped','Shed','Curved','Green Roof',
+                 'Vaulted/Domed','Sawtooth'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = '{TABLE}_facade_pattern_check'
+    ) THEN
+        ALTER TABLE {TABLE}
+            ADD CONSTRAINT {TABLE}_facade_pattern_check
+            CHECK (facade_pattern IS NULL OR facade_pattern IN
+                ('Grid','Louvered','Solid/Mass','Glazed Curtain','Perforated',
+                 'Organic','Layered','Rhythmic Openings'));
     END IF;
 END$$;
 
@@ -144,6 +191,16 @@ CREATE INDEX IF NOT EXISTS idx_{TABLE}_source_categories
     ON {TABLE} USING GIN (source_categories);
 CREATE INDEX IF NOT EXISTS idx_{TABLE}_year_kind
     ON {TABLE} (year_kind);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_era
+    ON {TABLE} (era);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_scale
+    ON {TABLE} (scale);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_structural_system
+    ON {TABLE} (structural_system);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_roof_type
+    ON {TABLE} (roof_type);
+CREATE INDEX IF NOT EXISTS idx_{TABLE}_facade_pattern
+    ON {TABLE} (facade_pattern);
 """
 
 COLUMNS = (
@@ -182,6 +239,11 @@ COLUMNS = (
     "architectural_elements",
     "source_categories",
     "year_kind",
+    "era",
+    "scale",
+    "structural_system",
+    "roof_type",
+    "facade_pattern",
     "embedding",
 )
 
@@ -223,6 +285,11 @@ ON CONFLICT (canonical_bld_id) DO UPDATE SET
     architectural_elements       = EXCLUDED.architectural_elements,
     source_categories            = EXCLUDED.source_categories,
     year_kind                    = EXCLUDED.year_kind,
+    era                          = EXCLUDED.era,
+    scale                        = EXCLUDED.scale,
+    structural_system            = EXCLUDED.structural_system,
+    roof_type                    = EXCLUDED.roof_type,
+    facade_pattern               = EXCLUDED.facade_pattern,
     embedding                    = EXCLUDED.embedding,
     updated_at                   = NOW();
 """
@@ -305,6 +372,11 @@ def _row_tuple(mapped: dict[str, Any]) -> tuple[Any, ...]:
         mapped["architectural_elements"],
         psycopg2.extras.Json(mapped["source_categories"]),
         mapped.get("year_kind") or "unknown",
+        mapped.get("era"),
+        mapped.get("scale"),
+        mapped.get("structural_system"),
+        mapped.get("roof_type"),
+        mapped.get("facade_pattern"),
         _vec_literal(mapped["embedding"]),
     )
 
@@ -333,7 +405,14 @@ def _load_rows(
     batch_size: int,
     dry_run: bool,
     removed_ids: list[str] | None = None,
+    r4_results: Path | None = None,
 ) -> dict[str, Any]:
+    # R4 LLM-axis overlay (era is computed in map_row regardless): without the
+    # sidecar a reload would NULL the LLM axes — load it whenever present.
+    from tools.r4_axis_merge import MERGED_SIDECAR, load_merged
+
+    r4_path = r4_results if r4_results is not None else MERGED_SIDECAR
+    r4_overlay = load_merged(r4_path)
     conn = _connect()
     total = 0
     failed = 0
@@ -353,7 +432,8 @@ def _load_rows(
             batch: list[tuple[Any, ...]] = []
             for raw in iter_buildings(input_path, limit=limit):
                 try:
-                    batch.append(_row_tuple(map_row(raw)))
+                    overlay = r4_overlay.get(raw.get("canonical_bld_id"))
+                    batch.append(_row_tuple(map_row(raw, r4_overlay=overlay)))
                 except Exception:
                     failed += 1
                     continue
@@ -492,6 +572,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=200)
     parser.add_argument("--confirm-db-write", action="store_true")
+    parser.add_argument("--r4-results", type=Path, default=None,
+                        help="R4 merged sidecar (default: data/canonical/r4_results.merged.jsonl)")
     parser.add_argument("--removed-ids", type=Path, default=None,
                         help="C10 recovery report JSON; its removed_canonical_ids "
                              "are DELETEd from the table before upsert")
@@ -543,6 +625,7 @@ def main() -> int:
             batch_size=args.batch_size,
             dry_run=True,
             removed_ids=removed_ids,
+            r4_results=args.r4_results,
         )
     else:
         report = _load_rows(
@@ -551,6 +634,7 @@ def main() -> int:
             batch_size=args.batch_size,
             dry_run=False,
             removed_ids=removed_ids,
+            r4_results=args.r4_results,
         )
 
     _write_report(args.report, report)
