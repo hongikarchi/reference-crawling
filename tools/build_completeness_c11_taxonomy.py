@@ -66,6 +66,26 @@ _PRIO_IDX = {t: i for i, t in enumerate(_TYPOLOGY_PRIORITY)}
 # a building's real use (e.g. a transit terminal with a planted roof).
 _CONTEXT_TYPOLOGIES = {"Park", "Pavilion", "Mixed Use", "Memorial"}
 
+# 2026-Q2 audit fold (job 20260615_audit_remediation_F1_F3): incidental room/feature/
+# umbrella/former-use source tags must NOT yield a building typology (e.g. dining-rooms
+# -> Restaurant on a house). Skip them when building the typology counter.
+_DEMOTE_TAGS = {
+    "divisare": {"dining-rooms", "canteens", "kitchens", "bedrooms", "living-rooms",
+                 "bathrooms", "home-offices", "offices-and-studios", "car-parks",
+                 "pet-houses", "art-studios-and-workshops",
+                 "post-industrial-architecture", "post-industrial-interiors"},
+    "architizer": {"Hospitality + Sport", "Government + Health"},
+    "archello": set(), "metalocus": set(),
+}
+# ancillary typologies lose a count-tie to any genuine primary-use type (tie-break fix).
+_ANCILLARY = {"Park", "Pavilion", "Mixed Use", "Memorial", "Car Park",
+              "Civic Building", "Office", "Restaurant"}
+# remediation overrides keyed by stable canonical_bld_id; applied verbatim so a rebuild
+# preserves the 2026-Q2 LLM typology re-derivation + material cleanup. CHANGED-ONLY
+# (only the ~20.8k rows actually remediated) so future re-enrichment of OTHER rows is
+# NOT frozen — new/unchanged rows still get the improved crosswalk (_DEMOTE + tie-break).
+_OVERRIDES_PATH = ROOT / "data/canonical/remediation_typmat_changed_rem2026q2.jsonl"
+
 # Fallback chain for rows whose source tags yield no typology: an unambiguous
 # institution word in the name, then a program value that maps to one typology.
 # Regexes are word-bounded so "hospital" never matches "hospitality".
@@ -202,13 +222,29 @@ def _load_source_tags() -> dict:
 
 def _pick_primary(counter: Counter):
     """Most-tagged typology; a specific type always outranks a context type
-    (Park/Pavilion/Mixed Use/Memorial) regardless of tag count, so a building
-    with landscape feature-tags plus one specific tag resolves to the specific."""
+    (Park/Pavilion/Mixed Use/Memorial) regardless of tag count. On a count-tie,
+    a genuine primary-use type beats an ancillary one (2026-Q2 tie-break fix), so a
+    house tagged with one incidental ancillary tag no longer resolves to the ancillary."""
     if not counter:
         return None
     specifics = {t: c for t, c in counter.items() if t not in _CONTEXT_TYPOLOGIES}
     pool = specifics or counter
-    return max(pool, key=lambda t: (pool[t], -_PRIO_IDX.get(t, 999)))
+    return max(pool, key=lambda t: (pool[t], t not in _ANCILLARY, -_PRIO_IDX.get(t, 999)))
+
+
+def _load_overrides() -> dict:
+    """{canonical_bld_id: {typology_primary, typology_primary_source, typology_tags,
+    material_visual, architectural_elements}} from the 2026-Q2 remediation sidecar."""
+    if not _OVERRIDES_PATH.exists():
+        return {}
+    out = {}
+    with _OVERRIDES_PATH.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                r = json.loads(line)
+                out[r["id"]] = r
+    return out
 
 
 def main() -> int:
@@ -219,6 +255,7 @@ def main() -> int:
 
     crosswalk = json.loads(CROSSWALK.read_text(encoding="utf-8"))
     source_tags = _load_source_tags()
+    overrides = _load_overrides()  # 2026-Q2 remediation: authoritative per-id overrides
 
     counts = Counter()
     primary_dist: Counter = Counter()
@@ -245,7 +282,10 @@ def main() -> int:
                 if raw:
                     src_cats[source] = sorted(set(raw))
                 cwmap = crosswalk.get(source) or {}
+                dem = _DEMOTE_TAGS.get(source, set())
                 for tag in raw:
+                    if tag in dem:  # 2026-Q2: incidental/umbrella tags yield no typology
+                        continue
                     for term in cwmap.get(tag) or []:
                         if term in vocab.TYPOLOGY:
                             typ_counter[term] += 1
@@ -270,6 +310,21 @@ def main() -> int:
             row["typology_tags"] = typ_tags
             row["typology_primary"] = primary
             row["typology_primary_source"] = prov
+
+            # 2026-Q2 remediation override (authoritative for existing ids): replaces the
+            # crosswalk-derived typology + material with the committed LLM/cleaned values.
+            ov = overrides.get(row.get("canonical_bld_id"))
+            if ov:
+                row["typology_primary"] = ov["typology_primary"]
+                row["typology_primary_source"] = ov["typology_primary_source"]
+                row["typology_tags"] = ov["typology_tags"]
+                row["material_visual"] = ov["material_visual"]
+                row["architectural_elements"] = ov["architectural_elements"]
+                primary = ov["typology_primary"]
+                typ_tags = ov["typology_tags"]
+                prov = ov["typology_primary_source"]
+                elements = set(ov["architectural_elements"])
+                counts["override_applied"] += 1
 
             counts["rows_total"] += 1
             if src_cats:

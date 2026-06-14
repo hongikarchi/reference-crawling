@@ -34,7 +34,7 @@ if str(ROOT) not in sys.path:
 from tools.canonical_v2_upload_validator import iter_buildings, map_row, validate_rows  # noqa: E402
 
 
-DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.resume10_complete.json"
+DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.completeness_c26_rem2026q2.json"
 DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_neon_loader_report.json"
 TABLE = "canonical_v2_buildings"
 

@@ -894,6 +894,12 @@
         "en": "Patios",
         "is_generic": false,
         "reviewed": true
+      },
+      "unspecified": {
+        "ko": "미상",
+        "en": "Unspecified",
+        "is_generic": true,
+        "reviewed": false
       }
     },
     "era": {
