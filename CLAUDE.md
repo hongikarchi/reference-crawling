@@ -51,6 +51,18 @@ This file is the operating manual. For schema/vocab/tool detail see
     Reports: `data/reports/full_census_audit_2026Q2.md`,
     `remediation_log_2026Q2.md`; job cards `20260614_full_census_audit.md`,
     `20260615_audit_remediation_F1_F3.md`.
+  - **Accuracy eval + typology refine (2026-06-19/21):** quantified two-tier accuracy
+    (conformance + sampled veracity). Key result: the naive single-judge typology metric
+    (Sonnet, 9.3% error) was inflated; an **independent Opus** judge on a disjoint holdout
+    measured **2.7% clear error — already ≤5% target**. Applied a description-based typology
+    re-derive anyway as a precision refinement: **1,647 rows**, `typology_primary_source=
+    'descr_rederive_2026q2'`, net-validated 92% (Opus blind A/B), holdout error 2.7%→1.6%,
+    **benchmark 10 PASS/0 FAIL**. Architect top_typologies refreshed (740). Contradiction
+    proxy 828→906 (program-side lag + narrow Civic acceptable-set, not typology errors).
+    Durability: override+c26+changed-only(24,792) sidecars regenerated (re-upsert safe).
+    Reversible via `typology_corrections_descr.jsonl`. Vision proven UNRELIABLE for
+    scale/structural/facade veracity (conformance-only). Report
+    `data/reports/accuracy_eval_2026Q2.{md,json}`; job card `20260619_accuracy_eval_loop.md`.
   - Mental model: **`archi_data` = architecture data** (only 2 tables above);
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
     make_web. As of 2026-05-24, all 23 user/app tables + legacy
