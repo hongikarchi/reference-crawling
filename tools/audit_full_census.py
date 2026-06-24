@@ -361,22 +361,25 @@ def section_l6(cur) -> dict:
     out["era_vs_year"] = _one(cur, f"""
         SELECT count(*) FILTER (WHERE era IS DISTINCT FROM ({ERA_CASE})) mismatch,
                count(*) total FROM {BLD}""")
+    # boundary year MUST equal canonical_v2_c15_make_web_polish.CURRENT_YEAR (the rule the
+    # stored year_kind was built with: project_year > CURRENT_YEAR -> 'future'). Bump BOTH
+    # together on a corpus rebuild, or phantom year_kind drift reappears. (2026-06-21)
     out["year_kind_vs_year"] = _one(cur, f"""
         SELECT count(*) FILTER (WHERE year_kind IS DISTINCT FROM (CASE
             WHEN project_year IS NULL THEN 'unknown'
-            WHEN project_year >= 2026 THEN 'future'
+            WHEN project_year > 2026 THEN 'future'
             ELSE 'completed' END)) mismatch,
                count(*) total FROM {BLD}""")
     out["year_kind_mismatch_breakdown"] = _q(cur, f"""
         SELECT year_kind stored, (CASE
             WHEN project_year IS NULL THEN 'unknown'
-            WHEN project_year >= 2026 THEN 'future'
+            WHEN project_year > 2026 THEN 'future'
             ELSE 'completed' END) expected,
             min(project_year) min_year, max(project_year) max_year, count(*) n
         FROM {BLD}
         WHERE year_kind IS DISTINCT FROM (CASE
             WHEN project_year IS NULL THEN 'unknown'
-            WHEN project_year >= 2026 THEN 'future'
+            WHEN project_year > 2026 THEN 'future'
             ELSE 'completed' END)
         GROUP BY year_kind, expected ORDER BY n DESC""")
     out["tier_vs_nsources"] = _one(cur, f"""

@@ -19,7 +19,8 @@ OUT = CCR / "canonical_buildings_strict_embedded.completeness_c26_rem2026q2.json
 OVR = ROOT / "data/canonical/remediation_overrides_rem2026q2.jsonl"
 COLS = ("typology_primary", "typology_primary_source", "typology_tags",
         "material_visual", "architectural_elements",
-        "is_publishable", "publishability_reasons")
+        "is_publishable", "publishability_reasons",
+        "program")  # program: 2026-06-21 contradiction re-derive (bake into c26)
 
 
 def main() -> int:

@@ -30,7 +30,7 @@ This file is the operating manual. For schema/vocab/tool detail see
   - Tag precompute siblings (make_web algo support, R1-R3 **deployed
     2026-06-12**, R4 axes **deployed 2026-06-14**):
     `canonical_v2_tag_stats` / `_tag_centroids` / `_tag_vocabulary` (**15,655
-    rows each; 11 axes**, `corpus_version c23_final+matstrip+r4+rem2026q2`) via
+    rows each; 11 axes**, `corpus_version c23_final+matstrip+r4+rem2026q2+prog2026q2`) via
     `tools/canonical_v2_tag_stats_build.py --with-r4` — rebuild every crawl, one
     txn, in-txn QC. Material reclassify applied in the R1-R3 commit: publishable
     **36,673**, architects recommendable **4,348**. R4 = 5 new axes (era derived
@@ -63,6 +63,20 @@ This file is the operating manual. For schema/vocab/tool detail see
     Reversible via `typology_corrections_descr.jsonl`. Vision proven UNRELIABLE for
     scale/structural/facade veracity (conformance-only). Report
     `data/reports/accuracy_eval_2026Q2.{md,json}`; job card `20260619_accuracy_eval_loop.md`.
+  - **Contradiction re-derive (2026-06-21/24):** diagnosed the typology↔program contradiction
+    residual (rose to 906 when typology got more precise; the COARSE program lagged).
+    Classified 833 rows from source prose → **program_error 364 / map_artifact 415 (defensible,
+    narrow `TYP_PROGRAM_OK` map, NOT data errors) / typology_error 38**. Independent **Opus
+    blind A/B** confirmed **223 program** corrections (140 Sonnet over-calls rejected) +
+    **13 typology→Pavilion** (skeptical refute-pass dropped 4: 1 real building + 3 non-building
+    junk). `typology_primary_source` adds `program`(3,449 via the program tag) and
+    `typ_fix_prog_contra_2026q2`(13). **Contradictions 2.68%→1.90%** (597; remaining ≈415 are
+    map_artifacts). tag rebuilt (corpus `+prog2026q2`); top_programs 212 + top_typologies 7;
+    durability re-synced (override+`program` col / c26 parity 223+13 / changed 24,827);
+    benchmark 10 PASS/0 FAIL; validator PASS. year_kind "507 drift" was a stale audit-rule
+    artifact (fixed, drift→0), not data. **Deferred (user decisions):** widen `TYP_PROGRAM_OK`
+    map; add Garden/Landscape typology (would free the held Park-17); junk-row sweep
+    (non-building publishable rows). Job card `20260621_program_contradiction_diagnosis.md`.
   - Mental model: **`archi_data` = architecture data** (only 2 tables above);
     **`user_data`** (separate Neon DB) holds Django auth/profiles/swipes for
     make_web. As of 2026-05-24, all 23 user/app tables + legacy

@@ -17,7 +17,8 @@ from tools.canonical_v2_neon_loader import _connect  # noqa: E402
 OUT = ROOT / "data/canonical/remediation_overrides_rem2026q2.jsonl"
 COLS = ("typology_primary", "typology_primary_source", "typology_tags",
         "material_visual", "architectural_elements",
-        "is_publishable", "publishability_reasons")
+        "is_publishable", "publishability_reasons",
+        "program")  # program: 2026-06-21 contradiction re-derive (durable re-upsert)
 
 
 def main() -> int:

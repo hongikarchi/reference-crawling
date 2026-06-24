@@ -18,7 +18,7 @@ SRC = CCR / "canonical_buildings_strict_embedded.completeness_c23_final.json"
 OVR = ROOT / "data/canonical/remediation_overrides_rem2026q2.jsonl"
 OUT = ROOT / "data/canonical/remediation_typmat_changed_rem2026q2.jsonl"
 COLS = ("typology_primary", "typology_primary_source", "typology_tags",
-        "material_visual", "architectural_elements")
+        "material_visual", "architectural_elements", "program")
 
 
 def _norm(v):

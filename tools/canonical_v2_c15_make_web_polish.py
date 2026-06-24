@@ -49,7 +49,7 @@ REPORT = ROOT / "data/reports/canonical_v2_c15_make_web_polish_report.json"
 SPLIT_SIDECAR = ROOT / "data/reports/canonical_v2_c15_split_candidates.jsonl"
 HYGIENE_DIFF = ROOT / "data/reports/canonical_v2_c15_string_hygiene_diff.json"
 
-CURRENT_YEAR = 2026
+CURRENT_YEAR = 2026  # year_kind boundary; audit_full_census mirrors this (> CURRENT_YEAR -> future). Bump BOTH together.
 
 # --- patterns ---
 _HTTP_HOST_REWRITE = (

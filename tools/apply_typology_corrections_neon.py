@@ -32,6 +32,8 @@ CORR = ROOT / "data/canonical/typology_corrections_descr.jsonl"
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corrections", default=str(CORR))
+    ap.add_argument("--source", default="descr_rederive_2026q2",
+                    help="value written to typology_primary_source")
     ap.add_argument("--apply", action="store_true", help="attempt live write (also needs --confirm-db-write)")
     ap.add_argument("--confirm-db-write", action="store_true")
     args = ap.parse_args()
@@ -39,7 +41,7 @@ def main() -> int:
 
     corr = [json.loads(l) for l in open(args.corrections) if l.strip()]
     # safety filters (defense in depth)
-    rows = [(c["id"], c["new"]) for c in corr
+    rows = [(c["id"], c["new"], args.source) for c in corr
             if c.get("new") and c["new"] in vocab.TYPOLOGY and c["new"] != c.get("old")]
     report = {"mode": "LIVE-COMMIT" if live else "dry-run(rollback)",
               "corrections_in": len(corr), "corrections_applicable": len(rows)}
@@ -52,13 +54,13 @@ def main() -> int:
             psycopg2.extras.execute_values(cur, """
                 UPDATE canonical_v2_buildings b SET
                   typology_primary = v.newp,
-                  typology_primary_source = 'descr_rederive_2026q2',
+                  typology_primary_source = v.src,
                   typology_tags = (SELECT array(
                       SELECT DISTINCT unnest(b.typology_tags || ARRAY[v.newp]) ORDER BY 1))
-                FROM (VALUES %s) AS v(id, newp)
+                FROM (VALUES %s) AS v(id, newp, src)
                 WHERE b.canonical_bld_id = v.id
                   AND b.typology_primary IS DISTINCT FROM v.newp
-            """, rows, template="(%s, %s)", page_size=len(rows) + 1)
+            """, rows, template="(%s, %s, %s)", page_size=len(rows) + 1)
             report["rows_affected"] = cur.rowcount
 
             # in-txn QC
