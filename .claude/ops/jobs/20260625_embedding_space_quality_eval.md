@@ -192,3 +192,19 @@ Smoke: 40 bad-cover blds, cap 6.
 - Calibrate judge (test-retest + human spot-check) before trusting the absolute metric.
 - Optional: confirm direction holds at full 36k pool.
 - Phase 3 cover audit (sample for rate).
+
+## STEP 1 (cover re-pick) — executed at 1000-scale, VALIDATED (2026-06-27)
+Safe sequential-improvement workflow (user-requested): each step local + measured +
+git-checkpointed; Neon untouched until a final gated, reversible upload.
+- `cover_repick.py --sample 1000` (streaming delete-after, free): **bad_rate 0.467**
+  (≈ Haiku 0.53), **273 re-pick proposals** (58.5% of bad covers have a better exterior
+  in all_images), 3712 imgs streamed+deleted (disk ~0).
+- **Measurement gate PASSED:** 4/4 before/after eyeballed (2 here + 2 prior) — all
+  excellent (interior/landscape/pendant-lit lobby → real building exteriors; e.g.
+  bld_002129 0.00 interior → purple-LED facade night shot 1.00).
+- Proposals are LOCAL only. **Deferred gate to apply:** Haiku-confirm each pair +
+  user approval → update `display_cover_url` (old value preserved, reversible) →
+  re-upload. NO make_web change. Full census later (streaming/pipeline-integrated).
+- Artifact: `data/reports/cover_audit/repick_chunk1k/proposals.jsonl` (273).
+- NEXT: Step 2 — visual_description re-caption → re-embed → text-judge (does it lift
+  the 0.52-0.59 ceiling? confound-free measure; keep only if it does).
