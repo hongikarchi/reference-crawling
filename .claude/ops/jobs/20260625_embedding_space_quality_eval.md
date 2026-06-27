@@ -239,3 +239,19 @@ User authorized unattended sequential run. Each measured, Neon untouched, disk-s
 **Net of the program:** only STEP 1 (cover re-pick) is a real, validated win. Steps 2-4
 empirically confirmed the earlier honest forecast (uncertain/low-yield). The recommender's
 content-based ceiling holds; the real accuracy lever remains post-launch swipe data.
+
+## STEP 1 hybrid COMPLETED — Haiku-confirmed re-pick list ready (2026-06-28)
+`tools/cover_repick_confirm.py` (batched 4 pairs/call, streaming, Haiku). Ran the
+chosen hybrid gate on the 1000-sample's 273 SigLIP proposals:
+- **164 confirmed better / 273 (60.1% confirm rate), 109 rejected** (Haiku catches
+  SigLIP over-eager picks — the hybrid value), $4.05.
+- Confirmed reasons are clean ("B exterior vs interior", "B building vs cityscape").
+- **DELIVERABLE: `repick_chunk1k/confirmed.jsonl` — 164 user-approvable cover swaps**
+  (current→proposed `display_cover_url`, with ext-scores + Haiku why). From a 1000
+  sample → extrapolates to ~6k confirmed improvements corpus-wide.
+- **PENDING USER (on waking):** review 164 → approve → apply `display_cover_url` update
+  (old value preserved in confirmed.jsonl, reversible) → re-upload. NO make_web change.
+  Full census later (streaming / crawl-pipeline-integrated, not a 150k blast).
+
+Session spend ~$88 total (eval ~$48 + cover audit/repick/confirm ~$5 + recap ~$18 +
+misc). 9 reusable tools. 5 git checkpoints (3fc6952→). Neon untouched throughout.
