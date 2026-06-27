@@ -208,3 +208,34 @@ git-checkpointed; Neon untouched until a final gated, reversible upload.
 - Artifact: `data/reports/cover_audit/repick_chunk1k/proposals.jsonl` (273).
 - NEXT: Step 2 — visual_description re-caption → re-embed → text-judge (does it lift
   the 0.52-0.59 ceiling? confound-free measure; keep only if it does).
+
+## STEPS 2-4 — autonomous overnight run (2026-06-28), honest results
+User authorized unattended sequential run. Each measured, Neon untouched, disk-streamed.
+
+**STEP 2 (visual_description re-caption) — NO IMPROVEMENT, discarded.**
+- `tools/recaption_experiment.py`. Recipe fidelity gate PASSED first (my re-embed vs
+  production median cosine 0.990). Re-captioned 300 sub-pool covers with Haiku (rich,
+  accurate captions, $11.69), swapped the noisy `image_derived.visual_description`,
+  re-embedded (exact `embed_strict.make_embedding_text` recipe).
+- Confound-free text-judge, paired N=30: **baseline 0.647 vs recap 0.620 = -0.027**
+  (win6/tie14/loss10, p=0.45). Re-caption did NOT help — marginally worse.
+- Why: single-cover Haiku caption adds no taste signal over the existing fields; the
+  content-based ceiling (~0.6) doesn't move. **DISCARDED** (no Neon change). ~$18 spent
+  to establish the negative. Tool kept (reusable; Opus/Sonnet captioner untested but
+  unlikely to overturn given the ceiling).
+
+**STEP 3 (junk-row sweep) — LOW YIELD, deferred.**
+- Cheap heuristic (no exterior in 6 capped imgs) over-flagged 42% — caught real
+  interior-heavy buildings (apartments, museums, offices), not junk. Discarded.
+- True junk rate (Haiku audit not_a_building) = **~1.3%** — rare. Precise detection
+  needs per-row "is this architecture?" LLM judgment; payoff < cost pre-launch. Defer.
+
+**STEP 4 (filter-label accuracy) — already addressed, no rework.**
+- The 2026-Q2 accuracy eval (job card 20260619) already measured typology error **1.6%**
+  (≤5% target, independent Opus holdout) + contradictions 1.90%. make_web filter labels
+  are already ~98% accurate. Bulk re-derivation = diminishing returns + the documented
+  "validate-unflagged-bulk" risk. No new measurement beats the existing rigorous one.
+
+**Net of the program:** only STEP 1 (cover re-pick) is a real, validated win. Steps 2-4
+empirically confirmed the earlier honest forecast (uncertain/low-yield). The recommender's
+content-based ceiling holds; the real accuracy lever remains post-launch swipe data.
