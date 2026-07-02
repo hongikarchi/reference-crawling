@@ -160,4 +160,8 @@ This file is the operating manual. For schema/vocab/tool detail see
 - `docs/ARCHITECT_RECOMMENDATION.md` — architects table schema + cold-start + cosine SQL templates
 - `docs/dashboard.html` — live pipeline + DB state (regenerate: `python3 tools/build_dashboard.py`)
 - `data/reports/db_quality_audit.md` — 2026-05 database quality audit (verdict: PASS with WARNINGS)
+- `docs/MIGRATION_WINDOWS.md` — **machine move (Mac→Windows).** If the user says they
+  moved environments, follow this: `pip install -r requirements-eval.txt`, copy the
+  gitignored secrets + 2 data files it lists, run `python tools/verify_env.py`, then
+  resume from its "Current state → Next" (pending: approve the 164 cover re-picks).
 - `.claude/ops/jobs/` — job cards = run history

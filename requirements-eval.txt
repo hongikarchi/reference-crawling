@@ -1,0 +1,12 @@
+# Extra deps for the 2026-Q2 embedding-eval + cover-audit/re-pick tools
+# (tools/neighbor_eval*, cover_*, extract_all_images, recaption_experiment, verify_env).
+# Install alongside the main requirements.txt:  pip install -r requirements-eval.txt
+numpy
+ijson
+requests
+Pillow
+torch
+transformers
+sentence-transformers
+sentencepiece
+psycopg2-binary
