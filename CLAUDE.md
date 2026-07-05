@@ -17,9 +17,10 @@ This file is the operating manual. For schema/vocab/tool detail see
   state by reading those — never assume in-memory continuity between sessions.
 - **Current production dataset (Neon `archi_data`):**
   - `canonical_v2_buildings`: 39,478 rows / 36,673 publishable, artifact
-    `completeness_c26_rem2026q2` (= c23_final + 2026-Q2 audit remediation overlay,
-    == live Neon, upload-validator PASS; loader `DEFAULT_INPUT` points here — re-upsert
-    from c26, NOT c23_final. c26 base lacks the 5 R4 columns BY DESIGN — the loader
+    `completeness_c27_cover2026q3` (= c26_rem2026q2 + 145 user-approved
+    `display_cover_url` re-picks applied 2026-07-06, == live Neon, upload-validator
+    PASS; loader `DEFAULT_INPUT` points here — re-upsert from c27, NOT c26/c23_final.
+    c27 base lacks the 5 R4 columns BY DESIGN — the loader
     overlays R4 at upsert from `data/canonical/r4_results.merged.jsonl`), schema includes `year_kind` + R4 discriminative
     axes `era`/`scale`/`structural_system`/`roof_type`/`facade_pattern`
     (deployed 2026-06-14; `NULL` = unresolved, not `'Unknown'`).

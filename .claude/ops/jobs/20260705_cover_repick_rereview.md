@@ -54,13 +54,33 @@ Goal: turn the pending "approve the 164" into a precision-filtered, easy decisio
   disk persistence, POST null undo, invalid decision → 400, bulk apply 101 then re-bulk 0
   (no overwrite), decisions reset to blank for the user.
 
-## PENDING USER
+## APPLIED (2026-07-06, user-gated)
 
-1. Run `PYTHONUTF8=1 python tools/cover_repick_review_app.py --serve` and decide the 273
-   (focus: user_review 10 → rescued 28 → real_demotion 53; bulk the rest).
-2. Approve building the gated apply tool (`apply_cover_repick_neon.py`, dry-run first,
-   `--apply --confirm-db-write`, `IS NOT DISTINCT FROM old` guard) + c26→c27 override
-   parity (per-sidecar column sets — display_cover_url deliberately not in today's COLS).
+- Human review COMPLETE: 273/273 decided, 0 defer/undecided. approve_swap **145** /
+  reject 128; 21 overrides of the recommendation (6 rec-approve→reject,
+  15 rec-reject→approve incl. 2 interior_exception the user chose to swap anyway).
+- User decision: display_cover_url ONLY — covers_by_type sync deferred to make_web
+  Task #19 / full-census repick.
+- `tools/apply_cover_repick_neon.py` (new): adversarial 3-lens review (0 BLOCKER,
+  5 WARN all fixed: snapshot pinning vs review_cases.json, nonzero exit on any QC FAIL,
+  sidecar path from --decisions parent + crash-safe, --limit >= 1, KeyError path).
+  Dry-run ladder 10 → 145: rows_affected == expected, 0 stale guards, QC PASS.
+- **LIVE COMMIT (user-approved): 145 rows, QC PASS in-txn**, reversal sidecar
+  `applied_cover_swaps_2026-07-05.jsonl` (UTC date). Post-commit spot-check 6/6 live.
+- Artifact parity: `apply_overrides_to_artifact.py` extended with --src/--out/
+  --overrides/--cols (per-sidecar column sets); sidecar
+  `data/canonical/cover_repick_overrides_2026q3.jsonl` (145) baked onto c26 →
+  **c27_cover2026q3** (39,478 rows; independent ijson verify: 145/145 swapped,
+  128/128 rejected untouched). Upload validator vs c27: **PASS**. Loader + validator
+  `DEFAULT_INPUT` repointed c26 → c27; CLAUDE.md production-dataset note updated.
+- No tag rebuild needed (no tag axes touched); no R2 change (Divisare CDN URLs).
+
+## Remaining / deferred
+
+- both_bad 5 (2 user-swapped anyway, 3 kept): candidates for a proper re-pick when the
+  full-census run happens (crawl-integrated, per 20260625 deferral).
+- covers_by_type.exterior sync: revisit when make_web Task #19 (intent-based cover
+  serving) starts.
 
 ## Notes
 

@@ -25,8 +25,8 @@ from core import vocab  # noqa: E402
 
 # Keep in sync with canonical_v2_neon_loader.DEFAULT_INPUT — both must point at the
 # live-Neon production artifact so a default-run validates what is actually deployed.
-DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.completeness_c26_rem2026q2.json"
-DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_upload_dry_run.completeness_c26_rem2026q2.json"
+DEFAULT_INPUT = ROOT / "data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.completeness_c27_cover2026q3.json"
+DEFAULT_REPORT = ROOT / "data/reports/canonical_v2_upload_dry_run.completeness_c27_cover2026q3.json"
 EXPECTED_IMAGE_TYPES = {"exterior", "interior", "drawing", "aerial", "detail"}
 VALID_TIERS = {"T1", "T2", "T3"}
 PLACEHOLDER_PATTERNS = ("facebook-default-thumb", "img-placeholder")
