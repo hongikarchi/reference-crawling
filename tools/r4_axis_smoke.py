@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT))
 
 from core import vocab  # noqa: E402
 from tools.canonical_v2_neon_loader import _connect  # noqa: E402
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 from tools.d1_enrich_codex import extract_json, run_codex  # noqa: E402
 from tools.r4_axis_merge import era_from_year  # noqa: E402
 
@@ -142,7 +143,7 @@ def run_claude(prompt: str) -> str:
     """
     import subprocess
     proc = subprocess.run(
-        ["claude", "-p", "--model", CLAUDE_FALLBACK_MODEL, prompt],
+        [CLAUDE_BIN, "-p", "--model", CLAUDE_FALLBACK_MODEL, prompt],
         capture_output=True,
         text=True,
         timeout=CLAUDE_TIMEOUT_SECONDS,

@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 from tools.image_dedup_5type import _download_to_tmp  # noqa: E402
 
 PROMPT = (
@@ -57,7 +58,7 @@ def confirm_batch(pairs, model, timeout):
         labels[lab] = (p["canonical_bld_id"], ok)
     listing = "\n".join(f"{k} = {v}" for k, v in paths.items())
     add_dirs = {str(v.parent) for v in paths.values()}
-    cmd = ["claude", "-p", f"{PROMPT}\n\nImage files:\n{listing}",
+    cmd = [CLAUDE_BIN, "-p", f"{PROMPT}\n\nImage files:\n{listing}",
            "--output-format", "json", "--model", model]
     for d in add_dirs:
         cmd += ["--add-dir", d]

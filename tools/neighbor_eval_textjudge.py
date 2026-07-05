@@ -29,6 +29,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
+
 SRC_META = ROOT / "data/reports/neighbor_eval/meta.jsonl"
 
 DESC_FIELDS = ("program", "style", "atmosphere", "material_visual",
@@ -95,7 +97,7 @@ def main() -> int:
             prompt = PROMPT + "\n\n" + "\n".join(lines)
             try:
                 proc = subprocess.run(
-                    ["claude", "-p", prompt, "--output-format", "json", "--model", args.model],
+                    [CLAUDE_BIN, "-p", prompt, "--output-format", "json", "--model", args.model],
                     capture_output=True, text=True, timeout=args.timeout)
                 env = json.loads(proc.stdout)
                 verd = _extract_json(env.get("result", ""))

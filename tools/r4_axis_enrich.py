@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tools.canonical_v2_neon_loader import _connect  # noqa: E402
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 from tools.d1_enrich_codex import FailureLedger, JsonlWriter, extract_json  # noqa: E402
 from tools.r4_axis_merge import LLM_AXES, TEXT_SIDECAR  # noqa: E402
 from tools.r4_axis_smoke import (  # noqa: E402
@@ -70,8 +72,9 @@ def run_batch_claude(rows: list[dict], workers_label: str = "") -> list[dict]:
     out_by_idx: dict[int, dict] = {}
     try:
         proc = subprocess.run(
-            ["claude", "-p", "--model", CLAUDE_FALLBACK_MODEL, _batch_prompt(rows)],
-            capture_output=True, text=True, timeout=300, check=False, cwd="/tmp",
+            [CLAUDE_BIN, "-p", "--model", CLAUDE_FALLBACK_MODEL, _batch_prompt(rows)],
+            capture_output=True, text=True, timeout=300, check=False,
+            cwd=tempfile.gettempdir(),
         )
         if proc.returncode != 0:
             raise RuntimeError(f"claude exit {proc.returncode}: {(proc.stderr or proc.stdout)[:200]}")

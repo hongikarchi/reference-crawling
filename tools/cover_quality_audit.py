@@ -28,6 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 from tools.image_dedup_5type import _download_to_tmp  # noqa: E402
 
 SRC_META = ROOT / "data/reports/neighbor_eval/meta.jsonl"  # 36,673 publishable w/ cover
@@ -77,7 +78,7 @@ def classify_batch(rows: list[dict], model: str, timeout: int) -> tuple[dict, fl
             labels[lab] = r["canonical_bld_id"]  # mark unreachable below
     listing = "\n".join(f"{lab} = {paths[lab]}" for lab in paths)
     add_dirs = {str(p.parent) for p in paths.values()}
-    cmd = ["claude", "-p", f"{PROMPT}\n\nImage files:\n{listing}",
+    cmd = [CLAUDE_BIN, "-p", f"{PROMPT}\n\nImage files:\n{listing}",
            "--output-format", "json", "--model", model]
     for d in add_dirs:
         cmd += ["--add-dir", d]

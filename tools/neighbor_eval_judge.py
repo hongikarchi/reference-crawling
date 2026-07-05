@@ -36,6 +36,7 @@ sys.path.insert(0, str(ROOT))
 
 from tools.neighbor_eval import load, topk  # noqa: E402
 from tools.image_dedup_5type import _download_to_tmp  # noqa: E402
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 
 LABELS = "ABCDEFGH"
 
@@ -136,7 +137,7 @@ def run_judge_call(item: dict, model: str, timeout: int) -> dict:
     listing = f"SEED building = {paths['SEED']}\n" + "\n".join(
         f"Candidate {lab} = {paths[lab]}" for lab in avail)
     add_dirs = {str(p.parent) for p in paths.values()}
-    cmd = ["claude", "-p", f"{PROMPT}\n\nRead these image files:\n{listing}",
+    cmd = [CLAUDE_BIN, "-p", f"{PROMPT}\n\nRead these image files:\n{listing}",
            "--output-format", "json", "--model", model]
     for d in add_dirs:
         cmd += ["--add-dir", d]

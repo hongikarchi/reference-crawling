@@ -16,6 +16,7 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tools.canonical_v2_neon_loader import _connect  # noqa: E402
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 from tools.d1_enrich_codex import FailureLedger, JsonlWriter, extract_json  # noqa: E402
 from tools.image_dedup_5type import _download_to_tmp  # noqa: E402
 from tools.r4_axis_merge import (  # noqa: E402
@@ -100,7 +102,7 @@ def run_claude_vision(prompt: str, image_path: Path) -> str:
     # --add-dir grants the temp image location; reference the path in-prompt.
     proc = subprocess.run(
         [
-            "claude", "-p", "--model", CLAUDE_VISION_MODEL,
+            CLAUDE_BIN, "-p", "--model", CLAUDE_VISION_MODEL,
             "--allowedTools", "Read",
             "--add-dir", str(image_path.parent),
             "--append-system-prompt", CLAUDE_VISION_SYS,
@@ -110,7 +112,7 @@ def run_claude_vision(prompt: str, image_path: Path) -> str:
         text=True,
         timeout=CODEX_TIMEOUT_SECONDS,
         check=False,
-        cwd="/tmp",
+        cwd=tempfile.gettempdir(),
     )
     if proc.returncode != 0:
         raise RuntimeError(f"claude exit {proc.returncode}: {(proc.stderr or proc.stdout).strip()[:300]}")
@@ -166,14 +168,15 @@ def run_batch_claude_vision(rows: list[dict]) -> list[dict]:
                 f'"facade_pattern":..}}, ...]\n\n{lines}'
             )
             add_dirs = sorted({str(_P(p).parent) for (_i, _r, p, _d) in downloaded})
-            cmd = ["claude", "-p", "--model", CLAUDE_VISION_MODEL,
+            cmd = [CLAUDE_BIN, "-p", "--model", CLAUDE_VISION_MODEL,
                    "--output-format", "json", "--allowedTools", "Read"]
             for d in add_dirs:
                 cmd += ["--add-dir", d]
             cmd += ["--append-system-prompt", CLAUDE_VISION_SYS, prompt]
             t0 = time.time()
             proc = subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=600, check=False, cwd="/tmp")
+                                  timeout=600, check=False,
+                                  cwd=tempfile.gettempdir())
             elapsed = round((time.time() - t0) / max(1, len(downloaded)), 2)
             parsed, cost = {}, 0.0
             try:

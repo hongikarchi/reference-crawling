@@ -28,6 +28,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from tools.claude_cli import CLAUDE_BIN  # noqa: E402
 from tools.embed_strict import make_embedding_text  # exact production recipe
 from tools.image_dedup_5type import _download_to_tmp  # noqa: E402
 
@@ -103,7 +104,7 @@ def _caption(url, model, timeout):
     try:
         tmp, dl = _download_to_tmp(url)
         proc = subprocess.run(
-            ["claude", "-p", CAPTION_PROMPT + str(tmp), "--add-dir", str(Path(tmp).parent),
+            [CLAUDE_BIN, "-p", CAPTION_PROMPT + str(tmp), "--add-dir", str(Path(tmp).parent),
              "--output-format", "json", "--model", model],
             capture_output=True, text=True, timeout=timeout)
         env = json.loads(proc.stdout)
