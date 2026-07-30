@@ -1,0 +1,84 @@
+{
+  "assessment": {
+    "sitemap_is_full_corpus": false,
+    "sitemap_shape": "strong_evidence_of_approximately_one_year_rolling_window",
+    "urls_missing_from_current_sitemap": "retain_never_auto_delete"
+  },
+  "award_2026": {
+    "legacy_db_has_2026": false,
+    "official_tracks": [
+      "Firm",
+      "Plus",
+      "Products",
+      "Sustainability",
+      "Typology"
+    ],
+    "project_seed_count": 725,
+    "firm_seed_count": 722
+  },
+  "firm": {
+    "legacy_queue_count": 2802,
+    "current_url_count": 2545,
+    "current_entry_occurrences": 2545,
+    "overlap": 1807,
+    "current_new": 738,
+    "legacy_not_in_current": 995,
+    "overlap_lastmod_changed": 66,
+    "current_without_firm_row": 738,
+    "lastmod_min": "2025-07-31",
+    "lastmod_max": "2026-07-28",
+    "url_set_sha256": "3B9373B1843E9DB55A68621D74E66A1436E725C84BED03E37F2B91177BB073CF",
+    "url_lastmod_set_sha256": "DC7B08C7E45FC8A3D4EDF3F9E69F8564BD1403D8837C82537E29498FF732EA8C"
+  },
+  "legacy_input": {
+    "path": "data/crawl/architizer.db",
+    "size_bytes": 90918912,
+    "sha256": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+    "open_mode": "mode=ro&immutable=1;query_only=ON"
+  },
+  "manifest_version": "architizer-source-census-checked-v1",
+  "observed_at": "2026-07-30T18:17:09+00:00",
+  "official_sitemap": {
+    "url": "https://architizer.com/sitemap.xml",
+    "http_status": 200,
+    "final_url": "https://architizer.com/sitemap.xml",
+    "content_type": "application/xml",
+    "content_bytes": 16026,
+    "sha256": "FF4CF37211CDEBEF09ADB4DF4A0B4D4D39453E56C9A6FA0CC4AE7B03A1D2A5F1",
+    "registered_child_count": 210,
+    "registered_project_sitemaps_used": 12,
+    "registered_firm_sitemaps_used": 3,
+    "invented_page_ranges_used": false
+  },
+  "open_qa": [
+    "Sitemap absence cannot distinguish deletion, hiding, and window expiry.",
+    "The source-side semantic trigger for lastmod is undocumented.",
+    "Day-level ties at 1000-entry boundaries may cause duplicates or omissions."
+  ],
+  "project": {
+    "legacy_queue_count": 10636,
+    "legacy_project_row_count": 10632,
+    "current_url_count": 11303,
+    "current_entry_occurrences": 11325,
+    "duplicate_occurrences": 22,
+    "overlap": 7992,
+    "current_new": 3311,
+    "current_new_lastmod_after_2026_04_28": 3135,
+    "current_new_lastmod_on_2026_04_28": 87,
+    "current_new_lastmod_before_2026_04_28": 89,
+    "legacy_not_in_current": 2644,
+    "overlap_lastmod_changed": 535,
+    "current_without_project_row": 3314,
+    "lastmod_min": "2025-08-01",
+    "lastmod_max": "2026-07-29",
+    "url_set_sha256": "BEC1D047C867D3790BEF34C0662244CF2B417C2F32DAF885F79EB9345F4D374E",
+    "url_lastmod_set_sha256": "3178E7CC516CC944E0BA743B3DCEE9F9D05BD7F7B720FB98C4F9ACFEBC149CF4"
+  },
+  "recovery": {
+    "legacy_failed_count": 3,
+    "legacy_done_row_mismatch_count": 1,
+    "missing_firm_stub_slugs": 1951,
+    "legacy_award_unresolved_project_slugs": 4983,
+    "legacy_award_unresolved_firm_slugs": 2835
+  }
+}
