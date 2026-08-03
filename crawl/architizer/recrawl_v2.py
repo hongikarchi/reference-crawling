@@ -2918,6 +2918,18 @@ def _comparison_summary(
     }
 
 
+def _incoming_lastmod_changed(
+    existing_source_lastmod: str | None,
+    incoming_source_lastmod: str | None,
+) -> bool:
+    """Match the target upsert's NULL-aware lastmod scheduling rule."""
+
+    return (
+        incoming_source_lastmod is not None
+        and incoming_source_lastmod != existing_source_lastmod
+    )
+
+
 def upsert_target(
     connection: sqlite3.Connection,
     *,
@@ -2955,9 +2967,9 @@ def upsert_target(
             ),
         )
     else:
-        lastmod_changed = (
-            source_lastmod is not None
-            and source_lastmod != existing["source_lastmod"]
+        lastmod_changed = _incoming_lastmod_changed(
+            existing["source_lastmod"],
+            source_lastmod,
         )
         new_priority = min(priority, int(existing["priority"]))
         new_reason = (
@@ -5432,11 +5444,7 @@ def open_state_readonly(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def expand_full_targets(
-    connection: sqlite3.Connection,
-) -> dict[str, int]:
-    """Materialize every current sitemap URL as a full-refresh target."""
-
+def _latest_completed_census_id(connection: sqlite3.Connection) -> int:
     latest = connection.execute(
         """
         SELECT id FROM runs
@@ -5446,15 +5454,110 @@ def expand_full_targets(
     ).fetchone()
     if latest is None:
         raise RecrawlError("no completed sitemap census")
+    return int(latest["id"])
+
+
+def _full_sitemap_entries(
+    connection: sqlite3.Connection,
+    *,
+    census_run_id: int,
+) -> list[dict[str, Any]]:
+    return [
+        dict(row)
+        for row in connection.execute(
+            """
+            SELECT entity_type,source_url,lastmod,discovery_source
+            FROM sitemap_entries
+            WHERE run_id=?
+            ORDER BY entity_type,source_url
+            """,
+            (census_run_id,),
+        )
+    ]
+
+
+def _simulate_full_target_expansion(
+    connection: sqlite3.Connection,
+    *,
+    sitemap_entries: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Apply ``expand_full_targets`` scheduling semantics without DB writes."""
+
+    targets = {
+        row["url"]: dict(row)
+        for row in connection.execute(
+            """
+            SELECT url,entity_type,source_lastmod,priority,primary_reason,
+                   status,retryable
+            FROM targets
+            ORDER BY entity_type,url
+            """
+        )
+    }
+    inserted_urls: set[str] = set()
+    would_reschedule_urls: set[str] = set()
+    for entry in sitemap_entries:
+        url = normalize_entity_url(entry["source_url"], entry["entity_type"])
+        existing = targets.get(url)
+        if existing is None:
+            targets[url] = {
+                "url": url,
+                "entity_type": entry["entity_type"],
+                "source_lastmod": entry["lastmod"],
+                "priority": 70,
+                "primary_reason": "full_current_sitemap",
+                "status": "pending",
+                "retryable": 1,
+            }
+            inserted_urls.add(url)
+            continue
+
+        lastmod_changed = _incoming_lastmod_changed(
+            existing["source_lastmod"],
+            entry["lastmod"],
+        )
+        existing_priority = int(existing["priority"])
+        if 70 < existing_priority:
+            existing["primary_reason"] = "full_current_sitemap"
+        existing["priority"] = min(70, existing_priority)
+        if entry["lastmod"] is not None:
+            existing["source_lastmod"] = entry["lastmod"]
+        if lastmod_changed:
+            existing["status"] = "pending"
+            existing["retryable"] = 1
+            would_reschedule_urls.add(url)
+
+    eligible_targets = sorted(
+        (
+            target
+            for target in targets.values()
+            if target["status"] == "pending"
+            or (target["status"] == "failed" and target["retryable"])
+        ),
+        key=lambda target: (
+            int(target["priority"]),
+            target["entity_type"],
+            target["url"],
+        ),
+    )
+    return {
+        "targets": targets,
+        "eligible_targets": eligible_targets,
+        "inserted_urls": sorted(inserted_urls),
+        "would_reschedule_urls": sorted(would_reschedule_urls),
+    }
+
+
+def expand_full_targets(
+    connection: sqlite3.Connection,
+) -> dict[str, int]:
+    """Materialize every current sitemap URL as a full-refresh target."""
+
+    census_run_id = _latest_completed_census_id(connection)
     counts: Counter[str] = Counter()
-    for row in connection.execute(
-        """
-        SELECT entity_type,source_url,lastmod,discovery_source
-        FROM sitemap_entries
-        WHERE run_id=?
-        ORDER BY entity_type,source_url
-        """,
-        (latest["id"],),
+    for row in _full_sitemap_entries(
+        connection,
+        census_run_id=census_run_id,
     ):
         upsert_target(
             connection,
@@ -5465,7 +5568,7 @@ def expand_full_targets(
             reason="full_current_sitemap",
             discovery_source=row["discovery_source"],
             input_lineage={
-                "census_run_id": latest["id"],
+                "census_run_id": census_run_id,
                 "source_sitemap": row["discovery_source"],
             },
         )
@@ -5526,6 +5629,7 @@ def preview_full_recrawl(
     delay_seconds: float = 2.0,
 ) -> dict[str, Any]:
     connection = open_state_readonly(state_path)
+    connection.execute("BEGIN")
     try:
         state_meta = {
             row["key"]: row["value"]
@@ -5544,48 +5648,22 @@ def preview_full_recrawl(
                 ladder_error = str(exc)
         else:
             ladder_error = "sidecar has no immutable source binding"
-        latest_census = connection.execute(
-            """
-            SELECT id,summary_json FROM runs
-            WHERE run_kind='sitemap_census' AND status='completed'
-            ORDER BY id DESC LIMIT 1
-            """
-        ).fetchone()
-        if latest_census is None:
-            raise RecrawlError("no completed census for full preview")
-        current_entries = [
-            dict(row)
-            for row in connection.execute(
-                """
-                SELECT entity_type,source_url FROM sitemap_entries
-                WHERE run_id=? ORDER BY entity_type,source_url
-                """,
-                (latest_census["id"],),
-            )
-        ]
-        targets = [
-            dict(row)
-            for row in connection.execute(
-                """
-                SELECT url,entity_type,status,retryable,priority,primary_reason
-                FROM targets ORDER BY entity_type,url
-                """
-            )
-        ]
-        universe: dict[str, str] = {
-            row["source_url"]: row["entity_type"] for row in current_entries
+        latest_census_id = _latest_completed_census_id(connection)
+        current_entries = _full_sitemap_entries(
+            connection,
+            census_run_id=latest_census_id,
+        )
+        expansion = _simulate_full_target_expansion(
+            connection,
+            sitemap_entries=current_entries,
+        )
+        targets = list(expansion["targets"].values())
+        universe = {
+            row["url"]: row["entity_type"]
+            for row in targets
         }
-        universe.update({row["url"]: row["entity_type"] for row in targets})
-        target_by_url = {row["url"]: row for row in targets}
         remaining_urls = [
-            url
-            for url in universe
-            if url not in target_by_url
-            or target_by_url[url]["status"] == "pending"
-            or (
-                target_by_url[url]["status"] == "failed"
-                and target_by_url[url]["retryable"]
-            )
+            row["url"] for row in expansion["eligible_targets"]
         ]
         terminal_failures = [
             row
@@ -5643,7 +5721,7 @@ def preview_full_recrawl(
             estimated_storage_low = None
             estimated_storage_high = None
         return {
-            "latest_census_run_id": int(latest_census["id"]),
+            "latest_census_run_id": latest_census_id,
             "latest_n100_run_id": int(latest_n100["id"])
             if latest_n100
             else None,
@@ -5662,6 +5740,19 @@ def preview_full_recrawl(
                 row["status"] == "done" for row in targets if row["url"] in universe
             ),
             "remaining_network_targets": len(remaining_urls),
+            "remaining_network_target_urls_sha256": _url_set_sha256(
+                remaining_urls
+            ),
+            "would_insert_targets": len(expansion["inserted_urls"]),
+            "would_insert_target_urls_sha256": _url_set_sha256(
+                expansion["inserted_urls"]
+            ),
+            "would_reschedule_lastmod_targets": len(
+                expansion["would_reschedule_urls"]
+            ),
+            "would_reschedule_lastmod_urls_sha256": _url_set_sha256(
+                expansion["would_reschedule_urls"]
+            ),
             "terminal_failures_excluded_until_explicit_retry": len(
                 terminal_failures
             ),
@@ -5687,6 +5778,7 @@ def preview_full_recrawl(
             "ladder_ready": ladder is not None,
         }
     finally:
+        connection.rollback()
         connection.close()
 
 
@@ -6072,10 +6164,40 @@ def render_network_report(summary: Mapping[str, Any], title: str) -> str:
             f"{summary['recommended_request_delay_seconds']:.1f}s "
             f"({summary['recommended_delay_reason']})"
         ),
-        "",
-        "## Parse outcomes",
-        "",
     ]
+    if "newly_discovered_pending_count" in summary:
+        lines.extend(
+            [
+                "",
+                "## Full discovery gate",
+                "",
+                (
+                    "- Frozen target count: "
+                    f"{int(summary.get('frozen_target_count') or 0):,}"
+                ),
+                (
+                    "- Frozen target URL-set SHA-256: `"
+                    f"{summary.get('frozen_target_urls_sha256') or ''}`"
+                ),
+                (
+                    "- Newly discovered pending: "
+                    f"{int(summary['newly_discovered_pending_count']):,}"
+                ),
+                (
+                    "- Pending by entity type: "
+                    f"{canonical_json(summary.get('newly_discovered_pending_by_entity_type', {}))}"
+                ),
+                (
+                    "- Pending URL-set SHA-256: `"
+                    f"{summary.get('newly_discovered_pending_urls_sha256') or ''}`"
+                ),
+                (
+                    "- Additional full-phase approval required: "
+                    f"{'yes' if summary.get('additional_full_phase_approval_required') else 'no'}"
+                ),
+            ]
+        )
+    lines.extend(["", "## Parse outcomes", ""])
     for key, value in summary["parse_status_counts"].items():
         lines.append(f"- {key}: {value:,}")
     lines.extend(["", "## Selection types", ""])

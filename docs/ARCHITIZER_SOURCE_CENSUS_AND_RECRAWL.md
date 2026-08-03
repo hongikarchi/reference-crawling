@@ -16,8 +16,9 @@ Architizer 원천 범위 조사, legacy crawler 감사, sidecar recrawl 검증�
 - 그러므로 현재 sitemap에서 사라진 legacy URL을 삭제하거나 tombstone으로
   해석하지 않는다.
 - 신규·변경·복구·관계 seed를 대상으로 한 sidecar recrawl이 필요하다.
-  전체 network refresh는 이 문서의 preview 수치에 대한 별도 사용자 승인을
-  받기 전에는 실행하지 않는다.
+- 사용자가 승인한 frozen full phase는 run 14로 완료했다. 다만 실행 중 발견된
+  후속 URL 38,827개는 승인 범위에 자동 편입하지 않았고, 별도 승인 전에는
+  fetch하지 않는다.
 
 보존 기준:
 
@@ -26,8 +27,8 @@ Architizer 원천 범위 조사, legacy crawler 감사, sidecar recrawl 검증�
 | `data/crawl/architizer.db` | `35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985` |
 | `data/curated/architizer_curated_v1_3.db` | `5AEA8A85FA54B139F31585069C50A19AFA7D87B500A44AAAD32CCDC29937B089` |
 
-두 파일의 SHA는 census, N10, N100 전후 동일했다. curated v1.3 DB와 report는
-재생성하거나 덮어쓰지 않았다.
+두 파일의 SHA는 census, N10, N100 및 full run 14 전후 동일했다. curated
+v1.3 DB와 report는 재생성하거나 덮어쓰지 않았다.
 
 ## 공식 sitemap census
 
@@ -205,15 +206,19 @@ integrity, state resume/idempotency, process lock/stale recovery,
 changed-lastmod, failed retry, source binding, no-clobber, relation scheduling,
 full freeze, quality-gate forgery 방지를 포함한다.
 
-- Architizer recrawl: 30/30 PASS
-- Architizer recrawl + curated 회귀: 47/47 PASS
-- 전체 repository `pytest`: 190 passed, 9 subtests passed, 1 failed
+- Architizer recrawl: 33/33 PASS
+- Architizer recrawl + curated 회귀: 50/50 PASS, 3 subtests
+- 전체 repository `pytest`: 193 passed, 9 subtests passed, 1 failed
 - 유일한 실패는 기존 Divisare
   `test_unapproved_merge_decision_is_rejected`의 Windows SQLite handle
   teardown 오류다. 금지 범위이므로 Divisare 파일은 수정하지 않았다.
 
 Quality gate `architizer-smoke-gate-v2`는 저장된 `gate_passed`를 신뢰하지
 않고 실제 summary metric과 HTTP final URL evidence를 다시 계산한다.
+
+추가된 parity 회귀 검증은 NULL→known/same/changed lastmod semantics와
+read-only preview가 실제 expansion의 eligible count·URL SHA에 일치하며 sidecar를
+변경하지 않는지를 포함한다.
 
 - 모든 selected URL의 final HTTP success, snapshot, metadata version
 - input DB SHA 불변
@@ -278,7 +283,7 @@ Quality gate `architizer-smoke-gate-v2`는 저장된 `gate_passed`를 신뢰하�
 `/firms/?notfound=1`로 종료됨을 확인했다. 두 URL 모두 정상 entity로
 억지 저장하지 않고 terminal source outcome으로 남겼다.
 
-## Full preview와 승인 경계
+## Full preview와 run 14 결과
 
 최종 gate-v2 N100 이후 read-only `preview-full` 결과는 다음과 같다.
 
@@ -306,21 +311,132 @@ Terminal 목록:
 - `https://architizer.com/projects/requiem-for-ruins-2/`
 - `https://architizer.com/firms/yuanbo-jia-zhijun-lei/`
 
-실행 명령은 다음과 같지만 사용자 승인 전에는 실행하지 않는다.
+사용자의 명시적 승인 뒤 다음 명령으로 run 14를 실행했다.
 
 ```powershell
 python -B tools/recrawl_architizer_source_v2.py full `
   --confirm-full-network-crawl
 ```
 
+### Preview erratum
+
+Preview의 잔여 23,388건과 실제 frozen 23,389건 사이에는 1건의 차이가 있었다.
+추가된 URL은
+`https://architizer.com/firms/archmondo-piotr-kowalczyk-1/`이다. 기존 target의
+source lastmod가 NULL이었지만 full expansion에서 sitemap lastmod
+`2025-12-01`이 공급되면서 NULL→known 변경으로 안전하게 재예약됐다. 재예약
+정책은 보존했다. Preview와 full이 NULL-aware lastmod 판정과 in-memory
+expansion planning helper를 공유하도록 수정했고, read-only/eligible URL-set
+parity를 regression test로 고정했다.
+
+### Full network crawl
+
+Run 14는 2026-08-03 14:54:22 KST에 시작해 2026-08-04 04:00:50 KST에
+`completed_with_pending_discoveries`로 끝났다. 측정 runtime은 47,178.479초
+(13시간 6분 18.479초)다.
+
+| 항목 | 결과 |
+|---|---:|
+| Frozen/processed URL | 23,389 |
+| Frozen URL-set SHA-256 | `07EA289999CD5349750CB94D3733F50369D5265C50624BE3745FAC2FED7A0EB0` |
+| HTTP success | 23,389/23,389 |
+| Physical attempts | 23,392 |
+| 회복된 retry | 3 |
+| Gzip snapshot saved | 23,389/23,389 |
+| Metadata version | 23,389/23,389 |
+| Valid identity | 23,259/23,389 |
+| Block/login/rate signal | 0 |
+| 응답시간 mean / median / max | 1.2536초 / 1.204초 / 30.084초 |
+| 평균 response / gzip snapshot | 200,661 / 41,069 bytes |
+
+Parse outcome은 complete 9,384, conflict 4,642, partial 9,233,
+no_content 130이다. 최종 URL과 identity evidence를 기준으로 문서용 operational
+grouping을 적용하면 다음과 같다. 이는 strict internal source-absence classifier
+label과 동일하다는 뜻이 아니다.
+
+- project URL이 firm `?notfound_project=1`로 이동: 92
+- firm URL의 source `?notfound=1`: 23
+- project URL의 source `?notfound=1`: 12
+- 명시적 notfound가 아닌 identity/content anomaly: 3
+  (`riegers-spa`, `q`, `ana-design-studio-new-delhi-india`)
+
+Source absence와 project→firm 이동은 삭제로 해석하지 않는다. 세 anomaly도
+정상 entity로 강제 저장하지 않고 open QA로 남겼다.
+
+Full field coverage는 entity별 적용 가능한 분모를 사용했다.
+
+| Field | Coverage |
+|---|---:|
+| name | 23,058/23,389 (98.6%) |
+| slug | 23,259/23,389 (99.4%) |
+| description | 17,860/23,389 (76.4%) |
+| project ID/global ID | 16,707/16,813 (99.4%) |
+| firm name | 16,682/16,813 (99.2%) |
+| firm slug | 16,681/16,813 (99.2%) |
+| location | 12,860/16,813 (76.5%) |
+| completion year | 14,396/16,813 (85.6%) |
+| construction status | 16,235/16,813 (96.6%) |
+| size bucket | 12,244/16,813 (72.8%) |
+| short description | 16,707/16,813 (99.4%) |
+| category/tag | 16,652/16,813 (99.0%) |
+| cover/gallery | 16,707/16,813 (99.4%) |
+| image global ID | 16,696/16,813 (99.3%) |
+| published/modified time | 16,707/16,813 (99.4%) |
+| firm project/social relation | 6,552/6,576 (99.6%) |
+
+Run-reported 종료 시점 runtime storage는 2,836,493,250 bytes이며, 시작 대비
+2,746,741,471 bytes 증가했다. 이 중 snapshot은 976,679,874 bytes,
+summary 기록 시 state DB는 1,859,813,376 bytes였다. SQLite close 후 실제 DB
+파일은 1,859,895,296 bytes로 81,920 bytes 더 크므로 두 측정값을 구분한다.
+Post-close combined size는 2,836,575,170 bytes다.
+Runtime DB, snapshot, report, stdout/stderr log는 Git에 포함하지 않는다.
+기존 run 14 Markdown report는 pending discovery gate를 싣지 못했으므로 immutable
+artifact 그대로 보존하고 sidecar summary와 이 manifest에서 보완했다. 후속
+run부터는 renderer가 frozen count/SHA, pending count/type/SHA, 추가 승인 필요
+여부를 report에 직접 기록하며 fixture test로 고정했다.
+
+종료 후 read-only integrity audit 결과는 다음과 같다.
+
+- sidecar DB SHA-256:
+  `A78F5C7AC31BBE8250073C2F8C213B86BB1E841F3062C345AE5BD3A830DBF4A5`
+- SQLite `quick_check=ok`, `integrity_check=ok`, foreign-key violation 0
+- run 14 snapshot 23,389개 모두 존재·readable·content SHA 일치;
+  960,557,791 gzip bytes / 4,693,251,373 decompressed bytes
+- run 14 snapshot integrity manifest SHA-256:
+  `E32CE83FFE66EE44128A6035AC4922EDABD45940F870AD40844191FE8FDF9BB1`
+- 전체 sidecar unique snapshot 23,760개도 모두 검증됐고 root file 수와
+  일치한다. Missing/corrupt/mismatch/conflicting expected SHA는 모두 0이다.
+- 전체 sidecar snapshot integrity manifest SHA-256:
+  `B14C7DB6C76B85E5A9165B5260540CDA62B19BC4226A28357C6FC8EDD528186D`
+- 종료 후 process, lock, WAL, SHM 없음
+
+Run 14의 valid relation에서 새로 발견된 pending target은 38,827개다.
+
+- project: 38,694
+- firm: 133
+- URL-set SHA-256:
+  `122E20961BB1ED096A5E6DCA23CB6AD371712F2A1A4B561C65194C80789CC5A3`
+
+Frozen 승인 범위에 이 target들을 동적으로 추가하지 않았기 때문에 run status가
+`completed_with_pending_discoveries`다. 이 follow-up network phase는 별도
+사용자 승인 전에는 실행하지 않는다.
+
+Parity 보정 후 같은 sidecar를 변경하지 않는 read-only preview를 다시 실행한
+결과는 remaining 38,827, already done 23,491, terminal excluded 132였고,
+would-insert와 would-reschedule은 모두 0이었다. Remaining URL SHA도 위
+`122E...5A3`와 같고 실행 전후 sidecar SHA는 `A78F...F4A5`로 동일했다.
+2.0초 간격 기준 follow-up 예상시간은 77,654초(21시간 34분 14초), 예상 추가
+runtime storage는 4,607,561,263–9,215,122,526 bytes다.
+
 ## Curated DB 후속 단계
 
-Full이 승인·완료되기 전에는 curated v1.3을 다시 만들지 않는다. 이후 별도
-단계에서 curated v1.3, immutable raw DB, recrawl sidecar 세 입력을
-reconciliation하여 새 immutable version을 만든다. 기존 v1.3은 덮어쓰지
-않으며 신규·수정·복구 project, firm stub/award unresolved 감소, coverage,
-taxonomy claim, duplicate candidate, input/output SHA, N10/N100/full validation을
-새로 보고한다.
+승인된 full run 14는 완료됐지만 follow-up pending 38,827건의 처리 여부가 아직
+결정되지 않았다. 따라서 curated v1.3을 다시 만들지 않았고 reconciliation도
+실행하지 않았다. 별도 승인·범위 결정 뒤 curated v1.3, immutable raw DB,
+일관된 recrawl sidecar snapshot 세 입력을 reconciliation하여 새 immutable
+version을 만든다. 기존 v1.3은 덮어쓰지 않으며 신규·수정·복구 project, firm
+stub/award unresolved 감소, coverage, taxonomy claim, duplicate candidate,
+input/output SHA, N10/N100/full validation을 새로 보고한다.
 
 ## Open QA
 
@@ -332,3 +448,7 @@ taxonomy claim, duplicate candidate, input/output SHA, N10/N100/full validation�
   없다.
 - source의 `?notfound=1`과 project→firm 이동은 삭제가 아니라 terminal source
   outcome으로만 기록한다.
+- valid firm relation에서 발견된 project seed 38,694건이 실제 corpus인지,
+  stale relation인지, source absence인지 후속 fetch 전에는 확정할 수 없다.
+- `riegers-spa`, `q`, `ana-design-studio-new-delhi-india`의 비정상 identity/content
+  의미는 수동 QA가 필요하다.

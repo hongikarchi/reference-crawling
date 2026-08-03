@@ -833,6 +833,291 @@ class ParserFixtureTests(unittest.TestCase):
 
 
 class StateAndIntegrityTests(unittest.TestCase):
+    def test_incoming_lastmod_change_semantics(self) -> None:
+        self.assertTrue(
+            recrawl._incoming_lastmod_changed(None, "2026-07-01")
+        )
+        self.assertFalse(
+            recrawl._incoming_lastmod_changed(None, None)
+        )
+        self.assertFalse(
+            recrawl._incoming_lastmod_changed(
+                "2026-07-01",
+                "2026-07-01",
+            )
+        )
+        self.assertTrue(
+            recrawl._incoming_lastmod_changed(
+                "2026-07-01",
+                "2026-07-02",
+            )
+        )
+        self.assertFalse(
+            recrawl._incoming_lastmod_changed("2026-07-01", None)
+        )
+
+    def test_full_preview_is_read_only_and_matches_expansion(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="architizer-preview-test-") as root:
+            root_path = Path(root)
+            source = root_path / "source.db"
+            state_path = root_path / "state.db"
+            snapshots = root_path / "snapshots"
+            create_source(source)
+            source_sha = sha256(source)
+            connection = recrawl.connect_state(
+                state_path,
+                source_path=source,
+                source_sha256=source_sha,
+                source_size=source.stat().st_size,
+            )
+            null_url = "https://architizer.com/projects/null-lastmod/"
+            same_url = "https://architizer.com/projects/same-lastmod/"
+            changed_url = "https://architizer.com/projects/changed-lastmod/"
+            inserted_url = "https://architizer.com/projects/new-project/"
+            retryable_url = "https://architizer.com/projects/retryable/"
+            terminal_url = "https://architizer.com/projects/terminal/"
+            try:
+                census_id = recrawl.start_run(
+                    connection,
+                    run_kind="sitemap_census",
+                    source_path=source,
+                    source_sha256=source_sha,
+                    source_size=source.stat().st_size,
+                    arguments={},
+                )
+                now = recrawl.utc_now()
+                snapshot_id = connection.execute(
+                    """
+                    INSERT INTO sitemap_snapshots(
+                        run_id,entity_type,sitemap_url,discovered_at,fetched_at,
+                        http_status,final_url,content_type,content_bytes,sha256,
+                        gzip_path,parse_status,url_count,lastmod_min,lastmod_max,
+                        error
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)
+                    """,
+                    (
+                        census_id,
+                        "project",
+                        "https://architizer.com/project-sitemap.xml",
+                        now,
+                        now,
+                        200,
+                        "https://architizer.com/project-sitemap.xml",
+                        "application/xml",
+                        0,
+                        "A" * 64,
+                        "fixture/project.xml.gz",
+                        "parsed",
+                        4,
+                        "2026-01-01",
+                        "2026-07-02",
+                    ),
+                ).lastrowid
+                entries = (
+                    (null_url, "2026-07-01"),
+                    (same_url, "2026-01-01"),
+                    (changed_url, "2026-07-02"),
+                    (inserted_url, "2026-07-02"),
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO sitemap_entries(
+                        run_id,snapshot_id,entity_type,source_url,lastmod,
+                        discovery_source,discovered_at
+                    ) VALUES (?,?,'project',?,?,?,?)
+                    """,
+                    [
+                        (
+                            census_id,
+                            snapshot_id,
+                            url,
+                            lastmod,
+                            "https://architizer.com/project-sitemap.xml",
+                            now,
+                        )
+                        for url, lastmod in entries
+                    ],
+                )
+                recrawl.finish_run(
+                    connection,
+                    census_id,
+                    status="completed",
+                    source_sha256_after=source_sha,
+                    summary={"input_db_unchanged": True},
+                )
+                for url, lastmod in (
+                    (null_url, None),
+                    (same_url, "2026-01-01"),
+                    (changed_url, "2026-01-01"),
+                    (retryable_url, None),
+                    (terminal_url, None),
+                ):
+                    recrawl.upsert_target(
+                        connection,
+                        url=url,
+                        entity_type="project",
+                        source_lastmod=lastmod,
+                        priority=80,
+                        reason="fixture",
+                        discovery_source="fixture",
+                        input_lineage={},
+                    )
+                connection.execute(
+                    "UPDATE targets SET status='done',retryable=0"
+                )
+                connection.execute(
+                    "UPDATE targets SET status='failed',retryable=1 WHERE url=?",
+                    (retryable_url,),
+                )
+                connection.execute(
+                    "UPDATE targets SET status='failed',retryable=0 WHERE url=?",
+                    (terminal_url,),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            state_sha_before = sha256(state_path)
+            preview = recrawl.preview_full_recrawl(
+                state_path=state_path,
+                snapshot_root=snapshots,
+            )
+            self.assertEqual(sha256(state_path), state_sha_before)
+            self.assertEqual(preview["would_insert_targets"], 1)
+            self.assertEqual(preview["would_reschedule_lastmod_targets"], 2)
+            self.assertEqual(
+                preview["terminal_failures_excluded_until_explicit_retry"],
+                1,
+            )
+            self.assertEqual(
+                preview["would_reschedule_lastmod_urls_sha256"],
+                recrawl._url_set_sha256((null_url, changed_url)),
+            )
+
+            writable = recrawl.connect_state(
+                state_path,
+                source_path=source,
+                source_sha256=source_sha,
+                source_size=source.stat().st_size,
+            )
+            try:
+                self.assertEqual(
+                    recrawl.expand_full_targets(writable),
+                    {"project": 4},
+                )
+                eligible_urls = [
+                    row["url"]
+                    for row in recrawl._full_eligible_targets(writable)
+                ]
+                self.assertEqual(
+                    preview["remaining_network_targets"],
+                    len(eligible_urls),
+                )
+                self.assertEqual(
+                    preview["remaining_network_target_urls_sha256"],
+                    recrawl._url_set_sha256(eligible_urls),
+                )
+                statuses = {
+                    row["url"]: (
+                        row["status"],
+                        row["retryable"],
+                        row["source_lastmod"],
+                        row["priority"],
+                        row["primary_reason"],
+                    )
+                    for row in writable.execute(
+                        """
+                        SELECT url,status,retryable,source_lastmod,priority,
+                               primary_reason
+                        FROM targets
+                        """
+                    )
+                }
+                self.assertEqual(
+                    statuses[same_url],
+                    (
+                        "done",
+                        0,
+                        "2026-01-01",
+                        70,
+                        "full_current_sitemap",
+                    ),
+                )
+                self.assertEqual(
+                    statuses[null_url],
+                    (
+                        "pending",
+                        1,
+                        "2026-07-01",
+                        70,
+                        "full_current_sitemap",
+                    ),
+                )
+                self.assertEqual(
+                    statuses[changed_url],
+                    (
+                        "pending",
+                        1,
+                        "2026-07-02",
+                        70,
+                        "full_current_sitemap",
+                    ),
+                )
+                self.assertEqual(
+                    statuses[retryable_url][:2],
+                    ("failed", 1),
+                )
+                self.assertEqual(
+                    statuses[terminal_url][:2],
+                    ("failed", 0),
+                )
+            finally:
+                writable.close()
+
+    def test_full_network_report_includes_discovery_approval_gate(self) -> None:
+        summary = {
+            "run_id": 14,
+            "selected": 2,
+            "http_success": 2,
+            "http_success_rate": 1.0,
+            "identity_valid": 2,
+            "identity_valid_rate": 1.0,
+            "snapshot_saved": 2,
+            "input_db_unchanged": True,
+            "run_elapsed_seconds": 4.0,
+            "duration_ms": {"median": 100.0},
+            "recommended_request_delay_seconds": 2.0,
+            "recommended_delay_reason": "fixture",
+            "parse_status_counts": {"complete": 2},
+            "type_stats": {},
+            "field_coverage_counts": {},
+            "field_coverage_rates": {},
+            "field_coverage_denominators": {},
+            "block_signal_counts": {},
+            "legacy_field_comparison_counts": {},
+            "frozen_target_count": 2,
+            "frozen_target_urls_sha256": "A" * 64,
+            "newly_discovered_pending_count": 3,
+            "newly_discovered_pending_by_entity_type": {
+                "firm": 1,
+                "project": 2,
+            },
+            "newly_discovered_pending_urls_sha256": "B" * 64,
+            "additional_full_phase_approval_required": True,
+        }
+        report = recrawl.render_network_report(summary, "fixture full")
+        self.assertIn("## Full discovery gate", report)
+        self.assertIn("- Newly discovered pending: 3", report)
+        self.assertIn(
+            '- Pending by entity type: {"firm":1,"project":2}',
+            report,
+        )
+        self.assertIn(f"- Pending URL-set SHA-256: `{'B' * 64}`", report)
+        self.assertIn(
+            "- Additional full-phase approval required: yes",
+            report,
+        )
+
     def test_full_timing_estimate_does_not_double_count_request_delay(
         self,
     ) -> None:

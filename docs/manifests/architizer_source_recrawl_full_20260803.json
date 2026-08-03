@@ -1,0 +1,239 @@
+{
+  "manifest_version": "architizer-source-recrawl-full-run14-v1",
+  "run": {
+    "id": 14,
+    "kind": "full",
+    "status": "completed_with_pending_discoveries",
+    "started_at": "2026-08-03T05:54:22+00:00",
+    "finished_at": "2026-08-03T19:00:50+00:00",
+    "elapsed_seconds": 47178.479
+  },
+  "authorization": {
+    "frozen_full_phase_approved": true,
+    "dynamic_discoveries_included_in_approved_phase": false,
+    "follow_up_network_phase_approved": false,
+    "follow_up_network_phase_executed": false,
+    "curated_v1_3_rebuilt": false,
+    "reconciliation_executed": false
+  },
+  "immutable_inputs": {
+    "raw": {
+      "path": "data/crawl/architizer.db",
+      "size_bytes": 90918912,
+      "sha256_before": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+      "sha256_after": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+      "unchanged": true
+    },
+    "curated_v1_3": {
+      "path": "data/curated/architizer_curated_v1_3.db",
+      "size_bytes": 687579136,
+      "sha256": "5AEA8A85FA54B139F31585069C50A19AFA7D87B500A44AAAD32CCDC29937B089",
+      "unchanged": true
+    }
+  },
+  "frozen_phase": {
+    "preview_remaining_count": 23388,
+    "frozen_count": 23389,
+    "processed_count": 23389,
+    "url_set_sha256": "07EA289999CD5349750CB94D3733F50369D5265C50624BE3745FAC2FED7A0EB0",
+    "expanded_current_sitemap_counts": {
+      "project": 11303,
+      "firm": 2545
+    },
+    "preview_erratum": {
+      "difference": 1,
+      "url": "https://architizer.com/firms/archmondo-piotr-kowalczyk-1/",
+      "cause": "full expansion supplied sitemap lastmod 2025-12-01 to a target whose source lastmod was NULL, correctly triggering NULL-to-known changed-lastmod scheduling",
+      "action": "preserved scheduling policy; read-only preview and full now share NULL-aware lastmod and in-memory expansion planning, with eligible count and URL-set hash parity locked by regression tests"
+    }
+  },
+  "network": {
+    "http_success": 23389,
+    "snapshot_saved": 23389,
+    "metadata_version_count": 23389,
+    "physical_request_attempts": 23392,
+    "recovered_retry_count": 3,
+    "request_delay_seconds": 2.0,
+    "block_login_rate_signal_counts": {},
+    "average_response_bytes": 200661,
+    "average_snapshot_gzip_bytes": 41069,
+    "duration_ms": {
+      "mean": 1253.6,
+      "median": 1204.0,
+      "max": 30084
+    }
+  },
+  "parse": {
+    "status_counts": {
+      "complete": 9384,
+      "conflict": 4642,
+      "partial": 9233,
+      "no_content": 130
+    },
+    "identity_status_counts": {
+      "valid": 23259,
+      "conflict": 130
+    },
+    "terminal_no_content_taxonomy": {
+      "classification_scope": "operational grouping from final URL and identity evidence; not the strict internal source-absence classifier label",
+      "project_to_firm_notfound_project": 92,
+      "firm_notfound": 23,
+      "project_notfound": 12,
+      "identity_or_content_anomaly": 3
+    },
+    "anomaly_urls": [
+      "https://architizer.com/projects/riegers-spa/",
+      "https://architizer.com/projects/q/",
+      "https://architizer.com/firms/ana-design-studio-new-delhi-india/"
+    ]
+  },
+  "field_coverage": {
+    "name": {"covered": 23058, "applicable": 23389},
+    "slug": {"covered": 23259, "applicable": 23389},
+    "description": {"covered": 17860, "applicable": 23389},
+    "project_id": {"covered": 16707, "applicable": 16813},
+    "global_id": {"covered": 16707, "applicable": 16813},
+    "firm_name": {"covered": 16682, "applicable": 16813},
+    "firm_slug": {"covered": 16681, "applicable": 16813},
+    "location": {"covered": 12860, "applicable": 16813},
+    "completion_year": {"covered": 14396, "applicable": 16813},
+    "construction_status": {"covered": 16235, "applicable": 16813},
+    "size_bucket": {"covered": 12244, "applicable": 16813},
+    "description_short": {"covered": 16707, "applicable": 16813},
+    "categories": {"covered": 16652, "applicable": 16813},
+    "cover_image_url": {"covered": 16707, "applicable": 16813},
+    "gallery_image_urls": {"covered": 16707, "applicable": 16813},
+    "image_global_ids": {"covered": 16696, "applicable": 16813},
+    "published_time": {"covered": 16707, "applicable": 16813},
+    "modified_time": {"covered": 16707, "applicable": 16813},
+    "project_urls": {"covered": 6552, "applicable": 6576},
+    "social_links": {"covered": 6552, "applicable": 6576}
+  },
+  "discovery_gate": {
+    "additional_approval_required": true,
+    "pending_count": 38827,
+    "pending_by_entity_type": {
+      "project": 38694,
+      "firm": 133
+    },
+    "pending_url_set_sha256": "122E20961BB1ED096A5E6DCA23CB6AD371712F2A1A4B561C65194C80789CC5A3",
+    "pending_fields_source": "run 14 summary_json in the sidecar; the immutable generated runtime report omits these fields, and the post-run renderer fix includes them for subsequent reports",
+    "post_fix_read_only_preview": {
+      "remaining_network_targets": 38827,
+      "already_done": 23491,
+      "terminal_failures_excluded": 132,
+      "would_insert_targets": 0,
+      "would_reschedule_lastmod_targets": 0,
+      "estimated_elapsed_seconds": 77654,
+      "request_delay_seconds": 2.0,
+      "estimated_runtime_storage_bytes": {
+        "low": 4607561263,
+        "high": 9215122526
+      },
+      "sidecar_sha256_before_and_after": "A78F5C7AC31BBE8250073C2F8C213B86BB1E841F3062C345AE5BD3A830DBF4A5"
+    }
+  },
+  "runtime_storage": {
+    "run_reported": {
+      "combined_bytes": 2836493250,
+      "delta_bytes": 2746741471,
+      "snapshot_bytes": 976679874,
+      "state_db_bytes": 1859813376
+    },
+    "post_close_state_db": {
+      "path": "data/enrichment/architizer_source_recrawl_v2.db",
+      "size_bytes": 1859895296,
+      "sha256": "A78F5C7AC31BBE8250073C2F8C213B86BB1E841F3062C345AE5BD3A830DBF4A5",
+      "difference_from_run_reported_bytes": 81920,
+      "post_close_combined_bytes": 2836575170
+    }
+  },
+  "runtime_report": {
+    "path": "data/reports/architizer_source_recrawl_v2_full_20260803_145421.md",
+    "size_bytes": 2370,
+    "sha256": "BB6027BA4AFA5517DBCAC19BE9D53A183B7A0F85F67C3A041ADB2C9524DB7B8B"
+  },
+  "runtime_logs": {
+    "stdout": {
+      "path": "data/reports/architizer_source_recrawl_v2_full_20260803_145421.stdout.log",
+      "size_bytes": 104000,
+      "sha256": "D3174C123B01F34186892DCA111187650CC83D098C0CB055E97213717326F374"
+    },
+    "stderr": {
+      "path": "data/reports/architizer_source_recrawl_v2_full_20260803_145421.stderr.log",
+      "size_bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  },
+  "integrity_audit": {
+    "state_db": {
+      "quick_check": "ok",
+      "integrity_check": "ok",
+      "foreign_key_violation_count": 0,
+      "wal_present": false,
+      "shm_present": false
+    },
+    "run_14_snapshots": {
+      "referenced_unique_path_count": 23389,
+      "gzip_bytes": 960557791,
+      "decompressed_bytes": 4693251373,
+      "missing_count": 0,
+      "unreadable_or_corrupt_count": 0,
+      "content_sha_mismatch_count": 0,
+      "sorted_audit_manifest_sha256": "E32CE83FFE66EE44128A6035AC4922EDABD45940F870AD40844191FE8FDF9BB1",
+      "sorted_audit_manifest_record_format": "relative_path|expected_sha|gzip_size|content_size\\n"
+    },
+    "all_sidecar_snapshots": {
+      "root": "data/enrichment/architizer_html_snapshots_v2",
+      "referenced_unique_path_count": 23760,
+      "root_file_count": 23760,
+      "gzip_bytes": 976679874,
+      "decompressed_bytes": 4778813315,
+      "missing_count": 0,
+      "unreadable_or_corrupt_count": 0,
+      "content_sha_mismatch_count": 0,
+      "conflicting_expected_sha_count": 0,
+      "sorted_audit_manifest_sha256": "B14C7DB6C76B85E5A9165B5260540CDA62B19BC4226A28357C6FC8EDD528186D",
+      "sorted_audit_manifest_record_format": "relative_path|expected_content_sha|gzip_size|decompressed_size\\n"
+    },
+    "run_process": {
+      "pid": 53948,
+      "process_present": false,
+      "lock_present": false
+    }
+  },
+  "post_run_code_validation": {
+    "architizer_recrawl": {
+      "passed": 33,
+      "failed": 0
+    },
+    "architizer_recrawl_plus_curated": {
+      "passed": 50,
+      "subtests_passed": 3,
+      "failed": 0
+    },
+    "full_repository": {
+      "passed": 193,
+      "subtests_passed": 9,
+      "failed": 1,
+      "known_failure": "existing Divisare Windows SQLite handle teardown in test_unapproved_merge_decision_is_rejected; prohibited Divisare scope left unchanged"
+    },
+    "preview_parity_tests": [
+      "test_incoming_lastmod_change_semantics",
+      "test_full_preview_is_read_only_and_matches_expansion"
+    ],
+    "report_gate_tests": [
+      "test_full_network_report_includes_discovery_approval_gate"
+    ]
+  },
+  "git_policy": {
+    "manifest_committed": true,
+    "runtime_artifacts_committed": false,
+    "excluded_runtime_kinds": [
+      "SQLite DB/WAL/SHM",
+      "HTML gzip snapshots",
+      "generated reports",
+      "stdout/stderr logs"
+    ]
+  }
+}
