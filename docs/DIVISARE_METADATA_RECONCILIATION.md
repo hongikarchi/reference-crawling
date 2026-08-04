@@ -208,12 +208,12 @@ gates, taxonomy JSON, image URL equality, and no-clobber behavior.
 Outputs are immutable. A changed parser, policy, or decision file requires a
 new versioned artifact path.
 
-## Remaining Work
+## v2.3 follow-up
 
-- Resolve or retain the two partial-text review rows based on a human product
-  decision.
-- Review the 125 area candidates/quarantines only if additional coverage is
-  worth the manual effort.
-- Keep the 220 D2 pairs separate until versioned human decisions are supplied.
-- Image pHash, duplicate-image work, image semantics, vectors, and cross-site
-  comparison are later stages and are intentionally absent here.
+The two partial-text rows, all 125 area rows, and all 220 D2 pairs were
+subsequently reviewed in the immutable v2.3 overlay. Treat
+`v_divisare_buildings_export_v2_3` as the current Divisare source-final export.
+See `docs/DIVISARE_METADATA_REVIEW_V23.md`.
+
+Image pHash, duplicate-image work, image semantics, vectors, and cross-site
+comparison remain later stages and are intentionally absent from v2.3.

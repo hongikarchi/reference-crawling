@@ -1,109 +1,116 @@
 # Divisare D2 duplicate review status
 
-## Current state
+## Final metadata-only state
 
-The immutable metadata v2.1 artifact contains 286 Divisare-internal duplicate
-candidate pairs:
+The immutable v2.2 artifact contains 286 Divisare-internal duplicate candidate
+pairs:
 
-- 66 `auto_clustered` pairs remain confirmed under the strict v1.5 rule.
-- 220 pairs remain pending.
-- No new manual merge was approved, so v2.1 created no redirect.
+- 66 strict v1.5 pairs were already confirmed in the parent artifact.
+- All 220 previously pending or deferred pairs now have an approved v1 review.
+- The review approves 8 merges, 128 separate-project decisions, and 84
+  abstentions.
+- No image content, pHash, embedding, vision model, or cross-site record was
+  used.
 
-The 220 pending pairs were re-audited using names, architects, location, year,
-tags, cleaned text, and article-kind state. Images and pHash were not used.
+The authoritative ledger is
+`canonical/divisare_d2_decisions_v1.json`. It pins the exact v2.2 parent SHA,
+all 220 candidate pairs, the 304 source-article guards, evidence, reviewer,
+decision time, and reason code.
 
-| Candidate kind | Pairs | Score range |
-|---|---:|---:|
-| `exact_name_location_review` | 181 | `0.72-0.90` |
-| `fuzzy_name_same_architect_country` | 39 | `0.9150-0.9451` |
+## Identity scope
 
-Within the 181 exact-name/location candidates:
+D2 asks whether two Divisare articles represent the same architectural project
+and intervention. It does not ask whether they share a site, client, event,
+series, or physical complex.
 
-- 125 have disjoint architect sets.
-- 50 have the same architect set.
-- 6 have a partial architect overlap.
-- 81 have the same recorded year.
-- 100 have a different or missing year.
+- A photo essay, drawing article, detail article, and project article may merge
+  when they identify the same project/intervention.
+- Separate houses, blocks, phases, later interventions, competition entries,
+  and event installations remain separate buildings.
+- Supported context such as `same_complex`, `same_event`, or
+  `successive_intervention` is stored as a relation instead of being used to
+  collapse identity.
 
-## Why threshold automation is unsafe
+## Merge gate
 
-No score, tag, architect, or text-similarity threshold is reliable enough to
-resolve the pending set automatically.
+A merge requires all of the following:
 
-- High fuzzy scores include separate phases or siblings such as FASE I/III,
-  Residence A/B, and Vallecas 11/51.
-- Tag Jaccard at least `0.75` occurs in 31 pairs, but includes separate works
-  from the same series.
-- Text-token Jaccard at least `0.75` occurs in 28 pairs, but repeated editorial
-  and credit text inflates similarity.
-- Only two pairs have identical cleaned-text checksums; both are separate
-  `Structures of Landscape` works with reused photography credit text.
-- Of the 304 articles involved in pending pairs, 303 have cleaned text, but it
-  is still marked `ui_removed_caption_residue_possible`.
-- 133 of 220 pairs have unresolved article kind on both sides. The remainder
-  have only candidate or ambiguous kind; none has confirmed kind evidence.
+1. At least two independent identity-evidence families.
+2. No hard conflict in address/site, brief, geometry, quantity, phase, or
+   intervention scope.
+3. Exact article, parent-building, parser, source-row, prose/abstract, and HTML
+   guards.
+4. A component-safe union: no reject or defer edge may collapse transitively
+   through another merge.
 
-Therefore the 220 rows remain pending. This is an intentional abstention, not a
-failed duplicate-detection run.
+Name or slug similarity, the same city/country, the same architect alone, and
+tag similarity are candidate signals only. Repeated credits, copyright lines,
+publication UI, and photographer boilerplate do not count as substantive text
+evidence.
 
-## First metadata-only review batch
+## Final decisions
 
-The pending graph has 134 connected components:
+| Decision | Pairs | Effect |
+|---|---:|---|
+| `merge` | 8 | Union the two parent building identities |
+| `reject` | 128 | Keep separate; optionally retain a related-project edge |
+| `defer` | 84 | Approved abstention; keep separate without asserting different identity |
+| Total | 220 | Exact parent pending/deferred pair snapshot |
 
-| Component size | Components |
-|---:|---:|
-| 2 articles | 110 |
-| 3 articles | 18 |
-| 4 articles | 4 |
-| 7 articles | 2 |
+Reject relations:
 
-Six event or series components are suitable for the first human reject review:
+| Relation | Pairs |
+|---|---:|
+| Distinct event entry | 86 |
+| Distinct sibling building | 22 |
+| Distinct same-name project | 11 |
+| Distinct phase/intervention | 9 |
 
-| Component | Articles | Candidate pairs |
-|---|---:|---:|
-| BUS:STOP Krumbach | 7 | 21 |
-| Vatican Chapel | 7 | 21 |
-| XXI Triennale di Milano. Pavilion | 4 | 6 |
-| Summer House | 4 | 6 |
-| The Snow Show | 4 | 6 |
-| Serralves Pavilion | 4 | 6 |
-| Total | 30 | 66 |
+## Regression examples
 
-These 66 pairs are strong reject-review candidates because the shared
-event/series title groups distinct architects' designs. They must still be
-confirmed component by component. A global `different architect = reject`
-rule is unsafe because one building can credit different architects or roles.
+The pairs that previously exposed unsafe title-based matching are explicitly
+guarded:
 
-## Strong pair-level merge review
+| Pair | Decision | Reason |
+|---|---|---|
+| Residence A/B `260144/260145` | reject, `same_complex` | Two separate family houses |
+| FASE I/III `235013/235152` | reject, `successive_intervention` | Showroom bays versus a later Corten entrance intervention |
+| Vallecas 11/51 `110876/110882` | reject, `same_complex` | 35-unit/5,174.23 sqm block versus 123-unit/14,934 sqm block |
+| Valencia Apartments `430452/437795` | reject, unrelated | Same template title, but El Carmen versus El Cabanyal and different briefs |
+| CEPT `381279/381465` | defer | Campus label spans ambiguous 1962/2012 intervention scopes |
 
-The following pairs have strong non-image evidence, but still require an
-explicit reviewer decision:
+## Approved merges
 
-- `96467 / 343892`: Centro Galego/Gallego de Arte Contemporanea
-- `268679 / 383882`: Long Museum West Bund
-- `346047 / 396651`: Rolex Learning Centre/Center
-- `112411 / 343271`: Sihlholzli spelling variation and substantially matching
-  text
-- `348479 / 348989`: Murphy's House/Murphy House at the same Hart Street site
-- `317455 / 328691`: TER, reordered architect attribution and substantially
-  matching text
+The eight approved metadata-only merges are:
 
-These examples do not define a safe general-purpose merge rule.
+- `96467/343892`: CGAC, Santiago de Compostela
+- `112411/343271`: Sihlhölzli sports facilities
+- `237243/339073`: MUSE drawing/detail and project articles
+- `317455/328691`: TER
+- `339186/380335`: Alcalá duplex renovation
+- `346253/449455`: Lindower 22 planned/completed coverage
+- `348479/348989`: Murphy House
+- `478764/536572`: Green Kilometer planned/completed coverage
 
-## Decision workflow
+Each has two or more independent evidence families recorded in the canonical
+ledger. These decisions are examples, not a new automatic matching rule.
 
-1. Review the six event/series components and record pair-level reject
-   decisions with reviewer, timestamp, and reason.
-2. Review strong merge candidates individually against both source URLs and
-   current HTML prose.
-3. Keep all other pairs pending until the full HTML recrawl adds cleaner
-   location, year, area, and description evidence.
-4. Use pHash and image comparison later as supporting evidence, never as the
-   sole building-identity key.
-5. Build a new immutable metadata artifact only from an explicitly approved,
-   versioned decision file.
+## Deferred likely duplicates
 
-The current builder accepts decisions only for the existing 286 D2 candidates.
-New pairs discovered later by pHash or cross-site work require an explicit
-input-contract extension. A rejected v1.5 auto cluster also requires a future
-split policy or a v1 rebuild.
+Long Museum `268679/383882` and Rolex Learning Center `346047/396651` are
+likely the same buildings, but remain deferred. In each pair the sparse article
+lacks enough project-specific prose, and the articles share no exact asset key,
+materialized URL, raw URL, or Divisare album membership. Image content hashes
+are not yet available.
+
+These pairs can be reconsidered in the later image stage. pHash or visual
+similarity may provide supporting evidence, but must never be the sole building
+identity key.
+
+## Runtime behavior
+
+The v2.3 builder applies only the versioned ledger. It validates all 304 unique
+article guards against the immutable v2.2 database, materializes redirects and
+memberships for the eight approved merges, preserves related-project edges,
+and leaves all reject/defer pairs separate. New candidates require a new
+versioned decision ledger rather than an in-place edit.
