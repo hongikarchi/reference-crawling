@@ -74,13 +74,13 @@ Area is taken only from the project facts dimensions list:
 - Locate a `.project_fact` row whose label is exactly `Built Surface`.
 - Preserve the raw label, raw value, and DOM source.
 - Ignore `Building Cubature` and area-like numbers mentioned only in prose.
-- Divisare does not expose an explicit unit in the inspected `Built Surface`
-  rows. Normalization to `area_sqm` therefore uses the documented source
-  convention that `Built Surface` is square metres.
-- Mark this as `implicit_square_metres_divisare`, with confidence `0.75`.
-- Keep the raw value so this assumption can be revised without refetching.
-- Treat dot/comma groups of three trailing digits as thousands separators
-  where applicable.
+- The v2.3 parser stores a provisional `area_sqm` plus the unmodified raw
+  value. The full audit found metric, imperial, dual-unit, hectare, cubic,
+  linear, multiplier, and multi-scope values in this field, so the provisional
+  scalar must not be consumed directly.
+- Final unit-safe parsing is performed by metadata reconciliation v2.2. It
+  converts supported units and quarantines ambiguous or non-area expressions
+  without another network request.
 
 ### Other metadata
 
@@ -148,7 +148,7 @@ The authenticated v2.1 network run and v2.3 offline reparse both completed:
 
 ## Full-run status
 
-The authenticated full crawl was approved and started on 2026-07-28:
+The authenticated full crawl completed on 2026-07-31:
 
 - State DB: `data/enrichment/divisare_metadata_recrawl_v2_4.db`
 - Snapshot root: `data/enrichment/divisare_html_snapshots_v2_4`
@@ -157,43 +157,27 @@ The authenticated full crawl was approved and started on 2026-07-28:
   `data/reports/divisare_metadata_recrawl_v2_4_preflight.md`
 - Final report path:
   `data/reports/divisare_metadata_recrawl_v2_4.md`
-- PID file: `data/enrichment/divisare_metadata_recrawl_v2_4.pid`
-- Standard output/error:
-  `logs/divisare_full_recrawl_v2_4_run3.stdout.log` and
-  `logs/divisare_full_recrawl_v2_4_run3.stderr.log`
 - Request delay: approximately three seconds
-- Expected duration before retries: approximately 25 hours
 - API/LLM cost: `$0`
 
-The crawler holds an OS-level exclusive lock for the state DB. A login wall or
-HTTP 401/403 triggers one credential-based automatic re-login when enabled,
-without converting the remaining queue to blocked rows. Three consecutive
-blocked responses or ten consecutive fetch/structural parse failures stop the
-current run. Per-article commits allow the identical command to resume pending
-rows after an interruption.
-
-### Running checkpoint
-
-Read-only snapshot at `2026-07-31 00:21:05 KST`:
+Final accounting:
 
 - Queue: `29,955`
-- Fetch: `11,635 success`, `18,308 pending`, `1 running`, `10 failed`,
-  `1 not_found`, `0 blocked`
-- Parse: `11,167 success`, `15 partial`, `453 no_content`, `0 failed`
-- Snapshots / current metadata: `11,635 / 11,635`
-- Current descriptions / areas: `11,182 / 952`
-- Active run: `run_id=6`, `481` processed, no current error
-- Remaining selectable jobs: `18,319`
-- Estimated remaining time: approximately `15.3 hours`
+- Fetch: `29,945 success / 10 not_found`
+- Parse: `27,602 success / 21 partial / 2,322 no_content / 10 skipped`
+- Snapshots / current metadata: `29,945 / 29,945`
+- Current descriptions / raw Built Surface values: `27,623 / 1,544`
+- Explicit article kind: `0`
+- SQLite quick check: `ok`
+- Foreign-key violations: `0`
+- Current-row and snapshot linkage validation: PASS
 
-The active command includes `--retry-terminal` and `--auto-relogin`. The ten
-older failed jobs are ordered after pending work and will be retried. The
-single confirmed 404 is intentionally excluded. Empty run3 stdout/stderr files
-do not imply an idle process; progress is committed to the state DB and WAL.
-Do not start a second crawler or remove the lock/PID files. The final report is
-written only after normal completion and does not exist at this checkpoint.
+The ten 404 rows are retained as source tombstones. The 21 partial descriptions
+were reviewed in the v2.2 reconciliation artifact, and all 1,544 raw Built
+Surface values were reparsed with unit-aware policy. See
+`docs/DIVISARE_METADATA_RECONCILIATION.md`.
 
-Read-only progress inspection:
+Read-only final-state inspection:
 
 ```powershell
 .\.venv-divisare\Scripts\python.exe `

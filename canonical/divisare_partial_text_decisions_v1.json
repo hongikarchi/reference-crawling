@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "version": "divisare-partial-text-review-v1.0",
+  "decided_by": "codex-5.6-sol-semantic-review",
+  "decided_at": "2026-08-04T00:00:00+09:00",
+  "decisions": [
+    {
+      "article_id": 152511,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "a08bc73f2db940773796dbc18ac39e2ffafbec81f8d878e7c7a8c97e38acac80",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Complete installation project description."
+    },
+    {
+      "article_id": 189203,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "1b4be00575bef9166b31cdae05e11ea1734f280aa0f5e33170e823ebac4371e2",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Substantial restoration history and design text."
+    },
+    {
+      "article_id": 203666,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "eaa8933909f00c30f33ea6bf1a73585a390a4b87bed35d13110a6fe98d3b8dd9",
+      "decision": "reject",
+      "reason_code": "series_boilerplate",
+      "note": "Shared news boilerplate, not project prose."
+    },
+    {
+      "article_id": 203673,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "eaa8933909f00c30f33ea6bf1a73585a390a4b87bed35d13110a6fe98d3b8dd9",
+      "decision": "reject",
+      "reason_code": "series_boilerplate",
+      "note": "Shared news boilerplate, not project prose."
+    },
+    {
+      "article_id": 203677,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "eaa8933909f00c30f33ea6bf1a73585a390a4b87bed35d13110a6fe98d3b8dd9",
+      "decision": "reject",
+      "reason_code": "series_boilerplate",
+      "note": "Shared news boilerplate, not project prose."
+    },
+    {
+      "article_id": 203680,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "eaa8933909f00c30f33ea6bf1a73585a390a4b87bed35d13110a6fe98d3b8dd9",
+      "decision": "reject",
+      "reason_code": "series_boilerplate",
+      "note": "Shared news boilerplate, not project prose."
+    },
+    {
+      "article_id": 203683,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "eaa8933909f00c30f33ea6bf1a73585a390a4b87bed35d13110a6fe98d3b8dd9",
+      "decision": "reject",
+      "reason_code": "series_boilerplate",
+      "note": "Shared news boilerplate, not project prose."
+    },
+    {
+      "article_id": 203700,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "eaa8933909f00c30f33ea6bf1a73585a390a4b87bed35d13110a6fe98d3b8dd9",
+      "decision": "reject",
+      "reason_code": "series_boilerplate",
+      "note": "Shared news boilerplate, not project prose."
+    },
+    {
+      "article_id": 226836,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "6a1dcc3601ecf96352583716716783b8698daab0df230d3bb5aecccdd0760135",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Complete renovation and design description."
+    },
+    {
+      "article_id": 250887,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "6a658bc49d24e271f8ac7d45731fb9d7cd5a157455d3e635963fc9d2ce226d47",
+      "decision": "reject",
+      "reason_code": "hashtag_block",
+      "note": "Topic hashtags, not prose."
+    },
+    {
+      "article_id": 261731,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "01cce0c2282871f1f6c4bf52794b3f4c166733f64667946b21cd0c30f5e868dd",
+      "decision": "review",
+      "reason_code": "shared_exhibition_context",
+      "note": "Shared exhibition section text; route as context only after review."
+    },
+    {
+      "article_id": 261740,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "01cce0c2282871f1f6c4bf52794b3f4c166733f64667946b21cd0c30f5e868dd",
+      "decision": "review",
+      "reason_code": "shared_exhibition_context",
+      "note": "Shared exhibition section text; route as context only after review."
+    },
+    {
+      "article_id": 294814,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "feb253c237a475f83e0b89dc4f18eea611d1e9dd4c38a395c715160649d64cbc",
+      "decision": "accept",
+      "reason_code": "meaningful_project_prose",
+      "note": "Meaningful project and technique description."
+    },
+    {
+      "article_id": 302107,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "8fd7ac341d0a73fdad853246f41c008ade6c534ea8a6af76e928fa3a44f3f573",
+      "decision": "accept",
+      "reason_code": "meaningful_concept_prose",
+      "note": "Meaningful concept descriptions; article kind remains unchanged."
+    },
+    {
+      "article_id": 340154,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "a0b58d8d6fbed9c4628af399621e55278117015dcdb0b003ca2849eb15a90f32",
+      "decision": "reject",
+      "reason_code": "ascii_diagram",
+      "note": "Symbol diagram, not natural-language prose."
+    },
+    {
+      "article_id": 346848,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "5ec07e6477a3af049f541ef78f47c6a831721d40544906fa59483427958b62b5",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Substantial site history, ecology, and design text."
+    },
+    {
+      "article_id": 347217,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "30ab8d4fb136e6a29f3920dddcfef67e06a6775e6631ae35844d799e9847a0b8",
+      "decision": "reject",
+      "reason_code": "drawing_labels",
+      "note": "Drawing labels, not project prose."
+    },
+    {
+      "article_id": 348500,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "d0debd4bb1ff945b1109511ed1672bb5daaa45fbdf50baef50c6b8945c691bda",
+      "decision": "reject",
+      "reason_code": "program_label_list",
+      "note": "Program labels, not prose."
+    },
+    {
+      "article_id": 425341,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "aecf01d79e77b3cb57cca3e637e3f76a439b80e60d781e03ad265f0e14d76791",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Detailed location, concept, and form description."
+    },
+    {
+      "article_id": 431814,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "34367f1f417a2adac3630f600469a78483cadec473b8b68e0ec72c3b0238c53d",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Detailed use, budget, and design description."
+    },
+    {
+      "article_id": 545147,
+      "parser_version": "divisare-html-metadata-v2.3",
+      "prose_sha256": "5b1e6d07c5c718757806f55a68151284c5d0908b3bfdc8489e2b797f26d8b285",
+      "decision": "accept",
+      "reason_code": "complete_project_prose",
+      "note": "Substantial context, performance, and design text."
+    }
+  ]
+}
