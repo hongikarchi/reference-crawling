@@ -21,6 +21,7 @@ from crawl.architizer.recrawl_v2 import (  # noqa: E402
     DEFAULT_SNAPSHOT_DIR,
     DEFAULT_SOURCE_DB,
     DEFAULT_STATE_DB,
+    finalize_full_run,
     inspect_sidecar_lock,
     preview_full_recrawl,
     recover_stale_sidecar_lock,
@@ -28,6 +29,7 @@ from crawl.architizer.recrawl_v2 import (  # noqa: E402
     run_award_seed_census,
     run_full_recrawl,
     run_network_smoke,
+    run_snapshot_reparse,
     write_text_no_clobber,
 )
 
@@ -99,6 +101,49 @@ def build_parser() -> argparse.ArgumentParser:
         "--report",
         type=Path,
         help="Optional new Markdown report; never overwrites an existing file.",
+    )
+
+    for command, size in (("reparse-n10", 10), ("reparse-n100", 100)):
+        reparse = subparsers.add_parser(
+            command,
+            help=f"Offline reparse of N={size} frozen firm gzip snapshots.",
+        )
+        _add_runtime_paths(reparse)
+        reparse.add_argument(
+            "--resume-run-id",
+            type=int,
+            help="Resume this unfinished snapshot-reparse run ID.",
+        )
+
+    reparse_full = subparsers.add_parser(
+        "reparse-full",
+        help="Offline full firm snapshot reparse after N10/N100 gates.",
+    )
+    _add_runtime_paths(reparse_full)
+    reparse_full.add_argument(
+        "--resume-run-id",
+        type=int,
+        help="Resume this unfinished snapshot-reparse run ID.",
+    )
+    reparse_full.add_argument(
+        "--confirm-full-offline-reparse",
+        action="store_true",
+        help="Required explicit gate for the full offline snapshot reparse.",
+    )
+
+    finalize = subparsers.add_parser(
+        "finalize-full-run",
+        help=(
+            "Offline-only recovery for a fully fetched full run that failed "
+            "in post-summary SQL."
+        ),
+    )
+    _add_runtime_paths(finalize)
+    finalize.add_argument("--run-id", type=int, required=True)
+    finalize.add_argument(
+        "--confirm-offline-finalization",
+        action="store_true",
+        help="Required explicit gate; this command performs no network requests.",
     )
 
     inspect_lock = subparsers.add_parser(
@@ -173,6 +218,31 @@ def main(argv: list[str] | None = None) -> int:
                 args.report,
                 render_network_report(result, "Architizer source recrawl v2 full"),
             )
+    elif args.command in {"reparse-n10", "reparse-n100"}:
+        result = run_snapshot_reparse(
+            smoke_size=10 if args.command == "reparse-n10" else 100,
+            resume_run_id=args.resume_run_id,
+            source_path=args.source_db,
+            state_path=args.state_db,
+            snapshot_root=args.snapshot_dir,
+        )
+    elif args.command == "reparse-full":
+        result = run_snapshot_reparse(
+            smoke_size=None,
+            confirmed_full=args.confirm_full_offline_reparse,
+            resume_run_id=args.resume_run_id,
+            source_path=args.source_db,
+            state_path=args.state_db,
+            snapshot_root=args.snapshot_dir,
+        )
+    elif args.command == "finalize-full-run":
+        result = finalize_full_run(
+            run_id=args.run_id,
+            confirmed=args.confirm_offline_finalization,
+            source_path=args.source_db,
+            state_path=args.state_db,
+            snapshot_root=args.snapshot_dir,
+        )
     elif args.command == "inspect-lock":
         result = inspect_sidecar_lock(args.state_db)
     elif args.command == "recover-lock":

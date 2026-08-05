@@ -1,0 +1,15 @@
+{
+  "award_year": 2026,
+  "finished_at": "2026-08-02T11:42:00+00:00",
+  "parser_version": "architizer-recrawl-v2-run4-sanitized",
+  "records_per_track": 2,
+  "run_id": 4,
+  "tracks": [
+    "Firm",
+    "Plus",
+    "Products",
+    "Sustainability",
+    "Typology"
+  ],
+  "typology_final_url_policy": "exact"
+}
