@@ -2780,10 +2780,14 @@ def _build_locked(
     parent_stat = parent_path.stat()
     parent_sha_before = file_sha256(parent_path)
     source = open_readonly(parent_path)
-    parent = validate_parent(source)
-    decision_version, decisions, decision_sha = load_review_decisions(
-        decisions_path
-    )
+    try:
+        parent = validate_parent(source)
+        decision_version, decisions, decision_sha = load_review_decisions(
+            decisions_path
+        )
+    except Exception:
+        source.close()
+        raise
 
     target: Optional[sqlite3.Connection] = None
     try:
