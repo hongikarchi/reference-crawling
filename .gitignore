@@ -18,6 +18,8 @@ __pycache__/
 *.egg-info/
 .venv/
 .venv-divisare/
+.venv-images/
+.uv-python/
 venv/
 
 # Environment / secrets

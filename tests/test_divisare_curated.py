@@ -110,6 +110,35 @@ class DivisarePolicyTests(unittest.TestCase):
         self.assertIsNotNone(cover_identity)
         self.assertEqual(cover_identity.asset_key, gallery_identity.asset_key)
         self.assertEqual(cover_identity.asset_key, "divisare|1743878|COLL-p03")
+        self.assertIsNone(cover_identity.delivery_version)
+
+    def test_cloudinary_asset_key_keeps_delivery_version(self):
+        public_id = "7f2fedf69ca074197bf77b221731ff5cca8a0812"
+        cover = (
+            "https://images.divisare.com/image/upload/c_fit,w_1200/"
+            f"v1678438203/{public_id}.jpg"
+        )
+        gallery_same_version = (
+            "https://images.divisare.com/images/f_auto,q_auto,w_auto/"
+            f"v1678438203/{public_id}/the-gyaan-center.jpg"
+        )
+        gallery_next_version = (
+            "https://images.divisare.com/images/f_auto,q_auto,w_auto/"
+            f"v1678438207/{public_id}/the-gyaan-center.jpg"
+        )
+
+        cover_identity = divisare_asset_identity(cover)
+        same_identity = divisare_asset_identity(gallery_same_version)
+        next_identity = divisare_asset_identity(gallery_next_version)
+
+        self.assertEqual(cover_identity.asset_key, same_identity.asset_key)
+        self.assertEqual(
+            cover_identity.asset_key,
+            f"divisare|{public_id}|v1678438203",
+        )
+        self.assertEqual(cover_identity.delivery_version, "v1678438203")
+        self.assertNotEqual(cover_identity.asset_key, next_identity.asset_key)
+        self.assertEqual(next_identity.delivery_version, "v1678438207")
 
     def test_tag_policy_keeps_scope_and_specificity(self):
         plans = mappings_for_tag(

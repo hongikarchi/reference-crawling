@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 TAXONOMY_VERSION = "divisare-taxonomy-v1.2"
 TEXT_PROCESSOR_VERSION = "divisare-text-clean-v1.0"
-ASSET_KEY_VERSION = "divisare-asset-key-v1.0"
+ASSET_KEY_VERSION = "divisare-asset-key-v1.1"
 URL_HINT_VERSION = "divisare-url-hint-v1.0"
 CLUSTER_VERSION = "divisare-cluster-v1.1"
 RESOLVER_VERSION = "divisare-resolver-v1.2"
@@ -41,6 +41,7 @@ class TagMapping:
 class AssetIdentity:
     asset_key: str
     public_id: Optional[str]
+    delivery_version: Optional[str]
     original_filename: Optional[str]
     url_generation: str
     transform_signature: Optional[str]
@@ -209,11 +210,11 @@ def is_generic_building_name(value: str) -> bool:
 
 
 _DIVISARE_UUID_RE = re.compile(
-    r"/v\d+/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/.]|$)"
+    r"/(v\d+)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/.]|$)"
 )
-_DIVISARE_HEX_RE = re.compile(r"/v\d+/([0-9a-f]{20,40})(?:[/.]|$)")
+_DIVISARE_HEX_RE = re.compile(r"/(v\d+)/([0-9a-f]{20,40})(?:[/.]|$)")
 _DIVISARE_PUBLIC_ID_RE = re.compile(
-    r"/v\d+/([a-z0-9][a-z0-9-]{14,40})(?:[/.]|$)"
+    r"/(v\d+)/([a-z0-9][a-z0-9-]{14,40})(?:[/.]|$)"
 )
 _DIVISARE_PROJECT_IMAGE_RE = re.compile(r"/project_images/(\d+)/([^/?.]+)")
 _TRANSFORM_RE = re.compile(r"/(?:image/upload|images)/([^/]+)/v\d+/")
@@ -238,6 +239,7 @@ def divisare_asset_identity(url: Any) -> Optional[AssetIdentity]:
         return AssetIdentity(
             asset_key=f"divisare|{image_id}|{filename}",
             public_id=image_id,
+            delivery_version=None,
             original_filename=filename,
             url_generation="project_images",
             transform_signature=transform,
@@ -246,10 +248,11 @@ def divisare_asset_identity(url: Any) -> Optional[AssetIdentity]:
     for pattern in (_DIVISARE_UUID_RE, _DIVISARE_HEX_RE, _DIVISARE_PUBLIC_ID_RE):
         match = pattern.search(path)
         if match:
-            public_id = match.group(1)
+            delivery_version, public_id = match.groups()
             return AssetIdentity(
-                asset_key=f"divisare|{public_id}",
+                asset_key=f"divisare|{public_id}|{delivery_version}",
                 public_id=public_id,
+                delivery_version=delivery_version,
                 original_filename=None,
                 url_generation="cloudinary_public_id",
                 transform_signature=transform,
@@ -261,6 +264,7 @@ def divisare_asset_identity(url: Any) -> Optional[AssetIdentity]:
     return AssetIdentity(
         asset_key=f"divisare|path|{fallback}",
         public_id=None,
+        delivery_version=None,
         original_filename=None,
         url_generation="path_fallback",
         transform_signature=transform,
