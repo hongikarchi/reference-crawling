@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-08-05T07:40:09+09:00",
+  "manifest_kind": "architizer_run15_post_close_audit",
+  "network_result": {
+    "block_attempt_count": 0,
+    "done_target_count": 38818,
+    "failed_target_count": 9,
+    "http200_success_attempt_count": 38827,
+    "http_attempt_count": 38832,
+    "metadata_version_link_count": 38827,
+    "selected_target_count": 38827,
+    "target_urlset_sha256": "122E20961BB1ED096A5E6DCA23CB6AD371712F2A1A4B561C65194C80789CC5A3"
+  },
+  "run": {
+    "error": "OperationalError: too many SQL variables",
+    "finished_at": "2026-08-04T22:38:10+00:00",
+    "id": 15,
+    "parser_version": "architizer-source-parser-v2.2.0",
+    "started_at": "2026-08-04T00:54:27+00:00",
+    "status_at_capture": "failed",
+    "status_note": "All frozen targets and metadata were persisted; only final summary aggregation failed after collection."
+  },
+  "sidecar": {
+    "combined_state_and_snapshot_bytes": 7475106438,
+    "foreign_key_violation_count": 0,
+    "integrity_check": "ok",
+    "path": "data/enrichment/architizer_source_recrawl_v2.db",
+    "quick_check": "ok",
+    "sha256": "12C099F1CDE143AE5197983329140E4678E67D7FFEF5E648C1CF8FDA49AA063E",
+    "size_bytes": 4869894144,
+    "snapshot_bytes": 2605212294,
+    "snapshot_file_count": 62587,
+    "sqlite_journal_present": false,
+    "sqlite_shm_present": false,
+    "sqlite_wal_present": false,
+    "writer_lock_present": false
+  },
+  "source_input": {
+    "path": "data/crawl/architizer.db",
+    "sha256_after": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+    "sha256_before": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+    "size_bytes": 90918912
+  }
+}

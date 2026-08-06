@@ -1,0 +1,50 @@
+{
+  "active_run_count": 0,
+  "approval_evidence": "User instruction 'ㅇㅇ 쭉 진행해줘.' authorized the already-scoped Architizer relation-closure continuation; no arbitrary all-source refresh was added.",
+  "captured_at": "2026-08-05T12:00:34+09:00",
+  "followup": {
+    "completed_distinct_target_count": 45753,
+    "distinct_target_count": 45753,
+    "elapsed_seconds_sum": 92157.609,
+    "global_pending_count": 0,
+    "run_ids": [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
+    "union_urlset_sha256": "32043EEF83B3B344BE16DD4B759A2EA86D9FE9AC08E8451883A5FD98C7C44DFE",
+    "wave_count": 11
+  },
+  "manifest_kind": "architizer_network_closure_post_close_audit",
+  "run_ledger": [
+    {"id": 15, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.2.0", "selected": 38827, "status": "completed_with_pending_discoveries", "elapsed_seconds": 78223.0, "new_pending": 1820},
+    {"id": 16, "kind": "network_smoke_n10", "parser": "architizer-source-parser-v2.3.0", "selected": 10, "status": "completed", "elapsed_seconds": 22.506},
+    {"id": 17, "kind": "network_smoke_n100", "parser": "architizer-source-parser-v2.3.0", "selected": 100, "status": "completed", "elapsed_seconds": 203.024},
+    {"id": 18, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 1820, "status": "completed_with_pending_discoveries", "elapsed_seconds": 3667.771, "new_pending": 4038},
+    {"id": 19, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 4038, "status": "completed_with_pending_discoveries", "elapsed_seconds": 8098.5, "new_pending": 179},
+    {"id": 20, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 179, "status": "completed_with_pending_discoveries", "elapsed_seconds": 362.266, "new_pending": 694},
+    {"id": 21, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 694, "status": "completed_with_pending_discoveries", "elapsed_seconds": 1393.275, "new_pending": 10},
+    {"id": 22, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 10, "status": "completed_with_pending_discoveries", "elapsed_seconds": 27.338, "new_pending": 55},
+    {"id": 23, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 55, "status": "completed_with_pending_discoveries", "elapsed_seconds": 113.385, "new_pending": 4},
+    {"id": 24, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 4, "status": "completed_with_pending_discoveries", "elapsed_seconds": 11.433, "new_pending": 16},
+    {"id": 25, "kind": "full_recrawl_v2", "parser": "architizer-source-parser-v2.3.0", "selected": 16, "status": "completed", "elapsed_seconds": 35.111, "new_pending": 0}
+  ],
+  "sidecar": {
+    "combined_state_and_snapshot_bytes": 8218001897,
+    "foreign_key_violation_count": 0,
+    "integrity_check": "ok",
+    "path": "data/enrichment/architizer_source_recrawl_v2.db",
+    "quick_check": "ok",
+    "schema_version": "2.2",
+    "sha256": "AB378A879865CE189F384F77ECD22674CC55E5E3D4A18404678F88710F083BF3",
+    "size_bytes": 5330952192,
+    "snapshot_bytes": 2887049705,
+    "snapshot_file_count": 69513,
+    "sqlite_journal_present": false,
+    "sqlite_shm_present": false,
+    "sqlite_wal_present": false,
+    "writer_lock_present": false
+  },
+  "source_input": {
+    "path": "data/crawl/architizer.db",
+    "sha256": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+    "size_bytes": 90918912
+  },
+  "target_status_counts": {"done": 69116, "failed": 150}
+}

@@ -1,0 +1,68 @@
+{
+  "active_run_count": 0,
+  "captured_at": "2026-08-05T12:09:36+09:00",
+  "global_pending_count": 0,
+  "manifest_kind": "architizer_final_sidecar_post_reparse_audit",
+  "project_parser_regression_recoveries": [
+    {"run_id": 26, "source_run_id": 15, "url": "https://architizer.com/projects/techsize-flagship-store/", "identity_status": "valid", "parse_status": "complete"},
+    {"run_id": 27, "source_run_id": 15, "url": "https://architizer.com/projects/lineweights-la-forum-solo-exhibition/", "identity_status": "valid", "parse_status": "partial"},
+    {"run_id": 28, "source_run_id": 15, "url": "https://architizer.com/projects/architektursalon/", "identity_status": "valid", "parse_status": "complete"},
+    {"run_id": 28, "source_run_id": 14, "url": "https://architizer.com/projects/riegers-spa/", "identity_status": "valid", "parse_status": "complete"}
+  ],
+  "reparse_full": {
+    "eligible_url_count": 6606,
+    "eligible_urls_sha256": "346008D0C366EEF103C7B9A0C69A8D53E9B50246D92C1D031089F275FCF1568E",
+    "entity_type_counts": {"firm": 6604, "project": 2},
+    "frozen_descriptor_sha256": "DD9DF6090FBEE8D8B454B9394C51F774DC8BB9F5843321A9559448D4681CB735",
+    "frozen_urls_sha256": "346008D0C366EEF103C7B9A0C69A8D53E9B50246D92C1D031089F275FCF1568E",
+    "gate_failures": [],
+    "gate_passed": true,
+    "identity_counts": {"valid": 6606},
+    "office_location_status_counts": {"confirmed": 4460, "missing": 2144},
+    "parse_status_counts": {"complete": 987, "conflict": 4478, "partial": 1141},
+    "processed": 6606,
+    "reparse_http_attempt_count": 0,
+    "run_id": 28,
+    "selected": 6606,
+    "source_http_attempt_count": 6606,
+    "status": "completed",
+    "target_status_unchanged_count": 6606,
+    "verified_content_bytes": 995488530,
+    "verified_gzip_count": 6606
+  },
+  "reparse_ladder": {
+    "n10_run_id": 26,
+    "n10_selected": 10,
+    "n100_run_id": 27,
+    "n100_selected": 100,
+    "project_parser_regression_recovery_count": 4,
+    "total_selected": 6716
+  },
+  "sidecar": {
+    "combined_state_and_snapshot_bytes": 8430559721,
+    "foreign_key_violation_count": 0,
+    "integrity_check": "ok",
+    "path": "data/enrichment/architizer_source_recrawl_v2.db",
+    "quick_check": "ok",
+    "schema_version": "2.2",
+    "sha256": "7BB98F789CBC779A3DA3F7A94D9E092A05883B23EC6441119A67FE11573742B8",
+    "size_bytes": 5543510016,
+    "snapshot_bytes": 2887049705,
+    "snapshot_file_count": 69513,
+    "sqlite_journal_present": false,
+    "sqlite_shm_present": false,
+    "sqlite_wal_present": false,
+    "writer_lock_present": false
+  },
+  "source_inputs": {
+    "curated_v1_3": {
+      "path": "data/curated/architizer_curated_v1_3.db",
+      "sha256": "5AEA8A85FA54B139F31585069C50A19AFA7D87B500A44AAAD32CCDC29937B089"
+    },
+    "raw": {
+      "path": "data/crawl/architizer.db",
+      "sha256": "35FAA8AD2B4681033E1F7F74148499B29009777977204C7A65923D8FABB5C985",
+      "size_bytes": 90918912
+    }
+  }
+}

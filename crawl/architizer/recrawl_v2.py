@@ -18,7 +18,9 @@ import email.utils
 import gzip
 import hashlib
 import html
+import io
 import json
+import math
 import os
 import random
 import re
@@ -48,11 +50,21 @@ DEFAULT_SNAPSHOT_DIR = (
 OFFICIAL_SITEMAP_URL = "https://architizer.com/sitemap.xml"
 ARCHITIZER_HOST = "architizer.com"
 WINNERS_HOST = "winners.architizer.com"
-PARSER_VERSION = "architizer-source-parser-v2.2.0"
-STATE_SCHEMA_VERSION = "2.1"
-METADATA_VERSION = "architizer-source-metadata-v2.2"
+PARSER_VERSION = "architizer-source-parser-v2.3.0"
+STATE_SCHEMA_VERSION = "2.2"
+METADATA_VERSION = "architizer-source-metadata-v2.3"
 SMOKE_GATE_POLICY_VERSION = "architizer-smoke-gate-v2"
+SNAPSHOT_REPARSE_GATE_POLICY_VERSION = "architizer-snapshot-reparse-gate-v1"
+NETWORK_SNAPSHOT_INTEGRITY_POLICY_VERSION = (
+    "architizer-network-snapshot-integrity-v1"
+)
+FULL_RUN_POSTPROCESS_RECOVERY_VERSION = (
+    "architizer-full-run-postprocess-recovery-v1"
+)
+FULL_RUN_SQL_VARIABLE_ERROR = "OperationalError: too many SQL variables"
 MINIMUM_FULL_DELAY_SECONDS = 2.0
+MAX_SNAPSHOT_RESPONSE_BYTES = 50 * 1024 * 1024
+MAX_COMPRESSED_SNAPSHOT_BYTES = 64 * 1024 * 1024
 KNOWN_IDENTITY_EXCEPTIONS = {
     "https://architizer.com/projects/requiem-for-ruins-2/": {
         "reason": (
@@ -106,6 +118,17 @@ FIRM_FIELDS = (
     "project_urls",
     "social_links",
 )
+TARGET_NETWORK_STATE_FIELDS = (
+    "status",
+    "retryable",
+    "attempt_count",
+    "next_retry_at",
+    "last_attempt_at",
+    "last_error",
+    "last_http_status",
+    "last_snapshot_sha256",
+    "last_parse_status",
+)
 
 
 class RecrawlError(RuntimeError):
@@ -143,6 +166,42 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest().upper()
+
+
+def _measure_stable_file_identity(path: Path) -> dict[str, Any]:
+    """Measure SHA/size while rejecting replacement or mutation mid-read."""
+
+    try:
+        before = path.stat()
+        digest = sha256_file(path)
+        after = path.stat()
+    except OSError as exc:
+        raise RecrawlError(f"cannot measure immutable source DB: {path}") from exc
+    before_file_id = (before.st_dev, before.st_ino)
+    after_file_id = (after.st_dev, after.st_ino)
+    if (
+        not path.is_file()
+        or before_file_id != after_file_id
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+    ):
+        raise RecrawlError(
+            f"immutable source DB changed while it was measured: {path}"
+        )
+    return {"sha256": digest, "size": int(after.st_size)}
+
+
+def _require_same_file_identity(
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+) -> None:
+    if (
+        before.get("sha256") != after.get("sha256")
+        or before.get("size") != after.get("size")
+    ):
+        raise RecrawlError(
+            "legacy source DB SHA-256/size changed during offline finalization"
+        )
 
 
 def normalize_entity_url(url: str, entity_type: str | None = None) -> str:
@@ -728,6 +787,236 @@ CREATE TABLE IF NOT EXISTS award_discoveries (
 """
 
 
+SNAPSHOT_REPARSE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS snapshot_reparse_inputs (
+    run_id INTEGER NOT NULL REFERENCES runs(id),
+    target_url TEXT NOT NULL REFERENCES targets(url),
+    selection_order INTEGER NOT NULL,
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('project','firm')),
+    selection_kind TEXT NOT NULL CHECK (
+        selection_kind IN (
+            'firm_last_good_parser_upgrade',
+            'project_parser_regression_recovery'
+        )
+    ),
+    source_run_id INTEGER NOT NULL REFERENCES runs(id),
+    source_metadata_version_id INTEGER NOT NULL REFERENCES metadata_versions(id),
+    source_http_attempt_id INTEGER NOT NULL REFERENCES http_attempts(id),
+    request_kind TEXT NOT NULL CHECK (
+        request_kind IN ('project_page','firm_page')
+    ),
+    requested_url TEXT NOT NULL,
+    http_outcome TEXT NOT NULL CHECK (http_outcome='success'),
+    http_status INTEGER NOT NULL CHECK (http_status=200),
+    block_signals_json TEXT NOT NULL CHECK (block_signals_json='[]'),
+    attempt_error TEXT CHECK (attempt_error IS NULL),
+    content_sha256 TEXT NOT NULL CHECK (length(content_sha256)=64),
+    final_url TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    response_bytes INTEGER NOT NULL CHECK (response_bytes > 0),
+    gzip_path TEXT NOT NULL,
+    gzip_sha256 TEXT NOT NULL CHECK (length(gzip_sha256)=64),
+    integrity_status TEXT NOT NULL CHECK (integrity_status='verified'),
+    target_network_state_json TEXT NOT NULL
+        CHECK (json_valid(target_network_state_json)),
+    frozen_at TEXT NOT NULL,
+    PRIMARY KEY(run_id,target_url),
+    UNIQUE(run_id,selection_order)
+);
+
+CREATE TABLE IF NOT EXISTS snapshot_reparse_lineage (
+    reparse_version_id INTEGER PRIMARY KEY REFERENCES metadata_versions(id),
+    reparse_run_id INTEGER NOT NULL REFERENCES runs(id),
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('project','firm')),
+    selection_kind TEXT NOT NULL CHECK (
+        selection_kind IN (
+            'firm_last_good_parser_upgrade',
+            'project_parser_regression_recovery'
+        )
+    ),
+    source_run_id INTEGER NOT NULL REFERENCES runs(id),
+    source_metadata_version_id INTEGER NOT NULL REFERENCES metadata_versions(id),
+    source_http_attempt_id INTEGER NOT NULL REFERENCES http_attempts(id),
+    request_kind TEXT NOT NULL CHECK (
+        request_kind IN ('project_page','firm_page')
+    ),
+    requested_url TEXT NOT NULL,
+    http_outcome TEXT NOT NULL CHECK (http_outcome='success'),
+    http_status INTEGER NOT NULL CHECK (http_status=200),
+    block_signals_json TEXT NOT NULL CHECK (block_signals_json='[]'),
+    attempt_error TEXT CHECK (attempt_error IS NULL),
+    target_url TEXT NOT NULL REFERENCES targets(url),
+    content_sha256 TEXT NOT NULL CHECK (length(content_sha256)=64),
+    final_url TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    response_bytes INTEGER NOT NULL CHECK (response_bytes > 0),
+    gzip_path TEXT NOT NULL,
+    gzip_sha256 TEXT NOT NULL CHECK (length(gzip_sha256)=64),
+    integrity_status TEXT NOT NULL CHECK (integrity_status='verified'),
+    verified_at TEXT NOT NULL,
+    UNIQUE(reparse_run_id,target_url),
+    FOREIGN KEY(reparse_run_id,target_url)
+        REFERENCES snapshot_reparse_inputs(run_id,target_url)
+);
+
+CREATE TRIGGER IF NOT EXISTS snapshot_reparse_inputs_validate_insert
+BEFORE INSERT ON snapshot_reparse_inputs
+BEGIN
+    SELECT CASE WHEN (
+        SELECT COUNT(*)
+        FROM runs r
+        WHERE r.id=NEW.run_id
+          AND r.run_kind IN (
+              'snapshot_reparse_n10',
+              'snapshot_reparse_n100',
+              'snapshot_reparse_full'
+          )
+          AND r.status='running'
+    )=1 THEN 1 ELSE RAISE(ABORT,'invalid snapshot reparse run') END;
+    SELECT CASE WHEN (
+        SELECT COUNT(*)
+        FROM metadata_versions m
+        JOIN runs r ON r.id=m.run_id
+        JOIN targets t ON t.url=m.target_url
+        WHERE m.id=NEW.source_metadata_version_id
+          AND m.run_id=NEW.source_run_id
+          AND m.target_url=NEW.target_url
+          AND m.entity_type=NEW.entity_type
+          AND (
+              (
+                  NEW.selection_kind='firm_last_good_parser_upgrade'
+                  AND NEW.entity_type='firm'
+                  AND m.identity_status='valid'
+              )
+              OR (
+                  NEW.selection_kind='project_parser_regression_recovery'
+                  AND NEW.entity_type='project'
+                  AND m.identity_status<>'valid'
+                  AND t.status='failed'
+                  AND t.retryable=0
+                  AND t.attempt_count>0
+                  AND t.last_attempt_at IS NOT NULL
+                  AND t.last_error IS NOT NULL
+                  AND t.last_http_status=200
+                  AND t.last_parse_status='no_content'
+                  AND t.last_snapshot_sha256=m.snapshot_sha256
+              )
+          )
+          AND m.snapshot_sha256=NEW.content_sha256
+          AND r.status LIKE 'completed%'
+    )=1 THEN 1 ELSE RAISE(ABORT,'invalid source metadata lineage') END;
+    SELECT CASE WHEN (
+        SELECT COUNT(*)
+        FROM http_attempts a
+        JOIN metadata_versions m ON m.run_id=a.run_id
+        WHERE m.id=NEW.source_metadata_version_id
+          AND a.target_url=NEW.target_url
+          AND a.request_kind=NEW.request_kind
+          AND (
+              (NEW.entity_type='firm' AND NEW.request_kind='firm_page')
+              OR (
+                  NEW.entity_type='project'
+                  AND NEW.request_kind='project_page'
+              )
+          )
+          AND a.requested_url=NEW.requested_url
+          AND a.outcome=NEW.http_outcome
+          AND a.http_status=NEW.http_status
+          AND a.block_signals_json=NEW.block_signals_json
+          AND a.error IS NEW.attempt_error
+          AND a.sha256=NEW.content_sha256
+    )=1 THEN 1 ELSE RAISE(ABORT,'source HTTP evidence is not exact') END;
+    SELECT CASE WHEN (
+        SELECT COUNT(*)
+        FROM http_attempts a
+        WHERE a.id=NEW.source_http_attempt_id
+          AND a.run_id=NEW.source_run_id
+          AND a.target_url=NEW.target_url
+          AND a.request_kind=NEW.request_kind
+          AND a.requested_url=NEW.requested_url
+          AND a.outcome=NEW.http_outcome
+          AND a.http_status=NEW.http_status
+          AND a.block_signals_json=NEW.block_signals_json
+          AND a.error IS NEW.attempt_error
+          AND a.sha256=NEW.content_sha256
+          AND a.final_url=NEW.final_url
+          AND a.content_type=NEW.content_type
+          AND a.response_bytes=NEW.response_bytes
+          AND a.gzip_path=NEW.gzip_path
+          AND NEW.source_run_id=(
+              SELECT m.run_id FROM metadata_versions m
+              WHERE m.id=NEW.source_metadata_version_id
+          )
+    )=1 THEN 1 ELSE RAISE(ABORT,'source HTTP attempt mismatch') END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS snapshot_reparse_lineage_validate_insert
+BEFORE INSERT ON snapshot_reparse_lineage
+BEGIN
+    SELECT CASE WHEN (
+        SELECT COUNT(*)
+        FROM snapshot_reparse_inputs i
+        WHERE i.run_id=NEW.reparse_run_id
+          AND i.target_url=NEW.target_url
+          AND i.entity_type=NEW.entity_type
+          AND i.selection_kind=NEW.selection_kind
+          AND i.source_run_id=NEW.source_run_id
+          AND i.source_metadata_version_id=NEW.source_metadata_version_id
+          AND i.source_http_attempt_id=NEW.source_http_attempt_id
+          AND i.request_kind=NEW.request_kind
+          AND i.requested_url=NEW.requested_url
+          AND i.http_outcome=NEW.http_outcome
+          AND i.http_status=NEW.http_status
+          AND i.block_signals_json=NEW.block_signals_json
+          AND i.attempt_error IS NEW.attempt_error
+          AND i.content_sha256=NEW.content_sha256
+          AND i.final_url=NEW.final_url
+          AND i.content_type=NEW.content_type
+          AND i.response_bytes=NEW.response_bytes
+          AND i.gzip_path=NEW.gzip_path
+          AND i.gzip_sha256=NEW.gzip_sha256
+          AND i.integrity_status=NEW.integrity_status
+    )=1 THEN 1 ELSE RAISE(ABORT,'snapshot reparse input mismatch') END;
+    SELECT CASE WHEN (
+        SELECT COUNT(*)
+        FROM metadata_versions m
+        JOIN runs r ON r.id=m.run_id
+        WHERE m.id=NEW.reparse_version_id
+          AND m.run_id=NEW.reparse_run_id
+          AND m.target_url=NEW.target_url
+          AND m.entity_type=NEW.entity_type
+          AND m.snapshot_sha256=NEW.content_sha256
+          AND m.parser_version=r.parser_version
+          AND m.id<>NEW.source_metadata_version_id
+    )=1 THEN 1 ELSE RAISE(ABORT,'reparse metadata lineage mismatch') END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS snapshot_reparse_inputs_no_update
+BEFORE UPDATE ON snapshot_reparse_inputs
+BEGIN
+    SELECT RAISE(ABORT,'snapshot reparse inputs are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS snapshot_reparse_inputs_no_delete
+BEFORE DELETE ON snapshot_reparse_inputs
+BEGIN
+    SELECT RAISE(ABORT,'snapshot reparse inputs are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS snapshot_reparse_lineage_no_update
+BEFORE UPDATE ON snapshot_reparse_lineage
+BEGIN
+    SELECT RAISE(ABORT,'snapshot reparse lineage is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS snapshot_reparse_lineage_no_delete
+BEFORE DELETE ON snapshot_reparse_lineage
+BEGIN
+    SELECT RAISE(ABORT,'snapshot reparse lineage is append-only');
+END;
+"""
+
+
 def _state_meta_readonly(path: Path) -> dict[str, str]:
     if not path.exists() or path.stat().st_size == 0:
         return {}
@@ -871,7 +1160,7 @@ def connect_state(
     path.parent.mkdir(parents=True, exist_ok=True)
     existing_meta = _state_meta_readonly(path)
     existing_version = existing_meta.get("schema_version")
-    if existing_version not in {None, "2.0", STATE_SCHEMA_VERSION}:
+    if existing_version not in {None, "2.0", "2.1", STATE_SCHEMA_VERSION}:
         raise RecrawlError(
             f"unsupported sidecar schema version: {existing_version}"
         )
@@ -895,23 +1184,61 @@ def connect_state(
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys=ON")
     connection.execute("PRAGMA busy_timeout=5000")
-    connection.executescript(STATE_SCHEMA)
-    if existing_version == "2.0":
-        connection.execute(
-            """
+    if existing_version != STATE_SCHEMA_VERSION:
+        backfill = ""
+        if existing_version == "2.0":
+            backfill = """
             INSERT OR IGNORE INTO run_metadata_versions(
                 run_id,version_id,target_url
             )
-            SELECT run_id,id,target_url FROM metadata_versions
+            SELECT run_id,id,target_url FROM metadata_versions;
             """
-        )
-    connection.execute(
+        migration = f"""
+        BEGIN IMMEDIATE;
+        {STATE_SCHEMA}
+        {SNAPSHOT_REPARSE_SCHEMA}
+        {backfill}
+        INSERT INTO state_meta(key,value)
+        VALUES ('schema_version','{STATE_SCHEMA_VERSION}')
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+        COMMIT;
         """
-        INSERT INTO state_meta(key,value) VALUES ('schema_version',?)
-        ON CONFLICT(key) DO UPDATE SET value=excluded.value
-        """,
-        (STATE_SCHEMA_VERSION,),
-    )
+        try:
+            connection.executescript(migration)
+        except Exception:
+            connection.rollback()
+            connection.close()
+            raise
+    required_reparse_columns = {
+        "entity_type",
+        "selection_kind",
+        "source_run_id",
+        "source_metadata_version_id",
+        "source_http_attempt_id",
+        "request_kind",
+        "requested_url",
+        "http_outcome",
+        "http_status",
+        "block_signals_json",
+        "attempt_error",
+        "content_sha256",
+        "final_url",
+        "content_type",
+        "response_bytes",
+        "gzip_path",
+        "gzip_sha256",
+        "integrity_status",
+    }
+    for table in ("snapshot_reparse_inputs", "snapshot_reparse_lineage"):
+        columns = {
+            row["name"]
+            for row in connection.execute(f"PRAGMA table_info({table})")
+        }
+        if not required_reparse_columns.issubset(columns):
+            connection.close()
+            raise RecrawlError(
+                f"incomplete sidecar schema {STATE_SCHEMA_VERSION}: {table}"
+            )
     if source_path is not None:
         binding = {
             "source_db_path": str(source_path.resolve()),
@@ -938,6 +1265,7 @@ def start_run(
     source_sha256: str,
     source_size: int,
     arguments: Mapping[str, Any],
+    commit: bool = True,
 ) -> int:
     cursor = connection.execute(
         """
@@ -957,7 +1285,8 @@ def start_run(
             source_size,
         ),
     )
-    connection.commit()
+    if commit:
+        connection.commit()
     return int(cursor.lastrowid)
 
 
@@ -970,6 +1299,7 @@ def finish_run(
     summary: Mapping[str, Any] | None = None,
     error: str | None = None,
     selected_count: int | None = None,
+    commit: bool = True,
 ) -> None:
     connection.execute(
         """
@@ -989,7 +1319,8 @@ def finish_run(
             run_id,
         ),
     )
-    connection.commit()
+    if commit:
+        connection.commit()
 
 
 def _write_gzip_snapshot(
@@ -1439,22 +1770,41 @@ class _ArchitizerHTMLParser(HTMLParser):
     """Loss-minimizing HTML scanner; it intentionally does not infer layout."""
 
     CAPTURE_TAGS = {"title", "h1", "h2"}
+    VOID_TAGS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.meta: dict[str, list[str]] = defaultdict(list)
         self.canonical_urls: list[str] = []
         self.data_data_blobs: list[str] = []
+        self.data_data_records: list[dict[str, str | None]] = []
         self.scripts: list[dict[str, Any]] = []
         self.global_ids: list[str] = []
         self.links: list[dict[str, str]] = []
         self.captured: dict[str, list[str]] = defaultdict(list)
+        self.firm_location_dom: dict[str, list[str]] = defaultdict(list)
         self._capture_stack: list[tuple[str, list[str]]] = []
         self._script_attrs: dict[str, str] | None = None
         self._script_buffer: list[str] = []
         self._link_href: str | None = None
         self._link_buffer: list[str] = []
         self._all_text: list[str] = []
+        self._element_stack: list[dict[str, Any]] = []
 
     @property
     def visible_text(self) -> str:
@@ -1465,6 +1815,47 @@ class _ArchitizerHTMLParser(HTMLParser):
     ) -> None:
         tag = tag.lower()
         attributes = {key.lower(): value or "" for key, value in attrs}
+        parent = self._element_stack[-1] if self._element_stack else None
+        firm_location_slug = (
+            parent.get("firm_location_slug") if parent is not None else None
+        )
+        element_id = attributes.get("id", "").strip()
+        location_match = (
+            re.fullmatch(r"(.+)-locations", element_id)
+            if tag == "div" and element_id
+            else None
+        )
+        if location_match:
+            firm_location_slug = location_match.group(1)
+        classes = set(attributes.get("class", "").split())
+        is_location_marker = bool(
+            firm_location_slug
+            and tag == "span"
+            and {"icon", "marker"}.issubset(classes)
+        )
+        captures_location = bool(
+            firm_location_slug
+            and tag == "span"
+            and {
+                "placeholder",
+                "single-line",
+                "js-rendered-content",
+            }.issubset(classes)
+            and parent is not None
+            and parent.get("last_child_was_location_marker")
+        )
+        if parent is not None:
+            parent["last_child_was_location_marker"] = False
+        frame = {
+            "tag": tag,
+            "firm_location_slug": firm_location_slug,
+            "is_location_marker": is_location_marker,
+            "captures_location": captures_location,
+            "location_buffer": [],
+            "last_child_was_location_marker": False,
+        }
+        if tag not in self.VOID_TAGS:
+            self._element_stack.append(frame)
         if tag == "meta":
             key = (
                 attributes.get("property")
@@ -1482,6 +1873,12 @@ class _ArchitizerHTMLParser(HTMLParser):
                 self.canonical_urls.append(href)
         if attributes.get("data-data"):
             self.data_data_blobs.append(attributes["data-data"])
+            self.data_data_records.append(
+                {
+                    "raw": attributes["data-data"],
+                    "firm_location_slug": firm_location_slug,
+                }
+            )
         global_id = attributes.get("data-globalid", "").strip()
         if global_id:
             self.global_ids.append(global_id)
@@ -1498,6 +1895,11 @@ class _ArchitizerHTMLParser(HTMLParser):
         if self._script_attrs is not None:
             self._script_buffer.append(data)
             return
+        for frame in self._element_stack:
+            if frame["captures_location"]:
+                frame["location_buffer"].append(data)
+        if data.strip() and self._element_stack:
+            self._element_stack[-1]["last_child_was_location_marker"] = False
         value = data.strip()
         if value:
             self._all_text.append(value)
@@ -1536,36 +1938,61 @@ class _ArchitizerHTMLParser(HTMLParser):
                 if value:
                     self.captured[tag].append(value)
                 break
+        for index in range(len(self._element_stack) - 1, -1, -1):
+            frame = self._element_stack[index]
+            if frame["tag"] != tag:
+                continue
+            del self._element_stack[index:]
+            parent = self._element_stack[-1] if self._element_stack else None
+            if frame["captures_location"]:
+                location = re.sub(
+                    r"\s+", " ", "".join(frame["location_buffer"])
+                ).strip()
+                slug = frame["firm_location_slug"]
+                if slug and location:
+                    self.firm_location_dom[slug].append(location)
+            if parent is not None:
+                parent["last_child_was_location_marker"] = bool(
+                    frame["is_location_marker"]
+                )
+            break
 
 
 def _parse_json_blob(raw: str, source: str) -> dict[str, Any]:
-    decoded = html.unescape(raw).strip()
+    observed = raw.strip()
     record: dict[str, Any] = {
         "source": source,
-        "raw": decoded,
-        "parse_status": "empty" if not decoded else "unparsed",
+        "raw": observed,
+        "parse_status": "empty" if not observed else "unparsed",
+        "parse_variant": None,
         "value": None,
     }
-    if not decoded:
+    if not observed:
         return record
-    candidates = [decoded]
-    assignment = re.search(
-        r"(?:window\.)?(?:__INITIAL_STATE__|__NEXT_DATA__)\s*=\s*(\{.*\})\s*;?\s*$",
-        decoded,
-        flags=re.DOTALL,
-    )
-    if assignment:
-        candidates.insert(0, assignment.group(1))
-    for candidate in candidates:
-        try:
-            value = json.loads(candidate)
-            if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
-                value = json.loads(value)
-            record["value"] = value
-            record["parse_status"] = "parsed"
-            return record
-        except (json.JSONDecodeError, TypeError, ValueError):
-            continue
+    variants = [("raw", observed)]
+    fallback = html.unescape(observed)
+    if fallback != observed:
+        variants.append(("html_unescape_fallback", fallback))
+    for variant_name, variant in variants:
+        candidates = [variant]
+        assignment = re.search(
+            r"(?:window\.)?(?:__INITIAL_STATE__|__NEXT_DATA__)\s*=\s*(\{.*\})\s*;?\s*$",
+            variant,
+            flags=re.DOTALL,
+        )
+        if assignment:
+            candidates.insert(0, assignment.group(1))
+        for candidate in candidates:
+            try:
+                value = json.loads(candidate)
+                if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
+                    value = json.loads(value)
+                record["value"] = value
+                record["parse_status"] = "parsed"
+                record["parse_variant"] = variant_name
+                return record
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
     record["parse_status"] = "malformed"
     return record
 
@@ -2110,19 +2537,52 @@ def _project_dom_fields(scanner: _ArchitizerHTMLParser) -> dict[str, Any]:
     }
 
 
-def _firm_embedded_fields(candidate: Mapping[str, Any]) -> dict[str, Any]:
+def _firm_location_values_from_embedded(
+    embedded_records: Sequence[Mapping[str, Any]],
+    *,
+    expected_slug: str | None,
+) -> list[str]:
+    """Read only explicit firm-location records scoped to its DOM section."""
+
+    if not expected_slug:
+        return []
+    locations: list[str] = []
+    for record in embedded_records:
+        context = record.get("context")
+        if not isinstance(context, Mapping):
+            continue
+        if context.get("firm_location_slug") != expected_slug:
+            continue
+        if record.get("parse_status") != "parsed":
+            continue
+        value = record.get("value")
+        if not isinstance(value, Mapping):
+            continue
+        global_id = _safe_text(value.get("global_id"))
+        if not global_id or re.fullmatch(
+            r"locations\.geolocation\.\d+", global_id
+        ) is None:
+            continue
+        raw_location = value.get("for_humans")
+        if not isinstance(raw_location, str):
+            continue
+        location = _safe_text(raw_location)
+        if location:
+            locations.append(location)
+    return _dedupe(locations)
+
+
+def _firm_embedded_fields(
+    candidate: Mapping[str, Any],
+    *,
+    office_locations: Sequence[str] = (),
+) -> dict[str, Any]:
     absolute_url = _url_from_maybe_object(
         _first(candidate, "absolute_url", "url", "canonical_url")
     )
     slug = _safe_text(candidate.get("slug"))
     if not slug and absolute_url:
         slug = slug_from_url(absolute_url, "firm")
-    locations = _first(candidate, "office_locations", "locations", "address")
-    normalized_locations: list[str] = []
-    for item in _as_list(locations):
-        value = _location_value(item)
-        if value:
-            normalized_locations.append(value)
     project_urls = [
         url
         for url in _extract_urls(
@@ -2136,7 +2596,7 @@ def _firm_embedded_fields(candidate: Mapping[str, Any]) -> dict[str, Any]:
         "description": _safe_text(
             _first(candidate, "description", "about", "text")
         ),
-        "office_locations": _dedupe(normalized_locations),
+        "office_locations": _dedupe(office_locations),
         "project_urls": _dedupe(
             normalize_entity_url(url, "project") for url in project_urls
         ),
@@ -2146,22 +2606,28 @@ def _firm_embedded_fields(candidate: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _firm_embedded_raw_fields(candidate: Mapping[str, Any]) -> dict[str, Any]:
+def _firm_embedded_raw_fields(
+    candidate: Mapping[str, Any],
+    *,
+    office_locations: Sequence[str] = (),
+) -> dict[str, Any]:
     return {
         "slug": _first(
             candidate, "slug", "absolute_url", "url", "canonical_url"
         ),
         "name": _first(candidate, "name", "headline", "title"),
         "description": _first(candidate, "description", "about", "text"),
-        "office_locations": _first(
-            candidate, "office_locations", "locations", "address"
-        ),
+        "office_locations": list(office_locations),
         "project_urls": _first(candidate, "projects", "portfolio"),
         "social_links": _first(candidate, "social_links", "social"),
     }
 
 
-def _firm_dom_fields(scanner: _ArchitizerHTMLParser) -> dict[str, Any]:
+def _firm_dom_fields(
+    scanner: _ArchitizerHTMLParser,
+    *,
+    expected_slug: str | None,
+) -> dict[str, Any]:
     title = (scanner.captured.get("title") or [None])[0]
     h1 = (scanner.captured.get("h1") or [None])[0]
     canonical_url = scanner.canonical_urls[0] if scanner.canonical_urls else None
@@ -2195,7 +2661,9 @@ def _firm_dom_fields(scanner: _ArchitizerHTMLParser) -> dict[str, Any]:
         else None,
         "name": name,
         "description": (scanner.meta.get("og:description") or [None])[0],
-        "office_locations": [],
+        "office_locations": _dedupe(
+            scanner.firm_location_dom.get(expected_slug or "", [])
+        ),
         "project_urls": _dedupe(project_urls),
         "social_links": social,
         "_canonical_url": canonical_url,
@@ -2283,8 +2751,16 @@ def parse_entity_page(
     scanner.feed(page)
     scanner.close()
     embedded_records: list[dict[str, Any]] = []
-    for index, raw in enumerate(scanner.data_data_blobs):
-        embedded_records.append(_parse_json_blob(raw, f"data-data[{index}]"))
+    for index, data_record in enumerate(scanner.data_data_records):
+        record = _parse_json_blob(
+            data_record["raw"],
+            f"data-data[{index}]",
+        )
+        location_slug = data_record.get("firm_location_slug")
+        record["context"] = (
+            {"firm_location_slug": location_slug} if location_slug else {}
+        )
+        embedded_records.append(record)
     for index, script in enumerate(scanner.scripts):
         attributes = script["attrs"]
         script_type = attributes.get("type", "").lower()
@@ -2311,9 +2787,22 @@ def parse_entity_page(
         dom_fields = _project_dom_fields(scanner)
         fields = PROJECT_FIELDS
     else:
-        embedded_fields = _firm_embedded_fields(candidate)
-        embedded_raw_fields = _firm_embedded_raw_fields(candidate)
-        dom_fields = _firm_dom_fields(scanner)
+        office_locations = _firm_location_values_from_embedded(
+            embedded_records,
+            expected_slug=expected_slug,
+        )
+        embedded_fields = _firm_embedded_fields(
+            candidate,
+            office_locations=office_locations,
+        )
+        embedded_raw_fields = _firm_embedded_raw_fields(
+            candidate,
+            office_locations=office_locations,
+        )
+        dom_fields = _firm_dom_fields(
+            scanner,
+            expected_slug=expected_slug,
+        )
         fields = FIRM_FIELDS
     classification = _page_classification(
         scanner,
@@ -3682,7 +4171,7 @@ def select_network_targets(
                 OR (status='failed' AND retryable=1)
                 OR (
                     status='done'
-                    AND EXISTS (
+                    AND NOT EXISTS (
                         SELECT 1
                         FROM metadata_versions AS mv
                         WHERE mv.target_url=t.url
@@ -3890,6 +4379,112 @@ def _legacy_value_map(
     }
 
 
+def _promote_parse_result(
+    connection: sqlite3.Connection,
+    *,
+    target_url: str,
+    version_id: int,
+    parsed: Mapping[str, Any],
+) -> None:
+    """Promote only non-missing, non-conflicting fields from a valid parse."""
+
+    if parsed["identity"]["status"] != "valid":
+        return
+    quality_rank = {"none": 0, "low": 1, "medium": 2, "high": 3}
+    for field_name, result in parsed["resolved"].items():
+        if result["status"] not in {"confirmed", "single_source"}:
+            continue
+        if result["value"] is None:
+            continue
+        existing = connection.execute(
+            """
+            SELECT status,quality FROM current_fields
+            WHERE target_url=? AND field_name=?
+            """,
+            (target_url, field_name),
+        ).fetchone()
+        should_promote = existing is None
+        if existing is not None:
+            should_promote = (
+                result["status"] == "confirmed"
+                or quality_rank.get(result["quality"], 0)
+                >= quality_rank.get(existing["quality"], 0)
+            )
+        if should_promote:
+            connection.execute(
+                """
+                INSERT INTO current_fields(
+                    target_url,field_name,value_json,status,quality,
+                    version_id,updated_at
+                ) VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT(target_url,field_name) DO UPDATE SET
+                    value_json=excluded.value_json,
+                    status=excluded.status,
+                    quality=excluded.quality,
+                    version_id=excluded.version_id,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    target_url,
+                    field_name,
+                    canonical_json(result["value"]),
+                    result["status"],
+                    result["quality"],
+                    version_id,
+                    utc_now(),
+                ),
+            )
+    connection.execute(
+        """
+        UPDATE targets
+        SET current_metadata_version_id=?,last_good_version_id=?
+        WHERE url=?
+        """,
+        (version_id, version_id, target_url),
+    )
+
+
+def _promote_stored_metadata_version(
+    connection: sqlite3.Connection,
+    *,
+    target_url: str,
+    version_id: int,
+) -> None:
+    metadata = connection.execute(
+        "SELECT identity_status FROM metadata_versions WHERE id=? AND target_url=?",
+        (version_id, target_url),
+    ).fetchone()
+    if metadata is None:
+        raise RecrawlError("stored metadata version disappeared before promotion")
+    resolved: dict[str, dict[str, Any]] = {}
+    for row in connection.execute(
+        """
+        SELECT field_name,value_json,status,quality,conflict_json
+        FROM resolved_fields WHERE version_id=?
+        """,
+        (version_id,),
+    ):
+        resolved[row["field_name"]] = {
+            "value": json.loads(row["value_json"])
+            if row["value_json"] is not None
+            else None,
+            "status": row["status"],
+            "quality": row["quality"],
+            "conflict": json.loads(row["conflict_json"])
+            if row["conflict_json"] is not None
+            else None,
+        }
+    _promote_parse_result(
+        connection,
+        target_url=target_url,
+        version_id=version_id,
+        parsed={
+            "identity": {"status": metadata["identity_status"]},
+            "resolved": resolved,
+        },
+    )
+
+
 def _store_parse_result(
     connection: sqlite3.Connection,
     *,
@@ -3898,12 +4493,16 @@ def _store_parse_result(
     snapshot_sha: str,
     parsed: Mapping[str, Any],
     legacy_connection: sqlite3.Connection,
+    promote_valid: bool = True,
+    commit: bool = True,
 ) -> int:
     raw_embedded = [
         {
             "source": record["source"],
             "raw": record["raw"],
             "parse_status": record["parse_status"],
+            "parse_variant": record.get("parse_variant"),
+            "context": record.get("context", {}),
         }
         for record in parsed["embedded_records"]
     ]
@@ -4065,60 +4664,15 @@ def _store_parse_result(
                 comparison_status,
             ),
         )
-    if parsed["identity"]["status"] == "valid":
-        quality_rank = {"none": 0, "low": 1, "medium": 2, "high": 3}
-        for field_name, result in parsed["resolved"].items():
-            if result["status"] not in {"confirmed", "single_source"}:
-                continue
-            if result["value"] is None:
-                continue
-            existing = connection.execute(
-                """
-                SELECT status,quality FROM current_fields
-                WHERE target_url=? AND field_name=?
-                """,
-                (target["url"], field_name),
-            ).fetchone()
-            should_promote = existing is None
-            if existing is not None:
-                should_promote = (
-                    result["status"] == "confirmed"
-                    or quality_rank.get(result["quality"], 0)
-                    >= quality_rank.get(existing["quality"], 0)
-                )
-            if should_promote:
-                connection.execute(
-                    """
-                    INSERT INTO current_fields(
-                        target_url,field_name,value_json,status,quality,
-                        version_id,updated_at
-                    ) VALUES (?,?,?,?,?,?,?)
-                    ON CONFLICT(target_url,field_name) DO UPDATE SET
-                        value_json=excluded.value_json,
-                        status=excluded.status,
-                        quality=excluded.quality,
-                        version_id=excluded.version_id,
-                        updated_at=excluded.updated_at
-                    """,
-                    (
-                        target["url"],
-                        field_name,
-                        canonical_json(result["value"]),
-                        result["status"],
-                        result["quality"],
-                        version_id,
-                        utc_now(),
-                    ),
-                )
-        connection.execute(
-            """
-            UPDATE targets
-            SET current_metadata_version_id=?,last_good_version_id=?
-            WHERE url=?
-            """,
-            (version_id, version_id, target["url"]),
+    if promote_valid:
+        _promote_parse_result(
+            connection,
+            target_url=target["url"],
+            version_id=version_id,
+            parsed=parsed,
         )
-    connection.commit()
+    if commit:
+        connection.commit()
     return version_id
 
 
@@ -4359,6 +4913,148 @@ def _classify_expected_identity_exception(
     return None, None
 
 
+def _run_scoped_entity_type(
+    target_url: str,
+    metadata_entity_type: str | None,
+) -> str:
+    if metadata_entity_type in {"project", "firm"}:
+        return metadata_entity_type
+    path_parts = [
+        part for part in urllib.parse.urlsplit(target_url).path.split("/") if part
+    ]
+    if len(path_parts) == 2 and path_parts[0] in {"projects", "firms"}:
+        return "project" if path_parts[0] == "projects" else "firm"
+    raise RecrawlError(
+        f"run target has no immutable entity type evidence: {target_url}"
+    )
+
+
+def _network_snapshot_integrity_summary(
+    *,
+    final_attempts: Mapping[str, Mapping[str, Any]],
+    versions: Sequence[Mapping[str, Any]],
+    snapshot_root: Path,
+) -> tuple[dict[str, Any], list[int]]:
+    """Read and attest every final content snapshot with bounded memory."""
+
+    version_snapshot_sha = {
+        str(row["target_url"]): str(row["snapshot_sha256"]).upper()
+        for row in versions
+    }
+    evidence_digest = hashlib.sha256()
+    content_digest = hashlib.sha256()
+    gzip_digest = hashlib.sha256()
+    path_digest = hashlib.sha256()
+    compressed_sizes: list[int] = []
+    total_response_bytes = 0
+    total_gzip_bytes = 0
+    validated_count = 0
+
+    def update_manifest(digest: Any, payload: Mapping[str, Any]) -> None:
+        digest.update(canonical_json(dict(payload)).encode("utf-8"))
+        digest.update(b"\n")
+
+    for target_url in sorted(final_attempts):
+        row = final_attempts[target_url]
+        content_sha = row.get("sha256")
+        relative_path = row.get("gzip_path")
+        response_bytes = row.get("response_bytes")
+        has_snapshot_evidence = bool(content_sha or relative_path)
+        if not has_snapshot_evidence:
+            if response_bytes:
+                raise RecrawlError(
+                    "HTTP attempt body has no snapshot evidence: "
+                    f"{target_url}"
+                )
+            continue
+        if not content_sha or not relative_path:
+            raise RecrawlError(
+                f"HTTP attempt has incomplete snapshot evidence: {target_url}"
+            )
+        normalized_path = _validate_content_addressed_snapshot_path(
+            str(relative_path),
+            content_sha256=str(content_sha),
+            expected_kind="pages",
+        )
+        path = _safe_snapshot_path(snapshot_root, normalized_path)
+        stat_before = path.stat()
+        _, actual_gzip_sha = _read_verified_snapshot(
+            snapshot_root,
+            relative_path=normalized_path,
+            content_sha256=str(content_sha),
+            response_bytes=response_bytes,
+            expected_kind="pages",
+        )
+        stat_after = path.stat()
+        if (
+            stat_before.st_size != stat_after.st_size
+            or stat_before.st_mtime_ns != stat_after.st_mtime_ns
+        ):
+            raise RecrawlError(
+                f"snapshot gzip changed during verification: {normalized_path}"
+            )
+        metadata_sha = version_snapshot_sha.get(target_url)
+        if metadata_sha is not None and metadata_sha != str(content_sha).upper():
+            raise RecrawlError(
+                "final HTTP snapshot disagrees with run metadata: "
+                f"{target_url}"
+            )
+        evidence = {
+            "target_url": target_url,
+            "http_attempt_id": int(row["id"]),
+            "content_sha256": str(content_sha).upper(),
+            "gzip_sha256": actual_gzip_sha,
+            "gzip_path": normalized_path,
+            "response_bytes": int(response_bytes),
+            "gzip_bytes": int(stat_after.st_size),
+        }
+        update_manifest(evidence_digest, evidence)
+        update_manifest(
+            content_digest,
+            {
+                "target_url": target_url,
+                "content_sha256": evidence["content_sha256"],
+            },
+        )
+        update_manifest(
+            gzip_digest,
+            {
+                "target_url": target_url,
+                "gzip_sha256": actual_gzip_sha,
+            },
+        )
+        update_manifest(
+            path_digest,
+            {
+                "target_url": target_url,
+                "gzip_path": normalized_path,
+            },
+        )
+        compressed_sizes.append(int(stat_after.st_size))
+        total_response_bytes += int(response_bytes)
+        total_gzip_bytes += int(stat_after.st_size)
+        validated_count += 1
+
+    return (
+        {
+            "policy_version": NETWORK_SNAPSHOT_INTEGRITY_POLICY_VERSION,
+            "validated_count": validated_count,
+            "evidence_manifest_sha256": evidence_digest.hexdigest().upper(),
+            "content_sha256_manifest_sha256": (
+                content_digest.hexdigest().upper()
+            ),
+            "gzip_sha256_manifest_sha256": gzip_digest.hexdigest().upper(),
+            "gzip_path_manifest_sha256": path_digest.hexdigest().upper(),
+            "total_response_bytes": total_response_bytes,
+            "total_gzip_bytes": total_gzip_bytes,
+            "manifest_record_format": (
+                "canonical-json-utf8-lines; target_url ascending"
+            ),
+        },
+        compressed_sizes,
+    )
+
+
 def _network_run_summary(
     connection: sqlite3.Connection,
     *,
@@ -4396,19 +5092,26 @@ def _network_run_summary(
             (run_id,),
         )
     ]
-    version_ids = [row["id"] for row in versions]
     run_targets = [
         dict(row)
         for row in connection.execute(
             """
-            SELECT rt.*,t.entity_type,t.primary_reason,t.last_http_status,
-                   t.last_parse_status,t.last_error
-            FROM run_targets rt JOIN targets t ON t.url=rt.url
+            SELECT rt.*,m.entity_type AS run_entity_type,
+                   m.parse_status AS run_parse_status
+            FROM run_targets rt
+            LEFT JOIN run_metadata_versions rm
+              ON rm.run_id=rt.run_id AND rm.target_url=rt.url
+            LEFT JOIN metadata_versions m ON m.id=rm.version_id
             WHERE rt.run_id=? ORDER BY rt.selection_order
             """,
             (run_id,),
         )
     ]
+    for row in run_targets:
+        row["entity_type"] = _run_scoped_entity_type(
+            str(row["url"]),
+            row.get("run_entity_type"),
+        )
     final_attempts: dict[str, dict[str, Any]] = {}
     for row in attempts:
         if row["target_url"]:
@@ -4422,7 +5125,7 @@ def _network_run_summary(
         final = final_attempts.get(row["url"])
         if final and final["outcome"] == "success":
             type_stats[row["selected_reason"]]["http_success"] += 1
-        if row["last_parse_status"] in {"complete", "partial", "conflict"}:
+        if row["run_parse_status"] in {"complete", "partial", "conflict"}:
             type_stats[row["selected_reason"]]["parse_success"] += 1
         else:
             type_stats[row["selected_reason"]]["failure"] += 1
@@ -4430,40 +5133,41 @@ def _network_run_summary(
     final_response_bytes = [
         row["response_bytes"] for row in final_attempts.values() if row["sha256"]
     ]
-    compressed_sizes: list[int] = []
-    for row in final_attempts.values():
-        if not row["gzip_path"]:
-            continue
-        path = snapshot_root / Path(row["gzip_path"])
-        if path.exists():
-            compressed_sizes.append(path.stat().st_size)
+    snapshot_integrity, compressed_sizes = (
+        _network_snapshot_integrity_summary(
+            final_attempts=final_attempts,
+            versions=versions,
+            snapshot_root=snapshot_root,
+        )
+    )
     field_coverage: dict[str, int] = Counter()
-    if version_ids:
-        placeholders = ",".join("?" for _ in version_ids)
+    if versions:
         for row in connection.execute(
-            f"""
+            """
             SELECT rf.field_name,COUNT(*) AS n
             FROM resolved_fields rf
+            JOIN run_metadata_versions rm ON rm.version_id=rf.version_id
             JOIN metadata_versions m ON m.id=rf.version_id
-            WHERE rf.version_id IN ({placeholders})
+            WHERE rm.run_id=?
               AND m.identity_status='valid'
               AND rf.value_json IS NOT NULL
               AND rf.status IN ('confirmed','single_source')
             GROUP BY rf.field_name
             """,
-            version_ids,
+            (run_id,),
         ):
             field_coverage[row["field_name"]] = row["n"]
         comparison_counts = {
             row["comparison_status"]: row["n"]
             for row in connection.execute(
-                f"""
-                SELECT comparison_status,COUNT(*) AS n
-                FROM legacy_field_comparisons
-                WHERE version_id IN ({placeholders})
-                GROUP BY comparison_status
+                """
+                SELECT lc.comparison_status,COUNT(*) AS n
+                FROM legacy_field_comparisons lc
+                JOIN run_metadata_versions rm ON rm.version_id=lc.version_id
+                WHERE rm.run_id=?
+                GROUP BY lc.comparison_status
                 """,
-                version_ids,
+                (run_id,),
             )
         }
     else:
@@ -4475,7 +5179,7 @@ def _network_run_summary(
     successful_http = sum(
         row["outcome"] == "success" for row in final_attempts.values()
     )
-    snapshots_saved = sum(bool(row["sha256"]) for row in final_attempts.values())
+    snapshots_saved = int(snapshot_integrity["validated_count"])
     valid_identity = identity_counts.get("valid", 0)
     average_response_bytes = (
         round(statistics.mean(final_response_bytes))
@@ -4555,6 +5259,7 @@ def _network_run_summary(
         "http_success": successful_http,
         "http_success_rate": successful_http / selected if selected else 0.0,
         "snapshot_saved": snapshots_saved,
+        "snapshot_integrity": snapshot_integrity,
         "identity_valid": valid_identity,
         "identity_valid_rate": valid_identity / selected if selected else 0.0,
         "identity_status_counts": dict(sorted(identity_counts.items())),
@@ -5431,6 +6136,1295 @@ def run_award_seed_census(
             state.close()
 
 
+def _target_network_state(target: Mapping[str, Any]) -> dict[str, Any]:
+    return {field: target[field] for field in TARGET_NETWORK_STATE_FIELDS}
+
+
+def select_snapshot_reparse_targets(
+    connection: sqlite3.Connection,
+    *,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """Freeze firm upgrades plus exact parser-regression project recoveries."""
+
+    firms = [
+        dict(row)
+        for row in connection.execute(
+            """
+            SELECT t.*,m.id AS source_metadata_version_id,
+                   m.run_id AS source_metadata_run_id,
+                   m.snapshot_sha256 AS content_sha256,
+                   m.parser_version AS source_parser_version,
+                   m.identity_status AS source_identity_status,
+                   m.dom_json AS source_dom_json
+            FROM targets t
+            JOIN metadata_versions m ON m.id=t.last_good_version_id
+            JOIN runs r ON r.id=m.run_id
+            WHERE t.entity_type='firm'
+              AND m.entity_type='firm'
+              AND m.identity_status='valid'
+              AND m.parser_version<>?
+              AND r.status LIKE 'completed%'
+            """,
+            (PARSER_VERSION,),
+        )
+    ]
+    for row in firms:
+        row["selection_kind"] = "firm_last_good_parser_upgrade"
+    projects = [
+        dict(row)
+        for row in connection.execute(
+            """
+            SELECT t.*,m.id AS source_metadata_version_id,
+                   m.run_id AS source_metadata_run_id,
+                   m.snapshot_sha256 AS content_sha256,
+                   m.parser_version AS source_parser_version,
+                   m.identity_status AS source_identity_status,
+                   m.dom_json AS source_dom_json
+            FROM targets t
+            JOIN metadata_versions m ON m.target_url=t.url
+            JOIN runs r ON r.id=m.run_id
+            WHERE t.entity_type='project'
+              AND t.status='failed'
+              AND t.retryable=0
+              AND t.attempt_count>0
+              AND t.last_attempt_at IS NOT NULL
+              AND t.last_error IS NOT NULL
+              AND t.last_http_status=200
+              AND t.last_parse_status='no_content'
+              AND m.entity_type='project'
+              AND m.identity_status<>'valid'
+              AND m.parser_version<>?
+              AND m.snapshot_sha256=t.last_snapshot_sha256
+              AND r.status LIKE 'completed%'
+              AND json_valid(m.dom_json)
+              AND json_extract(m.dom_json,'$._canonical_url')=t.url
+              AND m.id=(
+                  SELECT MAX(m2.id) FROM metadata_versions m2
+                  WHERE m2.target_url=t.url AND m2.parser_version<>?
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM metadata_versions current
+                  WHERE current.target_url=t.url
+                    AND current.snapshot_sha256=m.snapshot_sha256
+                    AND current.parser_version=?
+              )
+            """,
+            (PARSER_VERSION, PARSER_VERSION, PARSER_VERSION),
+        )
+    ]
+    for row in projects:
+        row["selection_kind"] = "project_parser_regression_recovery"
+    rows = projects + firms
+    rows.sort(
+        key=lambda row: (
+            int(row["selection_kind"] != "project_parser_regression_recovery"),
+            hashlib.sha256(row["url"].encode("utf-8")).hexdigest(),
+            row["url"],
+        )
+    )
+    if limit is not None:
+        if limit < 0:
+            raise ValueError("snapshot reparse limit cannot be negative")
+        rows = rows[:limit]
+    return rows
+
+
+def _safe_snapshot_path(snapshot_root: Path, relative_path: str) -> Path:
+    if not relative_path or "\x00" in relative_path:
+        raise RecrawlError("snapshot gzip path is empty or invalid")
+    portable = relative_path.replace("\\", "/")
+    if (
+        portable.startswith("/")
+        or re.match(r"^[A-Za-z]:", portable)
+        or ".." in portable.split("/")
+    ):
+        raise RecrawlError(f"unsafe snapshot gzip path: {relative_path}")
+    try:
+        root = snapshot_root.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise RecrawlError(
+            f"snapshot root not found: {snapshot_root.resolve()}"
+        ) from exc
+    if not root.is_dir():
+        raise RecrawlError(f"snapshot root is not a directory: {root}")
+    try:
+        path = (root / Path(relative_path)).resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise RecrawlError(
+            f"snapshot gzip not found: {relative_path}"
+        ) from exc
+    if not path.is_relative_to(root) or not path.is_file():
+        raise RecrawlError(f"snapshot gzip escapes its root: {relative_path}")
+    return path
+
+
+def _validate_content_addressed_snapshot_path(
+    relative_path: str,
+    *,
+    content_sha256: str,
+    expected_kind: str | None = None,
+) -> str:
+    """Validate the writer's portable ``kind/prefix/SHA.ext.gz`` contract."""
+
+    if re.fullmatch(r"[0-9A-Fa-f]{64}", content_sha256 or "") is None:
+        raise RecrawlError("invalid source content SHA-256")
+    portable = str(relative_path or "").replace("\\", "/")
+    parts = portable.split("/")
+    if len(parts) != 3 or any(not part for part in parts):
+        raise RecrawlError(
+            f"invalid content-addressed snapshot path: {relative_path}"
+        )
+    kind, prefix, filename = parts
+    if re.fullmatch(r"[A-Za-z0-9_-]+", kind) is None:
+        raise RecrawlError(f"invalid snapshot kind path: {relative_path}")
+    if expected_kind is not None and kind != expected_kind:
+        raise RecrawlError(
+            f"unexpected snapshot kind path: {relative_path}"
+        )
+    digest = content_sha256.upper()
+    if prefix.upper() != digest[:2]:
+        raise RecrawlError(
+            f"snapshot path SHA-256 prefix mismatch: {relative_path}"
+        )
+    match = re.fullmatch(
+        r"([0-9A-Fa-f]{64})\.([A-Za-z0-9_-]+)\.gz",
+        filename,
+    )
+    if match is None or match.group(1).upper() != digest:
+        raise RecrawlError(
+            f"snapshot path content SHA-256 mismatch: {relative_path}"
+        )
+    return "/".join(parts)
+
+
+def _read_verified_snapshot(
+    snapshot_root: Path,
+    *,
+    relative_path: str,
+    content_sha256: str,
+    response_bytes: int,
+    gzip_sha256: str | None = None,
+    expected_kind: str | None = None,
+) -> tuple[bytes, str]:
+    if expected_kind is None:
+        if re.fullmatch(r"[0-9A-Fa-f]{64}", content_sha256 or "") is None:
+            raise RecrawlError("invalid source content SHA-256")
+        normalized_relative_path = str(relative_path or "").replace("\\", "/")
+    else:
+        normalized_relative_path = _validate_content_addressed_snapshot_path(
+            relative_path,
+            content_sha256=content_sha256,
+            expected_kind=expected_kind,
+        )
+    if (
+        isinstance(response_bytes, bool)
+        or not isinstance(response_bytes, int)
+        or response_bytes <= 0
+        or response_bytes > MAX_SNAPSHOT_RESPONSE_BYTES
+    ):
+        raise RecrawlError(f"unsafe snapshot response size: {response_bytes}")
+    path = _safe_snapshot_path(snapshot_root, normalized_relative_path)
+    try:
+        compressed_size = path.stat().st_size
+        if (
+            compressed_size <= 0
+            or compressed_size > MAX_COMPRESSED_SNAPSHOT_BYTES
+        ):
+            raise RecrawlError(
+                f"unsafe compressed snapshot size: {compressed_size}"
+            )
+        with path.open("rb") as handle:
+            compressed = handle.read(MAX_COMPRESSED_SNAPSHOT_BYTES + 1)
+    except OSError as exc:
+        raise RecrawlError(f"cannot read snapshot gzip: {relative_path}") from exc
+    if (
+        len(compressed) != compressed_size
+        or len(compressed) > MAX_COMPRESSED_SNAPSHOT_BYTES
+    ):
+        raise RecrawlError(
+            f"snapshot gzip changed during read: {normalized_relative_path}"
+        )
+    actual_gzip_sha = sha256_bytes(compressed)
+    if gzip_sha256 is not None and actual_gzip_sha != gzip_sha256.upper():
+        raise RecrawlError(
+            "snapshot gzip SHA-256 changed: "
+            f"{normalized_relative_path}"
+        )
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as handle:
+            body = handle.read(response_bytes + 1)
+    except (OSError, EOFError) as exc:
+        raise RecrawlError(
+            f"invalid snapshot gzip: {normalized_relative_path}"
+        ) from exc
+    if len(body) != int(response_bytes):
+        raise RecrawlError(
+            "snapshot response byte count mismatch: "
+            f"{normalized_relative_path}"
+        )
+    if sha256_bytes(body) != content_sha256.upper():
+        raise RecrawlError(
+            "snapshot content SHA-256 mismatch: "
+            f"{normalized_relative_path}"
+        )
+    return body, actual_gzip_sha
+
+
+def _validate_snapshot_final_url(
+    target_url: str,
+    final_url: str,
+    *,
+    entity_type: str,
+) -> None:
+    try:
+        parsed = urllib.parse.urlsplit(final_url)
+        port = parsed.port
+    except ValueError as exc:
+        raise RecrawlError(f"invalid source final URL: {final_url}") from exc
+    host = (parsed.hostname or "").lower()
+    if host == f"www.{ARCHITIZER_HOST}":
+        host = ARCHITIZER_HOST
+    if (
+        parsed.scheme.lower() != "https"
+        or host != ARCHITIZER_HOST
+        or parsed.username
+        or parsed.password
+        or port not in {None, 443}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RecrawlError(f"unsafe source final URL: {final_url}")
+    if normalize_entity_url(final_url, entity_type) != target_url:
+        raise RecrawlError(
+            f"source final URL identity mismatch: {final_url} != {target_url}"
+        )
+
+
+def _has_raw_first_json_recovery(parsed: Mapping[str, Any]) -> bool:
+    for record in parsed.get("embedded_records", []):
+        raw = record.get("raw")
+        if record.get("parse_variant") != "raw" or not isinstance(raw, str):
+            continue
+        fallback = html.unescape(raw)
+        if fallback == raw:
+            continue
+        try:
+            json.loads(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+        try:
+            json.loads(fallback)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return True
+    return False
+
+
+def _build_snapshot_reparse_input(
+    connection: sqlite3.Connection,
+    *,
+    target: Mapping[str, Any],
+    snapshot_root: Path,
+) -> dict[str, Any]:
+    attempts = connection.execute(
+        """
+        SELECT * FROM http_attempts
+        WHERE run_id=? AND target_url=?
+          AND outcome='success' AND http_status=200 AND sha256=?
+        ORDER BY id
+        """,
+        (
+            target["source_metadata_run_id"],
+            target["url"],
+            target["content_sha256"],
+        ),
+    ).fetchall()
+    if len(attempts) != 1:
+        raise RecrawlError(
+            "source metadata must resolve to exactly one successful 200 HTTP "
+            f"attempt: {target['url']}: found {len(attempts)}"
+        )
+    attempt = dict(attempts[0])
+    expected_request_kind = f"{target['entity_type']}_page"
+    if attempt.get("request_kind") != expected_request_kind:
+        raise RecrawlError(
+            f"source attempt entity kind mismatch: {target['url']}"
+        )
+    if attempt.get("requested_url") != target["url"]:
+        raise RecrawlError(f"source requested URL mismatch: {target['url']}")
+    try:
+        block_signals = json.loads(attempt.get("block_signals_json") or "null")
+    except json.JSONDecodeError as exc:
+        raise RecrawlError(f"invalid source block evidence: {target['url']}") from exc
+    if block_signals != [] or attempt.get("error") is not None:
+        raise RecrawlError(f"source success attempt has error signals: {target['url']}")
+    final_url = attempt.get("final_url")
+    content_type = attempt.get("content_type")
+    gzip_path = attempt.get("gzip_path")
+    if not isinstance(final_url, str):
+        raise RecrawlError(f"source final URL missing: {target['url']}")
+    _validate_snapshot_final_url(
+        target["url"],
+        final_url,
+        entity_type=target["entity_type"],
+    )
+    if (
+        not isinstance(content_type, str)
+        or content_type.split(";", 1)[0].strip().lower() != "text/html"
+    ):
+        raise RecrawlError(f"source content type is not HTML: {target['url']}")
+    if not isinstance(gzip_path, str):
+        raise RecrawlError(f"source gzip path missing: {target['url']}")
+    response_bytes = int(attempt.get("response_bytes") or 0)
+    body, gzip_sha = _read_verified_snapshot(
+        snapshot_root,
+        relative_path=gzip_path,
+        content_sha256=target["content_sha256"],
+        response_bytes=response_bytes,
+    )
+    selection_kind = target["selection_kind"]
+    if selection_kind == "firm_last_good_parser_upgrade":
+        if (
+            target["entity_type"] != "firm"
+            or target["source_identity_status"] != "valid"
+        ):
+            raise RecrawlError("firm reparse input lacks valid last-good identity")
+    elif selection_kind == "project_parser_regression_recovery":
+        source_dom = json.loads(target["source_dom_json"])
+        if (
+            target["entity_type"] != "project"
+            or target["status"] != "failed"
+            or int(target["retryable"]) != 0
+            or int(target["attempt_count"]) <= 0
+            or target["last_attempt_at"] is None
+            or target["last_error"] is None
+            or int(target["last_http_status"] or 0) != 200
+            or target["last_parse_status"] != "no_content"
+            or target["last_snapshot_sha256"] != target["content_sha256"]
+            or target["source_identity_status"] == "valid"
+            or source_dom.get("_canonical_url") != target["url"]
+        ):
+            raise RecrawlError("project parser-regression evidence is incomplete")
+        reparsed = parse_entity_page(
+            body,
+            requested_url=target["url"],
+            final_url=final_url,
+            http_status=200,
+            content_type=content_type,
+            entity_type="project",
+        )
+        if (
+            reparsed["identity"]["status"] != "valid"
+            or not _has_raw_first_json_recovery(reparsed)
+        ):
+            raise RecrawlError(
+                "project snapshot is not an exact raw-first parser recovery"
+            )
+    else:
+        raise RecrawlError(f"unknown snapshot reparse selection kind: {selection_kind}")
+    return {
+        "target_url": target["url"],
+        "entity_type": target["entity_type"],
+        "selection_kind": selection_kind,
+        "source_run_id": int(target["source_metadata_run_id"]),
+        "source_metadata_version_id": int(
+            target["source_metadata_version_id"]
+        ),
+        "source_http_attempt_id": int(attempt["id"]),
+        "request_kind": str(attempt["request_kind"]),
+        "requested_url": str(attempt["requested_url"]),
+        "http_outcome": str(attempt["outcome"]),
+        "http_status": int(attempt["http_status"]),
+        "block_signals_json": "[]",
+        "attempt_error": None,
+        "content_sha256": str(target["content_sha256"]).upper(),
+        "final_url": final_url,
+        "content_type": content_type,
+        "response_bytes": response_bytes,
+        "gzip_path": gzip_path,
+        "gzip_sha256": gzip_sha,
+        "integrity_status": "verified",
+        "target_network_state_json": canonical_json(
+            _target_network_state(target)
+        ),
+    }
+
+
+def _snapshot_reparse_descriptor_sha(
+    descriptors: Iterable[Mapping[str, Any]],
+) -> str:
+    fields = (
+        "target_url",
+        "entity_type",
+        "selection_kind",
+        "source_run_id",
+        "source_metadata_version_id",
+        "source_http_attempt_id",
+        "request_kind",
+        "requested_url",
+        "http_outcome",
+        "http_status",
+        "block_signals_json",
+        "attempt_error",
+        "content_sha256",
+        "final_url",
+        "content_type",
+        "response_bytes",
+        "gzip_path",
+        "gzip_sha256",
+        "integrity_status",
+    )
+    payload = "\n".join(
+        sorted(
+            canonical_json({field: item[field] for field in fields})
+            for item in descriptors
+        )
+    ).encode("utf-8")
+    return sha256_bytes(payload)
+
+
+def _validate_frozen_snapshot_evidence(
+    connection: sqlite3.Connection,
+    frozen: Mapping[str, Any],
+) -> None:
+    referenced = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM metadata_versions m
+        JOIN runs r ON r.id=m.run_id
+        JOIN targets t ON t.url=m.target_url
+        JOIN http_attempts a ON a.id=?
+        WHERE m.id=? AND m.run_id=? AND m.target_url=?
+          AND m.entity_type=?
+          AND (
+              (?='firm_last_good_parser_upgrade' AND m.identity_status='valid')
+              OR (
+                  ?='project_parser_regression_recovery'
+                  AND m.identity_status<>'valid'
+                  AND t.status='failed'
+                  AND t.retryable=0
+                  AND t.attempt_count>0
+                  AND t.last_attempt_at IS NOT NULL
+                  AND t.last_error IS NOT NULL
+                  AND t.last_http_status=200
+                  AND t.last_parse_status='no_content'
+                  AND t.last_snapshot_sha256=m.snapshot_sha256
+              )
+          )
+          AND m.snapshot_sha256=? AND r.status LIKE 'completed%'
+          AND a.run_id=m.run_id AND a.target_url=m.target_url
+          AND a.request_kind=? AND a.requested_url=?
+          AND a.outcome=? AND a.http_status=?
+          AND a.block_signals_json=? AND a.error IS ?
+          AND a.sha256=? AND a.final_url=? AND a.content_type=?
+          AND a.response_bytes=? AND a.gzip_path=?
+        """,
+        (
+            frozen["source_http_attempt_id"],
+            frozen["source_metadata_version_id"],
+            frozen["source_run_id"],
+            frozen["target_url"],
+            frozen["entity_type"],
+            frozen["selection_kind"],
+            frozen["selection_kind"],
+            frozen["content_sha256"],
+            frozen["request_kind"],
+            frozen["requested_url"],
+            frozen["http_outcome"],
+            frozen["http_status"],
+            frozen["block_signals_json"],
+            frozen["attempt_error"],
+            frozen["content_sha256"],
+            frozen["final_url"],
+            frozen["content_type"],
+            frozen["response_bytes"],
+            frozen["gzip_path"],
+        ),
+    ).fetchone()[0]
+    exact_attempts = connection.execute(
+        """
+        SELECT COUNT(*) FROM http_attempts
+        WHERE run_id=? AND target_url=? AND request_kind=? AND requested_url=?
+          AND outcome=? AND http_status=? AND block_signals_json=?
+          AND error IS ? AND sha256=?
+        """,
+        (
+            frozen["source_run_id"],
+            frozen["target_url"],
+            frozen["request_kind"],
+            frozen["requested_url"],
+            frozen["http_outcome"],
+            frozen["http_status"],
+            frozen["block_signals_json"],
+            frozen["attempt_error"],
+            frozen["content_sha256"],
+        ),
+    ).fetchone()[0]
+    if referenced != 1 or exact_attempts != 1:
+        raise RecrawlError("frozen source metadata/HTTP evidence changed")
+
+
+def _completed_snapshot_reparse_run(
+    connection: sqlite3.Connection,
+    *,
+    run_kind: str,
+    source_sha256: str,
+    selected_count: int,
+    minimum_run_id: int = 0,
+) -> sqlite3.Row:
+    rows = connection.execute(
+        """
+        SELECT * FROM runs
+        WHERE run_kind=? AND status='completed'
+          AND id>? AND parser_version=?
+          AND source_db_sha256_before=?
+          AND source_db_sha256_after=?
+          AND selected_count=?
+        ORDER BY id DESC
+        """,
+        (
+            run_kind,
+            minimum_run_id,
+            PARSER_VERSION,
+            source_sha256,
+            source_sha256,
+            selected_count,
+        ),
+    ).fetchall()
+    for row in rows:
+        try:
+            summary = json.loads(row["summary_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        if (
+            summary.get("gate_policy_version")
+            == SNAPSHOT_REPARSE_GATE_POLICY_VERSION
+            and summary.get("gate_passed") is True
+            and summary.get("state_schema_version") == STATE_SCHEMA_VERSION
+            and summary.get("parser_version") == PARSER_VERSION
+            and summary.get("metadata_version") == METADATA_VERSION
+        ):
+            return row
+    raise RecrawlError(
+        f"missing current-parser/current-schema successful {run_kind} gate"
+    )
+
+
+def validate_snapshot_reparse_ladder(
+    connection: sqlite3.Connection,
+    *,
+    run_kind: str,
+    source_sha256: str,
+) -> dict[str, int]:
+    if run_kind == "snapshot_reparse_n10":
+        return {}
+    n10 = _completed_snapshot_reparse_run(
+        connection,
+        run_kind="snapshot_reparse_n10",
+        source_sha256=source_sha256,
+        selected_count=10,
+    )
+    if run_kind == "snapshot_reparse_n100":
+        return {"n10_run_id": int(n10["id"])}
+    if run_kind != "snapshot_reparse_full":
+        raise ValueError(f"unknown snapshot reparse run kind: {run_kind}")
+    n100 = _completed_snapshot_reparse_run(
+        connection,
+        run_kind="snapshot_reparse_n100",
+        source_sha256=source_sha256,
+        selected_count=100,
+        minimum_run_id=int(n10["id"]),
+    )
+    return {
+        "n10_run_id": int(n10["id"]),
+        "n100_run_id": int(n100["id"]),
+    }
+
+
+def _insert_snapshot_reparse_input(
+    connection: sqlite3.Connection,
+    *,
+    run_id: int,
+    selection_order: int,
+    status_before: str,
+    frozen: Mapping[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO run_targets(
+            run_id,url,selection_order,selected_reason,status_before
+        ) VALUES (?,?,?,?,?)
+        """,
+        (
+            run_id,
+            frozen["target_url"],
+            selection_order,
+            frozen["selection_kind"],
+            status_before,
+        ),
+    )
+    connection.execute(
+        """
+        INSERT INTO snapshot_reparse_inputs(
+            run_id,target_url,selection_order,
+            entity_type,selection_kind,
+            source_run_id,source_metadata_version_id,
+            source_http_attempt_id,request_kind,requested_url,
+            http_outcome,http_status,block_signals_json,
+            attempt_error,content_sha256,final_url,content_type,
+            response_bytes,gzip_path,gzip_sha256,
+            integrity_status,target_network_state_json,frozen_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            run_id,
+            frozen["target_url"],
+            selection_order,
+            frozen["entity_type"],
+            frozen["selection_kind"],
+            frozen["source_run_id"],
+            frozen["source_metadata_version_id"],
+            frozen["source_http_attempt_id"],
+            frozen["request_kind"],
+            frozen["requested_url"],
+            frozen["http_outcome"],
+            frozen["http_status"],
+            frozen["block_signals_json"],
+            frozen["attempt_error"],
+            frozen["content_sha256"],
+            frozen["final_url"],
+            frozen["content_type"],
+            frozen["response_bytes"],
+            frozen["gzip_path"],
+            frozen["gzip_sha256"],
+            frozen["integrity_status"],
+            frozen["target_network_state_json"],
+            utc_now(),
+        ),
+    )
+
+
+def _insert_snapshot_reparse_lineage(
+    connection: sqlite3.Connection,
+    *,
+    run_id: int,
+    version_id: int,
+    frozen: Mapping[str, Any],
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO snapshot_reparse_lineage(
+            reparse_version_id,reparse_run_id,entity_type,selection_kind,
+            source_run_id,
+            source_metadata_version_id,source_http_attempt_id,request_kind,
+            requested_url,http_outcome,http_status,block_signals_json,
+            attempt_error,target_url,content_sha256,final_url,content_type,
+            response_bytes,gzip_path,gzip_sha256,integrity_status,verified_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            version_id,
+            run_id,
+            frozen["entity_type"],
+            frozen["selection_kind"],
+            frozen["source_run_id"],
+            frozen["source_metadata_version_id"],
+            frozen["source_http_attempt_id"],
+            frozen["request_kind"],
+            frozen["requested_url"],
+            frozen["http_outcome"],
+            frozen["http_status"],
+            frozen["block_signals_json"],
+            frozen["attempt_error"],
+            frozen["target_url"],
+            frozen["content_sha256"],
+            frozen["final_url"],
+            frozen["content_type"],
+            frozen["response_bytes"],
+            frozen["gzip_path"],
+            frozen["gzip_sha256"],
+            frozen["integrity_status"],
+            utc_now(),
+        ),
+    )
+
+
+def _snapshot_reparse_summary(
+    connection: sqlite3.Connection,
+    *,
+    run_id: int,
+    source_sha_before: str,
+    source_sha_after: str,
+    elapsed_seconds: float,
+    verified_gzip_count: int,
+) -> dict[str, Any]:
+    inputs = connection.execute(
+        """
+        SELECT i.*,rt.status_before,rt.status_after
+        FROM snapshot_reparse_inputs i
+        JOIN run_targets rt ON rt.run_id=i.run_id AND rt.url=i.target_url
+        WHERE i.run_id=? ORDER BY i.selection_order
+        """,
+        (run_id,),
+    ).fetchall()
+    versions = connection.execute(
+        """
+        SELECT l.target_url,m.identity_status,m.parse_status,m.id
+        FROM snapshot_reparse_lineage l
+        JOIN metadata_versions m ON m.id=l.reparse_version_id
+        WHERE l.reparse_run_id=? ORDER BY l.target_url
+        """,
+        (run_id,),
+    ).fetchall()
+    identity_counts = Counter(row["identity_status"] for row in versions)
+    parse_counts = Counter(row["parse_status"] for row in versions)
+    office_counts = Counter(
+        row["status"]
+        for row in connection.execute(
+            """
+            SELECT rf.status
+            FROM snapshot_reparse_lineage l
+            JOIN resolved_fields rf ON rf.version_id=l.reparse_version_id
+            WHERE l.reparse_run_id=? AND rf.field_name='office_locations'
+            """,
+            (run_id,),
+        )
+    )
+    selected_urls = [row["target_url"] for row in inputs]
+    unchanged_statuses = sum(
+        row["status_before"] == row["status_after"] for row in inputs
+    )
+    reparse_http_attempt_count = int(
+        connection.execute(
+            "SELECT COUNT(*) FROM http_attempts WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+    )
+    summary: dict[str, Any] = {
+        "run_id": run_id,
+        "gate_policy_version": SNAPSHOT_REPARSE_GATE_POLICY_VERSION,
+        "state_schema_version": STATE_SCHEMA_VERSION,
+        "parser_version": PARSER_VERSION,
+        "metadata_version": METADATA_VERSION,
+        "selected": len(inputs),
+        "processed": len(versions),
+        "selected_urls_sha256": _url_set_sha256(selected_urls),
+        "frozen_descriptor_sha256": _snapshot_reparse_descriptor_sha(inputs),
+        "entity_type_counts": dict(
+            sorted(Counter(row["entity_type"] for row in inputs).items())
+        ),
+        "selection_kind_counts": dict(
+            sorted(Counter(row["selection_kind"] for row in inputs).items())
+        ),
+        "source_metadata_version_count": len(
+            {row["source_metadata_version_id"] for row in inputs}
+        ),
+        "source_http_attempt_count": len(
+            {row["source_http_attempt_id"] for row in inputs}
+        ),
+        "reparse_http_attempt_count": reparse_http_attempt_count,
+        "verified_gzip_count": verified_gzip_count,
+        "verified_content_bytes": sum(row["response_bytes"] for row in inputs),
+        "identity_counts": dict(sorted(identity_counts.items())),
+        "parse_status_counts": dict(sorted(parse_counts.items())),
+        "office_location_status_counts": dict(sorted(office_counts.items())),
+        "target_status_unchanged_count": unchanged_statuses,
+        "input_db_sha256_before": source_sha_before,
+        "input_db_sha256_after": source_sha_after,
+        "input_db_unchanged": source_sha_before == source_sha_after,
+        "elapsed_seconds": elapsed_seconds,
+    }
+    failures: list[str] = []
+    if summary["processed"] != summary["selected"]:
+        failures.append("not every frozen snapshot produced reparse lineage")
+    if verified_gzip_count != summary["selected"]:
+        failures.append("not every frozen gzip passed final integrity verification")
+    if identity_counts.get("valid", 0) != summary["selected"]:
+        failures.append("one or more reparses failed firm identity validation")
+    if unchanged_statuses != summary["selected"]:
+        failures.append("target network status changed during offline reparse")
+    if reparse_http_attempt_count != 0:
+        failures.append("offline reparse run recorded an HTTP attempt")
+    if not summary["input_db_unchanged"]:
+        failures.append("immutable legacy source DB changed")
+    summary["gate_failures"] = failures
+    summary["gate_passed"] = not failures
+    return summary
+
+
+def _resume_snapshot_reparse_run(
+    connection: sqlite3.Connection,
+    *,
+    run_id: int,
+    run_kind: str,
+    source_path: Path,
+    source_sha256: str,
+    source_size: int,
+) -> sqlite3.Row:
+    run = connection.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    if run is None:
+        raise RecrawlError(f"snapshot reparse resume run not found: {run_id}")
+    if run["status"] not in {"running", "failed", "interrupted"}:
+        raise RecrawlError("completed or quality-gated reparse runs are immutable")
+    if (
+        run["run_kind"] != run_kind
+        or run["parser_version"] != PARSER_VERSION
+        or not _same_resolved_path(run["source_db_path"], source_path)
+        or run["source_db_sha256_before"] != source_sha256
+        or int(run["source_db_size"]) != source_size
+    ):
+        raise RecrawlError("snapshot reparse resume identity mismatch")
+    try:
+        arguments = json.loads(run["arguments_json"])
+    except json.JSONDecodeError as exc:
+        raise RecrawlError("snapshot reparse resume arguments are invalid") from exc
+    if (
+        arguments.get("state_schema_version") != STATE_SCHEMA_VERSION
+        or arguments.get("parser_version") != PARSER_VERSION
+        or arguments.get("metadata_version") != METADATA_VERSION
+    ):
+        raise RecrawlError("snapshot reparse resume parser/schema mismatch")
+    input_count = connection.execute(
+        "SELECT COUNT(*) FROM snapshot_reparse_inputs WHERE run_id=?",
+        (run_id,),
+    ).fetchone()[0]
+    if int(input_count) != int(run["selected_count"]):
+        raise RecrawlError("snapshot reparse frozen input set is incomplete")
+    frozen_inputs = connection.execute(
+        "SELECT * FROM snapshot_reparse_inputs WHERE run_id=?",
+        (run_id,),
+    ).fetchall()
+    if (
+        arguments.get("frozen_url_count") != len(frozen_inputs)
+        or arguments.get("frozen_urls_sha256")
+        != _url_set_sha256(row["target_url"] for row in frozen_inputs)
+        or arguments.get("frozen_descriptor_sha256")
+        != _snapshot_reparse_descriptor_sha(frozen_inputs)
+    ):
+        raise RecrawlError("snapshot reparse frozen descriptor set changed")
+    connection.execute(
+        """
+        UPDATE runs SET status='running',finished_at=NULL,summary_json=NULL,error=NULL
+        WHERE id=?
+        """,
+        (run_id,),
+    )
+    connection.commit()
+    return run
+
+
+def run_snapshot_reparse(
+    *,
+    smoke_size: int | None,
+    confirmed_full: bool = False,
+    resume_run_id: int | None = None,
+    source_path: Path = DEFAULT_SOURCE_DB,
+    state_path: Path = DEFAULT_STATE_DB,
+    snapshot_root: Path = DEFAULT_SNAPSHOT_DIR,
+) -> dict[str, Any]:
+    """Reparse frozen firm gzip snapshots without issuing any HTTP request."""
+
+    if smoke_size not in {10, 100, None}:
+        raise ValueError("snapshot reparse smoke_size must be 10, 100, or None")
+    if smoke_size is None and not confirmed_full:
+        raise RecrawlError("full snapshot reparse requires explicit confirmation")
+    run_kind = (
+        "snapshot_reparse_full"
+        if smoke_size is None
+        else f"snapshot_reparse_n{smoke_size}"
+    )
+    source_path = source_path.resolve()
+    state_path = state_path.resolve()
+    snapshot_root = snapshot_root.resolve()
+    validate_runtime_paths(
+        source_path=source_path,
+        state_path=state_path,
+        snapshot_root=snapshot_root,
+    )
+    run_start = time.monotonic()
+    run_id: int | None = None
+    with SidecarLock(state_path):
+        source_sha = sha256_file(source_path)
+        source_size = source_path.stat().st_size
+        state = connect_state(
+            state_path,
+            source_path=source_path,
+            source_sha256=source_sha,
+            source_size=source_size,
+        )
+        try:
+            ladder = validate_snapshot_reparse_ladder(
+                state,
+                run_kind=run_kind,
+                source_sha256=source_sha,
+            )
+            if resume_run_id is not None:
+                _resume_snapshot_reparse_run(
+                    state,
+                    run_id=resume_run_id,
+                    run_kind=run_kind,
+                    source_path=source_path,
+                    source_sha256=source_sha,
+                    source_size=source_size,
+                )
+                run_id = resume_run_id
+            else:
+                eligible = select_snapshot_reparse_targets(state)
+                if smoke_size is not None and len(eligible) < smoke_size:
+                    raise RecrawlError(
+                        f"only {len(eligible)} eligible firm snapshots; "
+                        f"{smoke_size} required"
+                    )
+                if smoke_size is None:
+                    selected = eligible
+                else:
+                    recovery = [
+                        row
+                        for row in eligible
+                        if row["selection_kind"]
+                        == "project_parser_regression_recovery"
+                    ][:1]
+                    firms = [
+                        row
+                        for row in eligible
+                        if row["selection_kind"]
+                        == "firm_last_good_parser_upgrade"
+                    ]
+                    selected = recovery + firms[: smoke_size - len(recovery)]
+                    if len(selected) != smoke_size:
+                        raise RecrawlError(
+                            "insufficient firm snapshots after reserving parser "
+                            "regression recovery coverage"
+                        )
+                frozen = [
+                    _build_snapshot_reparse_input(
+                        state,
+                        target=target,
+                        snapshot_root=snapshot_root,
+                    )
+                    for target in selected
+                ]
+                arguments = {
+                    "state_schema_version": STATE_SCHEMA_VERSION,
+                    "parser_version": PARSER_VERSION,
+                    "metadata_version": METADATA_VERSION,
+                    "eligible_url_count": len(eligible),
+                    "eligible_urls_sha256": _url_set_sha256(
+                        row["url"] for row in eligible
+                    ),
+                    "frozen_url_count": len(selected),
+                    "frozen_urls_sha256": _url_set_sha256(
+                        row["url"] for row in selected
+                    ),
+                    "frozen_descriptor_sha256": (
+                        _snapshot_reparse_descriptor_sha(frozen)
+                    ),
+                    "ladder": ladder,
+                    "confirmed_full": confirmed_full,
+                }
+                state.execute("BEGIN IMMEDIATE")
+                run_id = start_run(
+                    state,
+                    run_kind=run_kind,
+                    source_path=source_path,
+                    source_sha256=source_sha,
+                    source_size=source_size,
+                    arguments=arguments,
+                    commit=False,
+                )
+                for ordinal, (target, item) in enumerate(
+                    zip(selected, frozen), start=1
+                ):
+                    _insert_snapshot_reparse_input(
+                        state,
+                        run_id=run_id,
+                        selection_order=ordinal,
+                        status_before=target["status"],
+                        frozen=item,
+                    )
+                state.execute(
+                    "UPDATE runs SET selected_count=? WHERE id=?",
+                    (len(selected), run_id),
+                )
+                state.commit()
+            inputs = state.execute(
+                """
+                SELECT * FROM snapshot_reparse_inputs
+                WHERE run_id=? ORDER BY selection_order
+                """,
+                (run_id,),
+            ).fetchall()
+            legacy = open_legacy_readonly(source_path)
+            try:
+                for frozen_row in inputs:
+                    frozen = dict(frozen_row)
+                    existing_lineage = state.execute(
+                        """
+                        SELECT reparse_version_id FROM snapshot_reparse_lineage
+                        WHERE reparse_run_id=? AND target_url=?
+                        """,
+                        (run_id, frozen["target_url"]),
+                    ).fetchone()
+                    if existing_lineage is not None:
+                        continue
+                    _validate_frozen_snapshot_evidence(state, frozen)
+                    body, actual_gzip_sha = _read_verified_snapshot(
+                        snapshot_root,
+                        relative_path=frozen["gzip_path"],
+                        content_sha256=frozen["content_sha256"],
+                        response_bytes=frozen["response_bytes"],
+                        gzip_sha256=frozen["gzip_sha256"],
+                    )
+                    if actual_gzip_sha != frozen["gzip_sha256"]:
+                        raise RecrawlError("frozen snapshot gzip identity changed")
+                    target_row = state.execute(
+                        "SELECT * FROM targets WHERE url=?",
+                        (frozen["target_url"],),
+                    ).fetchone()
+                    if target_row is None:
+                        raise RecrawlError("frozen snapshot target disappeared")
+                    expected_network_state = json.loads(
+                        frozen["target_network_state_json"]
+                    )
+                    if _target_network_state(target_row) != expected_network_state:
+                        raise RecrawlError(
+                            "target network state changed after reparse freeze"
+                        )
+                    source_metadata = state.execute(
+                        "SELECT * FROM metadata_versions WHERE id=?",
+                        (frozen["source_metadata_version_id"],),
+                    ).fetchone()
+                    if (
+                        source_metadata is None
+                        or source_metadata["target_url"] != frozen["target_url"]
+                        or source_metadata["entity_type"]
+                        != frozen["entity_type"]
+                        or source_metadata["snapshot_sha256"]
+                        != frozen["content_sha256"]
+                        or (
+                            frozen["selection_kind"]
+                            == "firm_last_good_parser_upgrade"
+                            and source_metadata["identity_status"] != "valid"
+                        )
+                        or (
+                            frozen["selection_kind"]
+                            == "project_parser_regression_recovery"
+                            and source_metadata["identity_status"] == "valid"
+                        )
+                    ):
+                        raise RecrawlError("frozen source metadata identity changed")
+                    parsed = parse_entity_page(
+                        body,
+                        requested_url=frozen["target_url"],
+                        final_url=frozen["final_url"],
+                        http_status=200,
+                        content_type=frozen["content_type"],
+                        entity_type=frozen["entity_type"],
+                    )
+                    state.execute("BEGIN IMMEDIATE")
+                    try:
+                        current_target = dict(
+                            state.execute(
+                                "SELECT * FROM targets WHERE url=?",
+                                (frozen["target_url"],),
+                            ).fetchone()
+                        )
+                        if (
+                            _target_network_state(current_target)
+                            != expected_network_state
+                        ):
+                            raise RecrawlError(
+                                "target network state changed before commit"
+                            )
+                        prior_current_parser = state.execute(
+                            """
+                            SELECT id FROM metadata_versions
+                            WHERE target_url=? AND snapshot_sha256=?
+                              AND parser_version=?
+                            """,
+                            (
+                                frozen["target_url"],
+                                frozen["content_sha256"],
+                                PARSER_VERSION,
+                            ),
+                        ).fetchone()
+                        if prior_current_parser is not None:
+                            raise RecrawlError(
+                                "current-parser metadata exists without frozen lineage"
+                            )
+                        version_id = _store_parse_result(
+                            state,
+                            run_id=run_id,
+                            target=current_target,
+                            snapshot_sha=frozen["content_sha256"],
+                            parsed=parsed,
+                            legacy_connection=legacy,
+                            promote_valid=False,
+                            commit=False,
+                        )
+                        _insert_snapshot_reparse_lineage(
+                            state,
+                            run_id=run_id,
+                            version_id=version_id,
+                            frozen=frozen,
+                        )
+                        final_target = state.execute(
+                            "SELECT * FROM targets WHERE url=?",
+                            (frozen["target_url"],),
+                        ).fetchone()
+                        if (
+                            _target_network_state(final_target)
+                            != expected_network_state
+                        ):
+                            raise RecrawlError(
+                                "offline reparse mutated target network state"
+                            )
+                        state.execute(
+                            """
+                            UPDATE run_targets SET status_after=?
+                            WHERE run_id=? AND url=?
+                            """,
+                            (
+                                expected_network_state["status"],
+                                run_id,
+                                frozen["target_url"],
+                            ),
+                        )
+                        state.commit()
+                    except Exception:
+                        state.rollback()
+                        raise
+            finally:
+                legacy.close()
+            final_verified_gzip_count = 0
+            for frozen in inputs:
+                _validate_frozen_snapshot_evidence(state, frozen)
+                _read_verified_snapshot(
+                    snapshot_root,
+                    relative_path=frozen["gzip_path"],
+                    content_sha256=frozen["content_sha256"],
+                    response_bytes=frozen["response_bytes"],
+                    gzip_sha256=frozen["gzip_sha256"],
+                )
+                final_verified_gzip_count += 1
+            source_sha_after = sha256_file(source_path)
+            summary = _snapshot_reparse_summary(
+                state,
+                run_id=run_id,
+                source_sha_before=source_sha,
+                source_sha_after=source_sha_after,
+                elapsed_seconds=time.monotonic() - run_start,
+                verified_gzip_count=final_verified_gzip_count,
+            )
+            run_arguments = json.loads(
+                state.execute(
+                    "SELECT arguments_json FROM runs WHERE id=?", (run_id,)
+                ).fetchone()[0]
+            )
+            summary.update(
+                {
+                    "eligible_url_count": run_arguments["eligible_url_count"],
+                    "eligible_urls_sha256": run_arguments[
+                        "eligible_urls_sha256"
+                    ],
+                    "frozen_url_count": run_arguments["frozen_url_count"],
+                    "frozen_urls_sha256": run_arguments["frozen_urls_sha256"],
+                    "expected_frozen_descriptor_sha256": run_arguments[
+                        "frozen_descriptor_sha256"
+                    ],
+                    "ladder": run_arguments["ladder"],
+                }
+            )
+            if (
+                summary["frozen_descriptor_sha256"]
+                != summary["expected_frozen_descriptor_sha256"]
+            ):
+                summary["gate_failures"].append(
+                    "frozen snapshot descriptor SHA changed"
+                )
+                summary["gate_passed"] = False
+            status = "completed" if summary["gate_passed"] else "quality_failed"
+            if summary["gate_passed"]:
+                state.execute("BEGIN IMMEDIATE")
+                try:
+                    for lineage in state.execute(
+                        """
+                        SELECT reparse_version_id,target_url
+                        FROM snapshot_reparse_lineage
+                        WHERE reparse_run_id=? ORDER BY target_url
+                        """,
+                        (run_id,),
+                    ):
+                        _promote_stored_metadata_version(
+                            state,
+                            target_url=lineage["target_url"],
+                            version_id=lineage["reparse_version_id"],
+                        )
+                    for frozen in state.execute(
+                        """
+                        SELECT target_url,target_network_state_json
+                        FROM snapshot_reparse_inputs WHERE run_id=?
+                        """,
+                        (run_id,),
+                    ):
+                        target = state.execute(
+                            "SELECT * FROM targets WHERE url=?",
+                            (frozen["target_url"],),
+                        ).fetchone()
+                        if _target_network_state(target) != json.loads(
+                            frozen["target_network_state_json"]
+                        ):
+                            raise RecrawlError(
+                                "target network state changed during promotion"
+                            )
+                    finish_run(
+                        state,
+                        run_id,
+                        status=status,
+                        source_sha256_after=source_sha_after,
+                        summary=summary,
+                        selected_count=summary["selected"],
+                        commit=False,
+                    )
+                    state.commit()
+                except Exception:
+                    state.rollback()
+                    raise
+            else:
+                finish_run(
+                    state,
+                    run_id,
+                    status=status,
+                    source_sha256_after=source_sha_after,
+                    summary=summary,
+                    selected_count=summary["selected"],
+                )
+            if not summary["gate_passed"]:
+                raise RecrawlError(
+                    "snapshot reparse failed quality gates: "
+                    + "; ".join(summary["gate_failures"])
+                )
+            return summary
+        except Exception as exc:
+            state.rollback()
+            source_sha_after = sha256_file(source_path)
+            if run_id is not None:
+                existing = state.execute(
+                    "SELECT status FROM runs WHERE id=?", (run_id,)
+                ).fetchone()
+                if existing and existing["status"] == "running":
+                    finish_run(
+                        state,
+                        run_id,
+                        status="failed",
+                        source_sha256_after=source_sha_after,
+                        summary={},
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+            raise
+        finally:
+            state.close()
+
+
 def open_state_readonly(path: Path) -> sqlite3.Connection:
     path = path.resolve()
     if not path.exists():
@@ -6119,6 +8113,530 @@ def run_full_recrawl(
             raise
         finally:
             state.close()
+
+
+def _open_state_without_migration_for_full_finalization(
+    state_path: Path,
+    *,
+    source_path: Path,
+    source_sha256: str,
+    source_size: int,
+) -> tuple[sqlite3.Connection, str]:
+    """Open a failed full-run sidecar without changing its historical schema."""
+
+    state_path = state_path.resolve()
+    if not state_path.exists() or not state_path.is_file():
+        raise RecrawlError(f"sidecar DB does not exist: {state_path}")
+    meta = _state_meta_readonly(state_path)
+    schema_version = meta.get("schema_version")
+    if schema_version not in {"2.1", STATE_SCHEMA_VERSION}:
+        raise RecrawlError(
+            "full-run finalization requires sidecar schema 2.1 or "
+            f"{STATE_SCHEMA_VERSION}, got {schema_version!r}"
+        )
+    if not all(
+        meta.get(key)
+        for key in ("source_db_path", "source_db_sha256", "source_db_size")
+    ):
+        raise RecrawlError("full-run finalization requires a bound sidecar")
+    _validate_source_binding(
+        meta,
+        source_path=source_path,
+        source_sha256=source_sha256,
+        source_size=source_size,
+    )
+    connection = sqlite3.connect(
+        state_path.as_uri() + "?mode=rw",
+        uri=True,
+    )
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys=ON")
+    connection.execute("PRAGMA busy_timeout=5000")
+    required_tables = {
+        "state_meta",
+        "runs",
+        "targets",
+        "target_reasons",
+        "run_targets",
+        "http_attempts",
+        "metadata_versions",
+        "run_metadata_versions",
+        "resolved_fields",
+        "legacy_field_comparisons",
+    }
+    tables = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    missing = sorted(required_tables - tables)
+    if missing:
+        connection.close()
+        raise RecrawlError(
+            "sidecar is missing full-run finalization tables: "
+            + ",".join(missing)
+        )
+    return connection, schema_version
+
+
+def _parse_aware_run_timestamp(value: Any, *, field_name: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise RecrawlError(f"recovery run has no {field_name}")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise RecrawlError(f"recovery run has invalid {field_name}") from exc
+    if parsed.tzinfo is None:
+        raise RecrawlError(f"recovery run {field_name} must be timezone-aware")
+    return parsed.astimezone(timezone.utc)
+
+
+def _prior_runtime_storage_for_full_finalization(
+    connection: sqlite3.Connection,
+    *,
+    run_id: int,
+    run_started_at: datetime,
+    source_sha256: str,
+) -> tuple[dict[str, int], dict[str, Any]]:
+    rows = connection.execute(
+        """
+        SELECT id,run_kind,status,started_at,finished_at,summary_json
+        FROM runs
+        WHERE id<?
+          AND status LIKE 'completed%'
+          AND source_db_sha256_before=?
+          AND source_db_sha256_after=?
+        ORDER BY id DESC
+        """,
+        (run_id, source_sha256, source_sha256),
+    ).fetchall()
+    for row in rows:
+        try:
+            summary = json.loads(row["summary_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        raw_after = (summary.get("runtime_storage") or {}).get("after")
+        if not isinstance(raw_after, Mapping):
+            continue
+        storage_after: dict[str, int] = {}
+        valid = True
+        for key in ("state_bytes", "snapshot_bytes", "combined_bytes"):
+            value = raw_after.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                valid = False
+                break
+            storage_after[key] = value
+        if not valid or storage_after["combined_bytes"] != (
+            storage_after["state_bytes"] + storage_after["snapshot_bytes"]
+        ):
+            continue
+        prior_finished_at = _parse_aware_run_timestamp(
+            row["finished_at"], field_name="prior finished_at"
+        )
+        if prior_finished_at > run_started_at:
+            continue
+        provenance = {
+            "kind": "prior_completed_run_runtime_storage_after",
+            "run_id": int(row["id"]),
+            "run_kind": row["run_kind"],
+            "run_status": row["status"],
+            "run_started_at": row["started_at"],
+            "run_finished_at": row["finished_at"],
+            "summary_sha256": sha256_bytes(
+                canonical_json(summary).encode("utf-8")
+            ),
+        }
+        return storage_after, provenance
+    raise RecrawlError(
+        "no prior completed run has a valid runtime_storage.after baseline"
+    )
+
+
+def _validate_full_finalization_evidence(
+    connection: sqlite3.Connection,
+    *,
+    run: Mapping[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    if run["run_kind"] != "full_recrawl_v2":
+        raise RecrawlError("finalization target is not a full_recrawl_v2 run")
+    selected_count = run["selected_count"]
+    if (
+        isinstance(selected_count, bool)
+        or not isinstance(selected_count, int)
+        or selected_count < 1
+    ):
+        raise RecrawlError("failed full run has an invalid selected_count")
+    try:
+        arguments = json.loads(run["arguments_json"] or "{}")
+    except json.JSONDecodeError as exc:
+        raise RecrawlError("failed full run arguments are not valid JSON") from exc
+    if not isinstance(arguments, dict):
+        raise RecrawlError("failed full run arguments must be a JSON object")
+    rows = connection.execute(
+        """
+        SELECT url,selection_order,status_after
+        FROM run_targets WHERE run_id=? ORDER BY selection_order
+        """,
+        (run["id"],),
+    ).fetchall()
+    if len(rows) != selected_count:
+        raise RecrawlError(
+            "failed full run selected_count does not match run_targets"
+        )
+    expected_orders = list(range(1, selected_count + 1))
+    if [int(row["selection_order"]) for row in rows] != expected_orders:
+        raise RecrawlError("failed full run selection_order is not contiguous")
+    if any(row["status_after"] not in {"done", "failed"} for row in rows):
+        raise RecrawlError("failed full run still has non-terminal frozen targets")
+    frozen_urls = [str(row["url"]) for row in rows]
+    frozen_hash = _url_set_sha256(frozen_urls)
+    if arguments.get("frozen_target_count") != selected_count:
+        raise RecrawlError("failed full run frozen_target_count does not match")
+    if arguments.get("frozen_target_urls_sha256") != frozen_hash:
+        raise RecrawlError("failed full run frozen target hash does not match")
+    metadata_links = int(
+        connection.execute(
+            "SELECT COUNT(*) FROM run_metadata_versions WHERE run_id=?",
+            (run["id"],),
+        ).fetchone()[0]
+    )
+    valid_links = int(
+        connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM run_metadata_versions rm
+            JOIN metadata_versions m
+              ON m.id=rm.version_id AND m.target_url=rm.target_url
+            JOIN run_targets rt
+              ON rt.run_id=rm.run_id AND rt.url=rm.target_url
+            WHERE rm.run_id=?
+            """,
+            (run["id"],),
+        ).fetchone()[0]
+    )
+    if metadata_links != selected_count or valid_links != selected_count:
+        raise RecrawlError(
+            "failed full run selected targets do not match metadata links"
+        )
+    attempted_targets = int(
+        connection.execute(
+            """
+            SELECT COUNT(DISTINCT target_url)
+            FROM http_attempts
+            WHERE run_id=? AND target_url IS NOT NULL
+            """,
+            (run["id"],),
+        ).fetchone()[0]
+    )
+    attempts_outside_frozen_set = int(
+        connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM http_attempts AS h
+            WHERE h.run_id=? AND h.target_url IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM run_targets AS rt
+                  WHERE rt.run_id=h.run_id AND rt.url=h.target_url
+              )
+            """,
+            (run["id"],),
+        ).fetchone()[0]
+    )
+    if attempted_targets != selected_count or attempts_outside_frozen_set:
+        raise RecrawlError(
+            "failed full run HTTP attempts do not match frozen targets"
+        )
+    target_state_mismatches = int(
+        connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM run_targets AS rt
+            JOIN targets AS t ON t.url=rt.url
+            WHERE rt.run_id=? AND t.status<>rt.status_after
+            """,
+            (run["id"],),
+        ).fetchone()[0]
+    )
+    done_identity_mismatches = int(
+        connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM run_targets AS rt
+            LEFT JOIN run_metadata_versions AS rm
+              ON rm.run_id=rt.run_id AND rm.target_url=rt.url
+            LEFT JOIN metadata_versions AS m ON m.id=rm.version_id
+            WHERE rt.run_id=? AND rt.status_after='done'
+              AND COALESCE(m.identity_status,'')<>'valid'
+            """,
+            (run["id"],),
+        ).fetchone()[0]
+    )
+    if target_state_mismatches or done_identity_mismatches:
+        raise RecrawlError(
+            "failed full run terminal target evidence is inconsistent"
+        )
+    return arguments, frozen_urls
+
+
+def _is_idempotent_full_finalization(
+    run: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    if run["status"] not in {"completed", "completed_with_pending_discoveries"}:
+        return None
+    try:
+        summary = json.loads(run["summary_json"] or "{}")
+    except json.JSONDecodeError as exc:
+        raise RecrawlError("completed recovery summary is not valid JSON") from exc
+    marker = summary.get("postprocess_recovery") if isinstance(summary, dict) else None
+    if not isinstance(marker, dict):
+        raise RecrawlError("completed full run was not finalized by this recovery")
+    expected = {
+        "contract_version": FULL_RUN_POSTPROCESS_RECOVERY_VERSION,
+        "run_id": int(run["id"]),
+        "original_status": "failed",
+        "original_error": FULL_RUN_SQL_VARIABLE_ERROR,
+        "original_summary": {},
+        "original_finished_at": run["finished_at"],
+        "network_requests": 0,
+    }
+    if any(marker.get(key) != value for key, value in expected.items()):
+        raise RecrawlError("completed recovery marker does not match the run")
+    expected_status = (
+        "completed_with_pending_discoveries"
+        if summary.get("newly_discovered_pending_count")
+        else "completed"
+    )
+    if run["status"] != expected_status:
+        raise RecrawlError("completed recovery status disagrees with its summary")
+    return summary
+
+
+def finalize_full_run(
+    *,
+    run_id: int,
+    confirmed: bool = False,
+    source_path: Path = DEFAULT_SOURCE_DB,
+    state_path: Path = DEFAULT_STATE_DB,
+    snapshot_root: Path = DEFAULT_SNAPSHOT_DIR,
+) -> dict[str, Any]:
+    """Finalize a fully fetched run that failed only in post-summary SQL."""
+
+    if not confirmed:
+        raise RecrawlError(
+            "offline full-run finalization requires explicit confirmation"
+        )
+    if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id < 1:
+        raise ValueError("run_id must be a positive integer")
+    source_path = source_path.resolve()
+    state_path = state_path.resolve()
+    snapshot_root = snapshot_root.resolve()
+    validate_runtime_paths(
+        source_path=source_path,
+        state_path=state_path,
+        snapshot_root=snapshot_root,
+    )
+    if not source_path.exists() or not source_path.is_file():
+        raise RecrawlError(f"immutable source DB does not exist: {source_path}")
+    if not snapshot_root.exists() or not snapshot_root.is_dir():
+        raise RecrawlError(f"snapshot directory does not exist: {snapshot_root}")
+    inspection = inspect_sidecar_lock(state_path)
+    if inspection.get("exists"):
+        raise LockHeldError(
+            "sidecar lock exists; inspect or explicitly recover it before "
+            "offline finalization"
+        )
+    source_identity_before = _measure_stable_file_identity(source_path)
+    source_sha = str(source_identity_before["sha256"])
+    source_size = int(source_identity_before["size"])
+    with SidecarLock(state_path):
+        connection, schema_version = (
+            _open_state_without_migration_for_full_finalization(
+                state_path,
+                source_path=source_path,
+                source_sha256=source_sha,
+                source_size=source_size,
+            )
+        )
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM runs WHERE id=?", (run_id,)
+            ).fetchone()
+            if row is None:
+                raise RecrawlError(f"full run does not exist: {run_id}")
+            run = dict(row)
+            if run["run_kind"] != "full_recrawl_v2":
+                raise RecrawlError("finalization target is not a full_recrawl_v2 run")
+            if (
+                not run["source_db_path"]
+                or not _same_resolved_path(run["source_db_path"], source_path)
+                or run["source_db_sha256_before"] != source_sha
+                or run["source_db_sha256_after"] != source_sha
+                or int(run["source_db_size"] or -1) != source_size
+            ):
+                raise RecrawlError("failed full run source lineage is not immutable")
+            started_at = _parse_aware_run_timestamp(
+                run["started_at"], field_name="started_at"
+            )
+            finished_at = _parse_aware_run_timestamp(
+                run["finished_at"], field_name="finished_at"
+            )
+            if finished_at < started_at:
+                raise RecrawlError("failed full run finished before it started")
+            existing_summary = _is_idempotent_full_finalization(run)
+            if existing_summary is not None:
+                source_identity_after = _measure_stable_file_identity(
+                    source_path
+                )
+                _require_same_file_identity(
+                    source_identity_before,
+                    source_identity_after,
+                )
+                connection.rollback()
+                return existing_summary
+            later_run = connection.execute(
+                "SELECT id,run_kind,status FROM runs WHERE id>? ORDER BY id LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            if later_run is not None:
+                # The failed post-summary transaction did not freeze the
+                # pending-discovery state separately.  A later run can mutate
+                # both selected targets and newly discovered stubs, so a
+                # first-time historical reconstruction would be ambiguous.
+                # Already recovered runs returned above remain idempotent.
+                raise RecrawlError(
+                    "cannot finalize a failed full run after a subsequent run: "
+                    f"{later_run['id']} ({later_run['run_kind']}, "
+                    f"{later_run['status']})"
+                )
+            arguments, frozen_urls = _validate_full_finalization_evidence(
+                connection,
+                run=run,
+            )
+            if run["status"] != "failed":
+                raise RecrawlError("full run is not in the failed recovery state")
+            if run["error"] != FULL_RUN_SQL_VARIABLE_ERROR:
+                raise RecrawlError("full run failure is not the exact SQL variable error")
+            if run["summary_json"] != "{}":
+                raise RecrawlError("failed full run summary is not exactly empty")
+            delay_seconds = arguments.get("delay_seconds")
+            if (
+                isinstance(delay_seconds, bool)
+                or not isinstance(delay_seconds, (int, float))
+                or not math.isfinite(float(delay_seconds))
+                or float(delay_seconds) < 0
+            ):
+                raise RecrawlError("failed full run delay_seconds is invalid")
+            storage_before, storage_provenance = (
+                _prior_runtime_storage_for_full_finalization(
+                    connection,
+                    run_id=run_id,
+                    run_started_at=started_at,
+                    source_sha256=source_sha,
+                )
+            )
+            summary = _network_run_summary(
+                connection,
+                run_id=run_id,
+                source_sha_before=source_sha,
+                source_sha_after=source_sha,
+                delay_seconds=float(delay_seconds),
+                state_path=state_path,
+                snapshot_root=snapshot_root,
+                storage_before=storage_before,
+                elapsed_seconds=(finished_at - started_at).total_seconds(),
+            )
+            expanded_counts = arguments.get("expanded_counts")
+            if not isinstance(expanded_counts, dict):
+                raise RecrawlError("failed full run expanded_counts is missing")
+            pending_discoveries = _pending_discoveries_for_run(
+                connection,
+                run_id=run_id,
+            )
+            pending_urls = [row["url"] for row in pending_discoveries]
+            summary["expanded_current_sitemap_counts"] = expanded_counts
+            summary["frozen_target_count"] = len(frozen_urls)
+            summary["frozen_target_urls_sha256"] = _url_set_sha256(frozen_urls)
+            summary["newly_discovered_pending_count"] = len(pending_discoveries)
+            summary["newly_discovered_pending_urls_sha256"] = _url_set_sha256(
+                pending_urls
+            )
+            summary["newly_discovered_pending_by_entity_type"] = dict(
+                sorted(
+                    Counter(
+                        row["entity_type"] for row in pending_discoveries
+                    ).items()
+                )
+            )
+            summary["additional_full_phase_approval_required"] = bool(
+                pending_discoveries
+            )
+            summary["runtime_storage"]["before_provenance"] = storage_provenance
+            source_identity_after = _measure_stable_file_identity(source_path)
+            _require_same_file_identity(
+                source_identity_before,
+                source_identity_after,
+            )
+            summary["input_db_size_before"] = source_size
+            summary["input_db_size_after"] = int(
+                source_identity_after["size"]
+            )
+            recovered_at = utc_now()
+            summary["postprocess_recovery"] = {
+                "contract_version": FULL_RUN_POSTPROCESS_RECOVERY_VERSION,
+                "run_id": run_id,
+                "recovered_at": recovered_at,
+                "network_requests": 0,
+                "sidecar_schema_version": schema_version,
+                "elapsed_source": "runs.started_at_to_original_finished_at",
+                "original_status": "failed",
+                "original_error": run["error"],
+                "original_summary": {},
+                "original_finished_at": run["finished_at"],
+                "runtime_storage_before_provenance": storage_provenance,
+                "source_identity_before": dict(source_identity_before),
+                "source_identity_after": dict(source_identity_after),
+            }
+            run_status = (
+                "completed_with_pending_discoveries"
+                if pending_discoveries
+                else "completed"
+            )
+            cursor = connection.execute(
+                """
+                UPDATE runs
+                SET status=?,summary_json=?,error=NULL
+                WHERE id=?
+                  AND run_kind='full_recrawl_v2'
+                  AND status='failed'
+                  AND error=?
+                  AND summary_json='{}'
+                  AND finished_at=?
+                  AND source_db_sha256_before=?
+                  AND source_db_sha256_after=?
+                  AND selected_count=?
+                """,
+                (
+                    run_status,
+                    canonical_json(summary),
+                    run_id,
+                    FULL_RUN_SQL_VARIABLE_ERROR,
+                    run["finished_at"],
+                    source_sha,
+                    source_sha,
+                    len(frozen_urls),
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RecrawlError("failed full run changed during finalization")
+            connection.commit()
+            return summary
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 def write_json_no_clobber(path: Path, payload: Mapping[str, Any]) -> None:
