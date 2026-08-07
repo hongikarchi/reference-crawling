@@ -121,15 +121,16 @@ def _make_architizer(path: Path) -> None:
               normalized_url TEXT NOT NULL,
               host TEXT NOT NULL,
               path TEXT NOT NULL,
-              is_placeholder_candidate INTEGER NOT NULL
-            );
+              is_placeholder_candidate INTEGER NOT NULL,
+              asset_key_version TEXT NOT NULL
+            ) STRICT;
             CREATE TABLE image_urls(
               image_url_id TEXT PRIMARY KEY,
               asset_id TEXT NOT NULL,
               raw_url TEXT NOT NULL,
               normalized_url TEXT NOT NULL,
               source_host TEXT NOT NULL
-            );
+            ) STRICT;
             CREATE TABLE source_image_occurrences(
               occurrence_id TEXT PRIMARY KEY,
               source_project_id INTEGER NOT NULL,
@@ -138,8 +139,11 @@ def _make_architizer(path: Path) -> None:
               raw_url TEXT NOT NULL,
               image_url_id TEXT,
               asset_id TEXT,
-              parse_status TEXT NOT NULL
-            );
+              parse_status TEXT NOT NULL,
+              parse_error TEXT,
+              source_field TEXT NOT NULL,
+              image_type TEXT
+            ) STRICT;
             CREATE TABLE image_work_queue(
               asset_id TEXT PRIMARY KEY,
               phash_status TEXT NOT NULL,
@@ -168,12 +172,12 @@ def _make_architizer(path: Path) -> None:
         not_queued = "https://architizer-prod.imgix.net/media/not-queued.jpg"
         video = "https://architizer-prod.imgix.net/media/movie.mp4"
         conn.executemany(
-            "INSERT INTO image_assets VALUES (?,?,?,?,?,?)",
+            "INSERT INTO image_assets VALUES (?,?,?,?,?,?,?)",
             [
-                ("atz_asset_a", "atz-key-a", normalized, "architizer-prod.imgix.net", "/media/a.jpg", 0),
-                ("atz_asset_placeholder", "atz-key-placeholder", placeholder, "facebook.com", "/static/placeholder.jpg", 1),
-                ("atz_asset_not_queued", "atz-key-not-queued", not_queued, "architizer-prod.imgix.net", "/media/not-queued.jpg", 0),
-                ("atz_asset_video", "atz-key-video", video, "architizer-prod.imgix.net", "/media/movie.mp4", 0),
+                ("atz_asset_a", "atz-key-a", normalized, "architizer-prod.imgix.net", "/media/a.jpg", 0, "architizer-host-path-asset-v1"),
+                ("atz_asset_placeholder", "atz-key-placeholder", placeholder, "facebook.com", "/static/placeholder.jpg", 1, "architizer-host-path-asset-v1"),
+                ("atz_asset_not_queued", "atz-key-not-queued", not_queued, "architizer-prod.imgix.net", "/media/not-queued.jpg", 0, "architizer-host-path-asset-v1"),
+                ("atz_asset_video", "atz-key-video", video, "architizer-prod.imgix.net", "/media/movie.mp4", 0, "architizer-host-path-asset-v1"),
             ],
         )
         conn.executemany(
@@ -187,14 +191,14 @@ def _make_architizer(path: Path) -> None:
             ],
         )
         conn.executemany(
-            "INSERT INTO source_image_occurrences VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO source_image_occurrences VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             [
-                ("o1", 100, "cover", 0, raw_large, "u-a-large", "atz_asset_a", "parsed"),
-                ("o2", 100, "gallery", 0, raw_small, "u-a-small", "atz_asset_a", "parsed"),
-                ("o3", 101, "gallery", 0, raw_large, "u-a-large", "atz_asset_a", "parsed"),
-                ("op", 100, "gallery", 1, placeholder, "u-placeholder", "atz_asset_placeholder", "placeholder_candidate"),
-                ("on", 102, "cover", 0, not_queued, "u-not-queued", "atz_asset_not_queued", "parsed"),
-                ("ov", 103, "gallery", 0, video, "u-video", "atz_asset_video", "parsed"),
+                ("o1", 100, "cover", 0, raw_large, "u-a-large", "atz_asset_a", "parsed", None, "og:image:cover", None),
+                ("o2", 100, "gallery", 0, raw_small, "u-a-small", "atz_asset_a", "parsed", None, "og:image:gallery", None),
+                ("o3", 101, "gallery", 0, raw_large, "u-a-large", "atz_asset_a", "parsed", None, "og:image:gallery", None),
+                ("op", 100, "gallery", 1, placeholder, "u-placeholder", "atz_asset_placeholder", "placeholder_candidate", None, "og:image:gallery", None),
+                ("on", 102, "cover", 0, not_queued, "u-not-queued", "atz_asset_not_queued", "parsed", None, "og:image:cover", None),
+                ("ov", 103, "gallery", 0, video, "u-video", "atz_asset_video", "parsed", None, "og:image:gallery", None),
             ],
         )
         conn.executemany(

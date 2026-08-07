@@ -52,7 +52,7 @@ def _asset(
 ) -> SourceAsset:
     asset_id = f"asset-{number:03d}"
     raw = f"https://{host}/images/f_auto/v1/{asset_id}/image.jpg"
-    fetch = f"https://{host}/images/c_limit,w_2048/v1/{asset_id}/image.jpg"
+    fetch = f"https://{host}/images/c_limit,w_1024/v1/{asset_id}/image.jpg"
     return SourceAsset(
         source="divisare",
         source_asset_id=asset_id,
@@ -104,6 +104,8 @@ def _run(
         resume=resume,
         asset_factory=lambda: iter(assets),
         fetcher=fetcher,
+        requests_per_second=10_000,
+        cooldown_seconds=0,
         sleep=lambda _: None,
         max_attempts=max_attempts,
     )
@@ -126,7 +128,10 @@ def test_pipeline_publishes_valid_sidecar_without_mutating_source(tmp_path: Path
     assert _sha(source) == before == result.source_sha256
     assert validate_sidecar(result.output_path).passed
     assert not Path(str(result.output_path) + ".partial").exists()
-    assert not Path(str(result.output_path) + ".lock").exists()
+    lock_path = Path(str(result.output_path) + ".lock")
+    assert lock_path.exists()
+    descriptor = pipeline._acquire_lock(lock_path)
+    pipeline._release_lock(lock_path, descriptor)
     assert not Path(str(source) + "-wal").exists()
     assert not Path(str(source) + "-shm").exists()
     assert not Path(str(source) + "-journal").exists()
@@ -147,7 +152,7 @@ def test_pipeline_publishes_valid_sidecar_without_mutating_source(tmp_path: Path
         assert validations["quick_check"] == 1
         assert validations["integrity_check"] == 1
         assert validations["foreign_key_check"] == 1
-        assert validations["eligible_inventory_accounting"] == 1
+        assert validations["source_inventory_accounting"] == 1
     finally:
         connection.close()
 
@@ -167,7 +172,9 @@ def test_completed_resume_makes_zero_requests_and_plain_rerun_refuses_clobber(
 
     with pytest.raises(FileExistsError, match="clobber"):
         _run(tmp_path, assets, FakeFetcher(_png()))
-    assert not (tmp_path / "e1.db.lock").exists()
+    lock_path = tmp_path / "e1.db.lock"
+    descriptor = pipeline._acquire_lock(lock_path)
+    pipeline._release_lock(lock_path, descriptor)
 
 
 def test_interrupted_partial_resumes_only_pending_assets(tmp_path: Path) -> None:
@@ -185,7 +192,9 @@ def test_interrupted_partial_resumes_only_pending_assets(tmp_path: Path) -> None
     partial = tmp_path / "e1.db.partial"
     assert partial.exists()
     assert not (tmp_path / "e1.db").exists()
-    assert not (tmp_path / "e1.db.lock").exists()
+    lock_path = tmp_path / "e1.db.lock"
+    descriptor = pipeline._acquire_lock(lock_path)
+    pipeline._release_lock(lock_path, descriptor)
     connection = open_sidecar(partial)
     try:
         assert connection.execute(
@@ -336,6 +345,8 @@ def test_full_preserves_adapter_order_and_manifest_is_repeatable(tmp_path: Path)
             sample_size=None,
             asset_factory=lambda: iter(assets),
             fetcher=FakeFetcher(_png()),
+            requests_per_second=10_000,
+            cooldown_seconds=0,
         )
 
     first = run("full-a.db")
@@ -353,13 +364,38 @@ def test_full_preserves_adapter_order_and_manifest_is_repeatable(tmp_path: Path)
         connection.close()
 
 
+def test_pending_batch_query_uses_rank_keyset_without_temp_sort(
+    tmp_path: Path,
+) -> None:
+    assets = tuple(_asset(index) for index in range(10))
+    result = _run(tmp_path, assets, FakeFetcher(_png()))
+    connection = open_sidecar(result.output_path)
+    try:
+        run_id = connection.execute(
+            "SELECT run_id FROM fingerprint_runs"
+        ).fetchone()[0]
+        plan = [
+            str(row[-1])
+            for row in connection.execute(
+                "EXPLAIN QUERY PLAN " + pipeline._PENDING_BATCH_SQL,
+                (run_id, 0, 128),
+            )
+        ]
+        assert any("idx_source_assets_run_rank" in detail for detail in plan)
+        assert all("TEMP B-TREE" not in detail for detail in plan)
+    finally:
+        connection.close()
+
+
 def test_exclusive_lock_refuses_a_second_writer(tmp_path: Path) -> None:
     assets = tuple(_asset(index) for index in range(10))
     lock = tmp_path / "e1.db.lock"
-    lock.write_text("held", encoding="ascii")
-    with pytest.raises(PipelineError, match="lock already exists"):
-        _run(tmp_path, assets, FakeFetcher(_png()))
-    assert lock.read_text(encoding="ascii") == "held"
+    descriptor = pipeline._acquire_lock(lock)
+    try:
+        with pytest.raises(PipelineError, match="exclusive runner lock is held"):
+            _run(tmp_path, assets, FakeFetcher(_png()))
+    finally:
+        pipeline._release_lock(lock, descriptor)
 
 
 def test_n10_hash_sample_scans_full_inventory_and_covers_important_strata(
@@ -389,7 +425,7 @@ def test_n10_hash_sample_scans_full_inventory_and_covers_important_strata(
         assert any(record["selection_reason"].startswith("coverage:") for record in records)
         accounting = json.loads(
             connection.execute(
-                "SELECT detail FROM validations WHERE validation_name='eligible_inventory_accounting'"
+                "SELECT actual FROM validations WHERE validation_name='source_inventory_accounting'"
             ).fetchone()[0]
         )
         assert accounting["eligible"] == 100

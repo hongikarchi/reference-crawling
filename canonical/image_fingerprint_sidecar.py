@@ -14,15 +14,71 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 APPLICATION_ID = int.from_bytes(b"E1FP", "big")
+
+REQUIRED_VALIDATIONS = (
+    "single_run",
+    "source_sha_unchanged",
+    "source_inventory_accounting",
+    "exclusion_ledger_accounting",
+    "source_record_sha256",
+    "ordered_selection_manifest",
+    "fingerprint_accounting",
+    "successful_attempt_linkage",
+    "quick_check",
+    "integrity_check",
+    "foreign_key_check",
+)
 
 TABLE_NAMES = (
     "fingerprint_runs",
     "source_assets",
+    "source_asset_exclusions",
     "fetch_attempts",
     "fingerprints",
     "validations",
+)
+
+TRIGGER_NAMES = (
+    "fingerprint_runs_single_run",
+    "fingerprint_runs_provenance_immutable",
+    "fingerprint_runs_status_transition",
+    "fingerprint_runs_terminal_immutable",
+    "fingerprint_runs_source_after_once",
+    "fingerprint_runs_immutable_delete",
+    "source_assets_initializing_insert",
+    "source_assets_immutable_update",
+    "source_assets_immutable_delete",
+    "source_assets_not_excluded",
+    "source_asset_exclusions_initializing_insert",
+    "source_asset_exclusions_immutable_update",
+    "source_asset_exclusions_not_selected",
+    "source_asset_exclusions_immutable_delete",
+    "fetch_attempts_running_insert",
+    "fetch_attempts_retry_budget_insert",
+    "fetch_attempts_immutable_update",
+    "fetch_attempts_immutable_delete",
+    "fingerprints_initializing_insert",
+    "fingerprints_running_update",
+    "fingerprints_immutable_delete",
+    "validations_running_insert",
+    "validations_running_update",
+    "validations_running_delete",
+)
+
+INDEX_NAMES = (
+    "idx_source_assets_canonical_url",
+    "idx_source_assets_run_rank",
+    "idx_source_assets_record_sha",
+    "idx_source_asset_exclusions_reason",
+    "idx_source_asset_exclusions_record_sha",
+    "idx_fetch_attempts_outcome",
+    "idx_fetch_attempts_response_sha",
+    "idx_fingerprints_status",
+    "idx_fingerprints_pixel_sha",
+    "idx_fingerprints_phash",
+    "idx_validations_failed",
 )
 
 
@@ -59,37 +115,114 @@ CREATE TABLE fingerprint_runs (
                                   AND dependency_manifest_sha256 NOT GLOB '*[^0-9a-f]*'),
     runner_version              TEXT NOT NULL
                                 CHECK(length(trim(runner_version)) > 0),
+    retry_policy_version        TEXT NOT NULL
+                                CHECK(length(trim(retry_policy_version)) > 0),
+    max_attempts                INTEGER NOT NULL CHECK(max_attempts >= 1),
     selection_manifest_sha256   TEXT NOT NULL
                                 CHECK(length(selection_manifest_sha256)=64
                                   AND selection_manifest_sha256=lower(selection_manifest_sha256)
                                   AND selection_manifest_sha256 NOT GLOB '*[^0-9a-f]*'),
+    selection_mode              TEXT NOT NULL
+                                CHECK(selection_mode IN ('sample','full')),
+    selection_count             INTEGER NOT NULL CHECK(selection_count >= 0),
+    sample_seed                 TEXT,
+    selection_version           TEXT NOT NULL
+                                CHECK(length(trim(selection_version)) > 0),
+    source_inventory_manifest_sha256 TEXT NOT NULL
+                                CHECK(length(source_inventory_manifest_sha256)=64
+                                  AND source_inventory_manifest_sha256=
+                                      lower(source_inventory_manifest_sha256)
+                                  AND source_inventory_manifest_sha256
+                                      NOT GLOB '*[^0-9a-f]*'),
+    exclusion_manifest_sha256   TEXT NOT NULL
+                                CHECK(length(exclusion_manifest_sha256)=64
+                                  AND exclusion_manifest_sha256=
+                                      lower(exclusion_manifest_sha256)
+                                  AND exclusion_manifest_sha256
+                                      NOT GLOB '*[^0-9a-f]*'),
+    source_total_count          INTEGER NOT NULL CHECK(source_total_count >= 0),
+    eligible_count              INTEGER NOT NULL CHECK(eligible_count >= 0),
+    excluded_count              INTEGER NOT NULL CHECK(excluded_count >= 0),
+    initialized_inventory_count INTEGER NOT NULL DEFAULT 0
+                                CHECK(initialized_inventory_count >= 0),
+    initialized_selected_count  INTEGER NOT NULL DEFAULT 0
+                                CHECK(initialized_selected_count >= 0),
+    initialized_excluded_count  INTEGER NOT NULL DEFAULT 0
+                                CHECK(initialized_excluded_count >= 0),
+    initialization_updated_at   TEXT,
+    initialization_completed_at TEXT,
     status                      TEXT NOT NULL
                                 CHECK(status IN
-                                  ('running','complete','complete_with_failures',
+                                  ('initializing','running','complete','complete_with_failures',
                                    'failed_validation','failed')),
     started_at                  TEXT NOT NULL CHECK(length(trim(started_at)) > 0),
     completed_at                TEXT,
     error                       TEXT,
-    CHECK((status='running' AND completed_at IS NULL
-                           AND source_db_sha256_after IS NULL)
-       OR (status<>'running' AND completed_at IS NOT NULL
-                            AND source_db_sha256_after IS NOT NULL
-                            AND source_db_sha256_after=source_db_sha256_before))
+    CHECK(source_total_count=eligible_count+excluded_count),
+    CHECK(selection_count<=eligible_count),
+    CHECK((selection_mode='sample'
+           AND selection_count>=1
+           AND sample_seed IS NOT NULL
+           AND length(trim(sample_seed))>0)
+       OR (selection_mode='full'
+           AND sample_seed IS NULL
+           AND selection_count=eligible_count)),
+    CHECK(initialized_inventory_count<=source_total_count),
+    CHECK(initialized_selected_count<=selection_count),
+    CHECK(initialized_excluded_count<=excluded_count),
+    CHECK(initialized_inventory_count>=
+          initialized_selected_count+initialized_excluded_count),
+    CHECK((status='initializing'
+           AND initialization_completed_at IS NULL)
+       OR (status<>'initializing'
+           AND initialization_completed_at IS NOT NULL
+           AND initialized_inventory_count=source_total_count
+           AND initialized_selected_count=selection_count
+           AND initialized_excluded_count=excluded_count)),
+    CHECK((status IN ('initializing','running')
+           AND completed_at IS NULL
+           AND source_db_sha256_after IS NULL)
+       OR (status NOT IN ('initializing','running')
+           AND completed_at IS NOT NULL
+           AND source_db_sha256_after IS NOT NULL
+           AND source_db_sha256_after=source_db_sha256_before))
 );
+
+CREATE TRIGGER fingerprint_runs_single_run
+BEFORE INSERT ON fingerprint_runs
+WHEN EXISTS (SELECT 1 FROM fingerprint_runs)
+BEGIN
+    SELECT RAISE(ABORT, 'an E1 sidecar contains exactly one run');
+END;
 
 CREATE TRIGGER fingerprint_runs_provenance_immutable
 BEFORE UPDATE OF
   run_id,source_name,source_db_path,source_db_sha256_before,
   fingerprint_contract_version,dependency_manifest_json,
-  dependency_manifest_sha256,runner_version,selection_manifest_sha256,started_at
+  dependency_manifest_sha256,runner_version,retry_policy_version,max_attempts,
+  selection_manifest_sha256,
+  selection_mode,selection_count,sample_seed,selection_version,
+  source_inventory_manifest_sha256,exclusion_manifest_sha256,
+  source_total_count,eligible_count,excluded_count,started_at
 ON fingerprint_runs
 BEGIN
     SELECT RAISE(ABORT, 'run source provenance is immutable');
 END;
 
+CREATE TRIGGER fingerprint_runs_status_transition
+BEFORE UPDATE OF status ON fingerprint_runs
+WHEN NOT (
+       (OLD.status='initializing' AND NEW.status='running')
+    OR (OLD.status='running' AND NEW.status IN
+        ('complete','complete_with_failures','failed_validation','failed'))
+)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid fingerprint run status transition');
+END;
+
 CREATE TRIGGER fingerprint_runs_terminal_immutable
 BEFORE UPDATE ON fingerprint_runs
-WHEN OLD.status<>'running'
+WHEN OLD.status NOT IN ('initializing','running')
 BEGIN
     SELECT RAISE(ABORT, 'terminal fingerprint run is immutable');
 END;
@@ -123,16 +256,15 @@ CREATE TABLE source_assets (
                                   AND source_record_sha256 NOT GLOB '*[^0-9a-f]*'),
     provenance_json             TEXT NOT NULL DEFAULT '{{}}'
                                 CHECK(json_valid(provenance_json)),
-    PRIMARY KEY(run_id, source_asset_id),
-    UNIQUE(run_id, selection_rank)
+    PRIMARY KEY(run_id, source_asset_id)
 );
 
-CREATE TRIGGER source_assets_running_insert
+CREATE TRIGGER source_assets_initializing_insert
 BEFORE INSERT ON source_assets
 WHEN coalesce((SELECT status FROM fingerprint_runs WHERE run_id=NEW.run_id), '')
-     <> 'running'
+     <> 'initializing'
 BEGIN
-    SELECT RAISE(ABORT, 'source assets can only be selected for a running run');
+    SELECT RAISE(ABORT, 'source assets can only be selected while initializing');
 END;
 
 CREATE TRIGGER source_assets_immutable_update
@@ -145,6 +277,67 @@ CREATE TRIGGER source_assets_immutable_delete
 BEFORE DELETE ON source_assets
 BEGIN
     SELECT RAISE(ABORT, 'source asset provenance is immutable');
+END;
+
+CREATE TRIGGER source_assets_not_excluded
+BEFORE INSERT ON source_assets
+WHEN EXISTS (
+    SELECT 1 FROM source_asset_exclusions e
+    WHERE e.run_id=NEW.run_id AND e.source_asset_id=NEW.source_asset_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'source asset is already recorded as excluded');
+END;
+
+CREATE TABLE source_asset_exclusions (
+    run_id                      TEXT NOT NULL
+                                REFERENCES fingerprint_runs(run_id)
+                                ON UPDATE RESTRICT ON DELETE RESTRICT,
+    source_asset_id             TEXT NOT NULL
+                                CHECK(length(trim(source_asset_id)) > 0),
+    source_asset_key            TEXT NOT NULL
+                                CHECK(length(trim(source_asset_key)) > 0),
+    inventory_rank              INTEGER NOT NULL CHECK(inventory_rank >= 1),
+    reason_code                 TEXT NOT NULL
+                                CHECK(length(trim(reason_code)) > 0),
+    source_record_sha256        TEXT NOT NULL
+                                CHECK(length(source_record_sha256)=64
+                                  AND source_record_sha256=lower(source_record_sha256)
+                                  AND source_record_sha256 NOT GLOB '*[^0-9a-f]*'),
+    provenance_json             TEXT NOT NULL CHECK(json_valid(provenance_json)),
+    detail_json                 TEXT NOT NULL CHECK(json_valid(detail_json)),
+    PRIMARY KEY(run_id, source_asset_id),
+    UNIQUE(run_id, inventory_rank)
+);
+
+CREATE TRIGGER source_asset_exclusions_initializing_insert
+BEFORE INSERT ON source_asset_exclusions
+WHEN coalesce((SELECT status FROM fingerprint_runs WHERE run_id=NEW.run_id), '')
+     <> 'initializing'
+BEGIN
+    SELECT RAISE(ABORT, 'source exclusions can only be recorded while initializing');
+END;
+
+CREATE TRIGGER source_asset_exclusions_immutable_update
+BEFORE UPDATE ON source_asset_exclusions
+BEGIN
+    SELECT RAISE(ABORT, 'source exclusion provenance is immutable');
+END;
+
+CREATE TRIGGER source_asset_exclusions_not_selected
+BEFORE INSERT ON source_asset_exclusions
+WHEN EXISTS (
+    SELECT 1 FROM source_assets s
+    WHERE s.run_id=NEW.run_id AND s.source_asset_id=NEW.source_asset_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'excluded source asset is already selected');
+END;
+
+CREATE TRIGGER source_asset_exclusions_immutable_delete
+BEFORE DELETE ON source_asset_exclusions
+BEGIN
+    SELECT RAISE(ABORT, 'source exclusion provenance is immutable');
 END;
 
 CREATE TABLE fetch_attempts (
@@ -168,6 +361,14 @@ CREATE TABLE fetch_attempts (
                                   AND raw_response_sha256 NOT GLOB '*[^0-9a-f]*')),
     error_kind                  TEXT,
     error_message               TEXT,
+    retry_after_seconds         REAL
+                                CHECK(retry_after_seconds IS NULL
+                                  OR retry_after_seconds >= 0),
+    scheduled_delay_seconds     REAL
+                                CHECK(scheduled_delay_seconds IS NULL
+                                  OR scheduled_delay_seconds >= 0),
+    worker_no                   INTEGER
+                                CHECK(worker_no IS NULL OR worker_no >= 1),
     PRIMARY KEY(run_id, source_asset_id, attempt_no),
     FOREIGN KEY(run_id, source_asset_id)
         REFERENCES source_assets(run_id, source_asset_id)
@@ -272,12 +473,22 @@ CREATE TABLE fingerprints (
     )
 );
 
-CREATE TRIGGER fingerprints_running_insert
+CREATE TRIGGER fingerprints_initializing_insert
 BEFORE INSERT ON fingerprints
-WHEN coalesce((SELECT status FROM fingerprint_runs WHERE run_id=NEW.run_id), '')
-     <> 'running'
+WHEN NEW.status<>'pending'
+  OR coalesce((SELECT status FROM fingerprint_runs WHERE run_id=NEW.run_id), '')
+     <> 'initializing'
 BEGIN
-    SELECT RAISE(ABORT, 'fingerprints require a running run');
+    SELECT RAISE(ABORT, 'pending fingerprints can only be created while initializing');
+END;
+
+CREATE TRIGGER fetch_attempts_retry_budget_insert
+BEFORE INSERT ON fetch_attempts
+WHEN NEW.attempt_no > coalesce((
+    SELECT max_attempts FROM fingerprint_runs WHERE run_id=NEW.run_id
+), 0)
+BEGIN
+    SELECT RAISE(ABORT, 'fetch attempt exceeds the immutable retry budget');
 END;
 
 CREATE TRIGGER fingerprints_running_update
@@ -312,15 +523,15 @@ CREATE TABLE validations (
 CREATE TRIGGER validations_running_insert
 BEFORE INSERT ON validations
 WHEN coalesce((SELECT status FROM fingerprint_runs WHERE run_id=NEW.run_id), '')
-     <> 'running'
+     NOT IN ('initializing','running')
 BEGIN
-    SELECT RAISE(ABORT, 'validations require a running run');
+    SELECT RAISE(ABORT, 'validations require a non-terminal run');
 END;
 
 CREATE TRIGGER validations_running_update
 BEFORE UPDATE ON validations
 WHEN coalesce((SELECT status FROM fingerprint_runs WHERE run_id=OLD.run_id), '')
-     <> 'running'
+     NOT IN ('initializing','running')
 BEGIN
     SELECT RAISE(ABORT, 'terminal validations are immutable');
 END;
@@ -328,15 +539,21 @@ END;
 CREATE TRIGGER validations_running_delete
 BEFORE DELETE ON validations
 WHEN coalesce((SELECT status FROM fingerprint_runs WHERE run_id=OLD.run_id), '')
-     <> 'running'
+     NOT IN ('initializing','running')
 BEGIN
     SELECT RAISE(ABORT, 'terminal validations are immutable');
 END;
 
 CREATE INDEX idx_source_assets_canonical_url
     ON source_assets(canonical_url);
+CREATE UNIQUE INDEX idx_source_assets_run_rank
+    ON source_assets(run_id,selection_rank);
 CREATE INDEX idx_source_assets_record_sha
     ON source_assets(source_record_sha256);
+CREATE INDEX idx_source_asset_exclusions_reason
+    ON source_asset_exclusions(run_id, reason_code, source_asset_id);
+CREATE INDEX idx_source_asset_exclusions_record_sha
+    ON source_asset_exclusions(source_record_sha256);
 CREATE INDEX idx_fetch_attempts_outcome
     ON fetch_attempts(run_id, outcome, error_kind);
 CREATE INDEX idx_fetch_attempts_response_sha
@@ -394,7 +611,21 @@ def _assert_schema(connection: sqlite3.Connection) -> None:
             "SELECT name FROM sqlite_schema WHERE type='table'"
         )
     }
+    triggers = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_schema WHERE type='trigger'"
+        )
+    }
+    indexes = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_schema WHERE type='index'"
+        )
+    }
     missing = sorted(set(TABLE_NAMES) - tables)
+    missing_triggers = sorted(set(TRIGGER_NAMES) - triggers)
+    missing_indexes = sorted(set(INDEX_NAMES) - indexes)
     if application_id != APPLICATION_ID:
         raise SidecarSchemaError(
             f"application_id mismatch: expected {APPLICATION_ID}, got {application_id}"
@@ -405,6 +636,14 @@ def _assert_schema(connection: sqlite3.Connection) -> None:
         )
     if missing:
         raise SidecarSchemaError(f"missing sidecar tables: {', '.join(missing)}")
+    if missing_triggers:
+        raise SidecarSchemaError(
+            f"missing sidecar triggers: {', '.join(missing_triggers)}"
+        )
+    if missing_indexes:
+        raise SidecarSchemaError(
+            f"missing sidecar indexes: {', '.join(missing_indexes)}"
+        )
 
 
 def initialize_sidecar(path: Path | str) -> sqlite3.Connection:
@@ -453,6 +692,36 @@ def open_sidecar(
     return connection
 
 
+def recover_sidecar(path: Path | str) -> None:
+    """Recover a possibly interrupted sidecar before immutable inspection.
+
+    SQLite performs hot-journal recovery only through a normal writable open;
+    ``immutable=1`` must not be the first open after an abnormal termination.
+    The brief immediate transaction also proves that no live SQLite writer owns
+    the database.  No application rows are changed.
+    """
+
+    target = Path(path).resolve()
+    if not target.is_file():
+        raise FileNotFoundError(f"sidecar does not exist: {target}")
+    connection = sqlite3.connect(target)
+    try:
+        _configure(connection, readonly=False)
+        _assert_schema(connection)
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("SELECT count(*) FROM fingerprint_runs").fetchone()
+        connection.commit()
+        journal_mode = str(connection.execute("PRAGMA journal_mode").fetchone()[0])
+        if journal_mode.casefold() == "wal":
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+    except Exception:
+        if connection.in_transaction:
+            connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def validate_sidecar(path: Path | str) -> SidecarValidation:
     """Run physical, relational, and E1 contract checks without writing."""
 
@@ -460,10 +729,14 @@ def validate_sidecar(path: Path | str) -> SidecarValidation:
     try:
         quick_check = str(connection.execute("PRAGMA quick_check").fetchone()[0])
         integrity_check = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
-        foreign_key_violations = len(
-            connection.execute("PRAGMA foreign_key_check").fetchall()
+        foreign_key_violations = sum(
+            1 for _ in connection.execute("PRAGMA foreign_key_check")
         )
         semantic_queries = (
+            (
+                "single_run_count_mismatch",
+                "SELECT abs(count(*)-1) FROM fingerprint_runs",
+            ),
             (
                 "successful_fingerprint_attempt_not_success",
                 """
@@ -487,6 +760,73 @@ def validate_sidecar(path: Path | str) -> SidecarValidation:
                  AND a.attempt_no=f.selected_attempt_no
                 WHERE f.status='success'
                   AND f.raw_response_sha256<>a.raw_response_sha256
+                """,
+            ),
+            (
+                "initialized_run_selected_count_mismatch",
+                """
+                SELECT count(*)
+                FROM fingerprint_runs r
+                WHERE r.status<>'initializing'
+                  AND r.selection_count<>(
+                    SELECT count(*) FROM source_assets s WHERE s.run_id=r.run_id
+                  )
+                """,
+            ),
+            (
+                "initialized_run_exclusion_count_mismatch",
+                """
+                SELECT count(*)
+                FROM fingerprint_runs r
+                WHERE r.status<>'initializing'
+                  AND r.excluded_count<>(
+                    SELECT count(*) FROM source_asset_exclusions e
+                    WHERE e.run_id=r.run_id
+                  )
+                """,
+            ),
+            (
+                "initialization_progress_row_count_mismatch",
+                """
+                SELECT count(*)
+                FROM fingerprint_runs r
+                WHERE r.initialized_selected_count<>(
+                        SELECT count(*) FROM source_assets s WHERE s.run_id=r.run_id
+                      )
+                   OR r.initialized_excluded_count<>(
+                        SELECT count(*) FROM source_asset_exclusions e
+                        WHERE e.run_id=r.run_id
+                      )
+                """,
+            ),
+            (
+                "selected_and_excluded_identity_overlap",
+                """
+                SELECT count(*)
+                FROM source_assets s
+                JOIN source_asset_exclusions e
+                  ON e.run_id=s.run_id
+                 AND e.source_asset_id=s.source_asset_id
+                """,
+            ),
+            (
+                "fetch_attempt_number_gap",
+                """
+                SELECT count(*) FROM (
+                  SELECT run_id,source_asset_id
+                  FROM fetch_attempts
+                  GROUP BY run_id,source_asset_id
+                  HAVING min(attempt_no)<>1 OR max(attempt_no)<>count(*)
+                )
+                """,
+            ),
+            (
+                "fetch_attempt_exceeds_retry_budget",
+                """
+                SELECT count(*)
+                FROM fetch_attempts a
+                JOIN fingerprint_runs r USING(run_id)
+                WHERE a.attempt_no>r.max_attempts
                 """,
             ),
             (
@@ -525,30 +865,6 @@ def validate_sidecar(path: Path | str) -> SidecarValidation:
                 """,
             ),
             (
-                "complete_run_without_validation",
-                """
-                SELECT count(*)
-                FROM fingerprint_runs r
-                WHERE r.status IN ('complete','complete_with_failures')
-                  AND NOT EXISTS (
-                    SELECT 1 FROM validations v WHERE v.run_id=r.run_id
-                  )
-                """,
-            ),
-            (
-                "failed_validation_without_failed_error_validation",
-                """
-                SELECT count(*)
-                FROM fingerprint_runs r
-                WHERE r.status='failed_validation'
-                  AND NOT EXISTS (
-                    SELECT 1 FROM validations v
-                    WHERE v.run_id=r.run_id
-                      AND v.severity='error' AND v.passed=0
-                  )
-                """,
-            ),
-            (
                 "complete_run_status_mismatch",
                 """
                 SELECT count(*)
@@ -575,6 +891,40 @@ def validate_sidecar(path: Path | str) -> SidecarValidation:
             (name, int(connection.execute(query).fetchone()[0]))
             for name, query in semantic_queries
         )
+        required = set(REQUIRED_VALIDATIONS)
+        required_validation_violations = 0
+        failed_validation_without_required_error = 0
+        for run in connection.execute("SELECT run_id,status FROM fingerprint_runs"):
+            validation_rows = {
+                str(row[0]): (str(row[1]), int(row[2]))
+                for row in connection.execute(
+                    "SELECT validation_name,severity,passed FROM validations WHERE run_id=?",
+                    (run["run_id"],),
+                )
+            }
+            if run["status"] in {"complete", "complete_with_failures"}:
+                required_validation_violations += sum(
+                    name not in validation_rows
+                    or validation_rows[name] != ("error", 1)
+                    for name in required
+                )
+            if run["status"] == "failed_validation":
+                failed_validation_without_required_error += int(
+                    not any(
+                        name in required and severity == "error" and passed == 0
+                        for name, (severity, passed) in validation_rows.items()
+                    )
+                )
+        semantic_violations += (
+            (
+                "terminal_required_validation_mismatch",
+                required_validation_violations,
+            ),
+            (
+                "failed_validation_without_failed_required_validation",
+                failed_validation_without_required_error,
+            ),
+        )
         dependency_manifest_mismatches = sum(
             hashlib.sha256(str(row[0]).encode("utf-8")).hexdigest() != str(row[1])
             for row in connection.execute(
@@ -584,6 +934,19 @@ def validate_sidecar(path: Path | str) -> SidecarValidation:
         )
         semantic_violations += (
             ("dependency_manifest_sha_mismatch", dependency_manifest_mismatches),
+        )
+        exclusion_source_record_mismatches = sum(
+            hashlib.sha256(str(row[0]).encode("utf-8")).hexdigest() != str(row[1])
+            for row in connection.execute(
+                """SELECT provenance_json,source_record_sha256
+                   FROM source_asset_exclusions"""
+            )
+        )
+        semantic_violations += (
+            (
+                "exclusion_source_record_sha_mismatch",
+                exclusion_source_record_mismatches,
+            ),
         )
         table_counts = tuple(
             (
