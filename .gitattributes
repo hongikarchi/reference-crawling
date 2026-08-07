@@ -1,0 +1,4 @@
+# These manifests are byte-frozen by tests.  Never apply platform newline
+# conversion, even when the global Git configuration enables core.autocrlf.
+canonical/divisare_d2_decisions_v1.json -text
+canonical/divisare_partial_text_decisions_v1.json -text
