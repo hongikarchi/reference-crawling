@@ -480,10 +480,15 @@ def build(
     d2_path: str = D2_RESULTS,
     image_unavailable_path: str | None = IMAGE_UNAVAILABLE_PATH,
 ) -> dict:
-    canonical = json.load(open(canonical_path))
+    with open(canonical_path, encoding="utf-8") as canonical_file:
+        canonical = json.load(canonical_file)
     clusters = canonical.get("clusters") or canonical.get("buildings") or []
 
-    arch_data = json.load(open(architects_path)) if Path(architects_path).exists() else {"clusters": []}
+    if Path(architects_path).exists():
+        with open(architects_path, encoding="utf-8") as architects_file:
+            arch_data = json.load(architects_file)
+    else:
+        arch_data = {"clusters": []}
     arch_by_id = {a["canonical_arch_id"]: a for a in arch_data.get("clusters", [])}
     arch_source_to_id = _arch_source_index(arch_data)
 
@@ -619,7 +624,7 @@ def build(
     }
     payload = {"summary": summary, "buildings": out_rows}
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
     return summary
 
