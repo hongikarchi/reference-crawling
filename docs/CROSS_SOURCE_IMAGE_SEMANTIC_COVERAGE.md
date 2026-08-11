@@ -1,27 +1,28 @@
-# Cross-source image semantic-coverage preflight
+# Cross-source image semantic coverage
 
 ## Status and boundary
 
-This stage is an offline plan for deciding which Divisare and Architizer
-images may later be shown to a Vision model. It does not run Vision, download
-an image, spend model tokens, choose a final hero image, merge buildings, or
-write to a source, canonical, Neon, or R2 database.
+The fixed cross-source Vision N10 is complete and independently validated.
+It analyzed 57 frozen image occurrences from ten buildings (five Divisare and
+five Architizer) without changing E1, E2, E3, curated metadata, canonical,
+Neon, or R2 data. N100 and selective full Vision remain unapproved and were
+not run.
 
-The current authorized boundary is:
+The completed boundary was:
 
 1. read the immutable E2 and E3 SQLite artifacts;
-2. create a deterministic representative-versus-coverage selection manifest;
-3. validate that manifest independently and estimate the future N10 request
-   count;
-4. stop before the first network or model request and report the exact N10
-   population, expected calls, and cost assumptions.
+2. use the already-frozen representative-versus-coverage N10 manifest;
+3. fetch only its 57 pinned image URLs and require exact E1 response and pixel
+   identity before inference;
+4. run the source-blind semantic contract in twelve batches;
+5. validate the sidecar independently, review all inputs through opaque-ID
+   contact sheets, and project N100;
+6. stop before N100 and selective full Vision.
 
-An actual N10 image fetch or Vision call requires a separate explicit approval.
-N100 requires another approval after N10 has measured real token, latency,
-failure, and list-price-equivalent rates. A selective full Vision run remains
-a third, independent approval decision.
+N100 requires a separate explicit approval based on the measurements below.
+A selective full Vision run remains a later, independent approval decision.
 
-The offline preflight is complete. Fixed seed
+The offline preflight used fixed seed
 `archibe-semantic-coverage-n10-v1` selected 10 buildings (five per source) and
 57 occurrence memberships. All 57 have distinct E1 normalized-pixel hashes in
 this sample. The independent validator replayed the complete population,
@@ -31,7 +32,119 @@ The canonical ignored manifest is
 `81fa13340e584e6d874ab7145a9d003ec57093db5a4dbe41f206c6e7ac85ce1f` and
 its self SHA-256 is
 `bf5ac74479ac305e11dc5aa17f17d02102a7eb2499d15680384d21848801ab5b`.
-No network, image, Vision, or LLM request was made.
+That preflight itself made no network, image, Vision, or LLM request. The later
+approved N10 execution is recorded below.
+
+## Actual Vision N10 result
+
+| Measure | Observed result |
+|---|---:|
+| Buildings / occurrences | 10 / 57 |
+| Exact E1 response and pixel matches | 57 / 57 |
+| Fetch attempts / retries | 57 / 0 |
+| Successful model batches | 12 / 12 |
+| Valid schema results | 57 / 57 |
+| Downloaded bytes | 6,658,781 |
+| Input / cached input / output tokens | 222,983 / 13,056 / 7,050 |
+| Vision elapsed, summed | 171.776 seconds |
+| Core run wall time | 250.241 seconds |
+| SQLite quick / integrity / FK | `ok` / `ok` / 0 |
+| Completed-run resume requests | fetch 0 / model 0 |
+
+The immutable result is
+`data/enrichment/divisare_architizer_semantic_vision_n10_v1.db`: 835,584
+bytes, byte SHA-256
+`30cfdce39b8ac0ecc0d1de0b52f05a5f1f5d7bec7390c03439096118e08ee31a`,
+logical SHA-256
+`10de6fc2a4678c0566beebd93774e97776c2e28239a48f01f4a0ef02001e65dc`.
+The run used contract `cross-source-image-semantics-v1.0.0`, prompt
+`cross-source-image-semantics-prompt-v1.0.0`, model `gpt-5.6-sol`, high image
+detail, batch size five, and stored raw model JSONL separately from normalized
+results and deterministic derivatives.
+
+An independent validator recomputed the frozen manifest, E2/E3 lineage,
+response and pixel identity, gzip payloads, token totals, every normalized
+result, every occurrence link, hero tier, coverage slot, trigger set, and
+logical SHA. All error-severity checks passed. E2 and E3 retained their exact
+start SHA values and had no WAL, SHM, or journal sidecars.
+
+The completed artifact records runner v1.0.0. A post-run static review found
+no defect in that uninterrupted success path, but exposed crash/resume and
+partial-publish risks. The committed runner/retry implementation is therefore
+v1.1 and remains able to validate the immutable v1.0.0 result. It adds a
+SHA-verified durable input spool so a committed `ready` row resumes without a
+second request, process-wide 2 requests/second pacing, atomic cache writes,
+persistent advisory locking, DB/report publish rollback, report content
+binding for new artifacts, bounded credential-redacted subprocess payloads,
+literal frozen-manifest identity pins, failure-aware inspection, and stricter
+attempt-ledger replay. The complete semantic test group passed 112 tests and
+the full repository suite passed 966 tests with 22 skips and 1,453 subtests.
+
+### What the semantic pass added
+
+The pixel-derived hero ledger contains 37 `preferred`, 8 `eligible`, 9
+`fallback`, 2 `qa_only`, and 1 `rejected` candidates. These are evidence
+tiers, not a final product hero choice.
+
+The expanded early/middle/late gallery probes produced at least one semantic
+slot absent from P2 top three for 7 of 10 buildings. They added 15 distinct
+building-slot pairs: interior 5, detail 3, plan 2, exterior-overall 2, other
+drawing 1, section 1, and model/render 1. This demonstrates measurable
+coverage gain without claiming that an unobserved slot is absent from the
+full gallery.
+
+Among nine non-QA P1 representative anchors, eight contained an in-scope
+architectural subject. `semv_000013` was correctly rejected because the frame
+was dominated by landscape with only tiny distant buildings. Another anchor,
+`semv_000046`, was retained only as `qa_only` because it was a low-legibility
+brick material detail. Downstream hero selection must therefore skip rejected
+anchors and prefer a better candidate from the same building when available.
+
+### Blind semantic review
+
+All 57 inputs were rendered to source-blind contact sheets showing only an
+opaque inference ID. No unambiguous scope or medium error was found in this
+agent review; the rendering/photo boundary on `semv_000019` was considered
+defensible. This is not an independent human gold set and must not be reported
+as production accuracy.
+
+The main open QA is uncertainty calibration. The model returned no
+`uncertain_axes` and no `resolution_insufficient` flag for any input. Review
+identified six defensible primary labels whose boundary should nevertheless
+have been surfaced as uncertain:
+
+| Inference ID | Boundary omitted from uncertainty |
+|---|---|
+| `semv_000013` | no-project-visible vs very-low-legibility site context |
+| `semv_000019` | rendering vs highly polished photograph |
+| `semv_000035` | coherent project vs low-legibility multi-building context |
+| `semv_000036` | threshold vs exterior rooftop terrace |
+| `semv_000054` | threshold vs exterior element detail |
+| `semv_000055` | threshold vs exterior element detail |
+
+These are uncertainty false negatives, not confirmed primary-label errors.
+The semantic N10 therefore passes its technical gate and its zero-clear-
+scope/medium-error gate, with uncertainty sensitivity carried as open QA into
+N100.
+
+### N100 projection and approval boundary
+
+A simple 10x empirical projection, before selecting a disjoint population,
+is 100 buildings, about 570 images, 114 theoretical fully packed five-image
+batches or up to 120 by direct N10 scaling, 66,587,810 downloaded bytes,
+2,229,830 input tokens, 130,560 cached input tokens, and 70,500 output tokens.
+Cached tokens are a subset of input tokens and are not added twice; the
+projected total excluding that double count is 2,300,330 tokens. Straight
+wall-time scaling is about 2,502 seconds (41.7 minutes); operational planning
+should allow roughly 35-50 minutes and 8-12 MB for the result sidecar.
+
+The Codex runtime does not expose a reliable conversion from these tokens to
+weekly-quota percentage or an actual API charge, so neither is fabricated.
+N100 must use a new deterministic sample disjoint from N10 by both building
+and actual Vision-input pixel identity, mirror the source/gallery-depth
+population, include a source-blind reviewed reference ledger, and repeat every
+technical integrity and zero-resume-request gate. It must not start without
+explicit approval.
 
 ## Beginner map
 
