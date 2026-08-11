@@ -127,3 +127,76 @@ The byte, time, and sidecar values are N100 point estimates. Retries,
 redirects, response-size tails, CDN variability, SQLite growth, and the
 repeated full-source provenance scans can increase them. E1 used $0 of
 LLM/Vision; semantic image analysis remains a separate stage.
+
+## Full-run failure recovery and immutable v1.2
+
+The completed v1.0 sidecars are immutable parents. Terminal failures are never
+resumed in place. The recovery workflow performs these steps instead:
+
+1. independently validate the parent and immutable source DB;
+2. reconcile only parent `fingerprints.status='failed'` identities against the
+   current source adapter and exact source-record SHA;
+3. write a separate failure-only child sidecar with parent SHA, run ID, fixed
+   ordered selection manifest, every HTTP attempt, and a companion manifest;
+4. materialize a new full sidecar from the parent plus successful child rows;
+5. bind the source, base, recovery and merge-manifest SHAs into the merged
+   dependency lineage;
+6. reject publication if any prior successful fingerprint changes, any child
+   success is not copied exactly, or standard or merge-specific validation
+   fails.
+
+An all-failed child is valid only when its dependency manifest contains the
+reserved `failure_recovery_v1` lineage. Ordinary E1 runs retain the original
+dependency JSON, runner version behavior, schema version, and requirement for
+at least one successful fingerprint. Both child and merged outputs use
+no-clobber paths and advisory locks. The merge uses 5,000-row durable keyset
+checkpoints and resumes only when its manifest and every immutable input SHA
+match exactly. A completed child resume performs zero network requests.
+
+The first smoke retried up to ten rows per failure type. Divisare recovered
+0/21; Architizer recovered the one transient HTTP 424 row out of 24. A second
+fixed Divisare N100 404 sample recovered 11%, which justified retrying all
+2,314 Divisare terminal failures once. No successful v1.0 row was downloaded
+again.
+
+| Source | Parent success | Parent failed | Recovery selected | Recovered | v1.2 success | v1.2 failed |
+|---|---:|---:|---:|---:|---:|---:|
+| Divisare | 544,915 | 2,314 | 2,314 | 412 | 545,327 | 1,902 |
+| Architizer | 884,248 | 69 | 69 | 1 | 884,249 | 68 |
+
+Divisare's 412 recoveries were all prior HTTP 404 rows. Its remaining failures
+are 1,849 HTTP 404, 52 decode failures, and one response-size row whose 33 MB
+JPEG was fetched under an isolated 40 MiB cap but proved truncated. Architizer
+recovered the HTTP 424 row; 52 empty responses, 13 HTTP 422 rows, and three
+decode failures remain.
+
+| Source | Immutable v1.2 output | Bytes | SHA-256 |
+|---|---|---:|---|
+| Divisare | `data/enrichment/divisare_image_fingerprints_e1_full_v1_2.db` | 2,646,114,304 | `869a79fee9fd65ddeffa299fef4dd9e2ba15a9c7c7170964b03fee1f4c96a819` |
+| Architizer | `data/enrichment/architizer_image_fingerprints_e1_full_v1_2.db` | 4,373,962,752 | `58aecdcda936f7327ef7bb4bf3fe21a39ad070e784ab7061e989b62c2dcfe937` |
+
+Both v1.2 outputs passed independent source-inventory, ordered-manifest,
+source-record, attempt-linkage, SQLite quick/integrity/foreign-key, and terminal
+accounting checks, plus the merge-specific lineage, decision-ledger, trigger,
+prior-success no-clobber, recovery-success exact-copy, full base-attempt prefix,
+unrecovered-fingerprint, and total-attempt accounting checks. The legacy
+recovery children predate five additive lineage fields. Merge v2 permits only
+those five missing fields, derives them from the independently validated base
+and source, and records the upgrade mode, missing fields, derived values and
+recovery SHA in the new immutable dependency lineage. Missing or changed core
+lineage still fails closed.
+
+The earlier `*_full_v1_1.db` files were produced before the merge lineage and
+terminal-ledger hardening. Their fingerprint counts passed the standard
+validator, but they are retained only as rejected drafts and are not release
+inputs. Parent/source/recovery SHA values were unchanged after the v1.2 merge,
+and no WAL, SHM, journal, retained image, Vision request, or LLM request was
+produced. The remaining failures are explicit no-hash rows, not deleted
+metadata or inferred placeholders.
+
+Merge v2 deliberately rejects any base or recovery sidecar containing a
+`skipped` (or otherwise unsupported) fingerprint status before creating an
+output. The current parents contain only `success` and `failed`. A generic
+well-shaped recovery lineage is only a syntactic all-failed marker; authority
+comes from the recovery-specific validator re-opening the immutable parent and
+source, verifying their SHAs, and recomputing the deterministic selection.

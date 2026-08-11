@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Callable, Iterable, Iterator
+from typing import Callable, Iterable, Iterator, Mapping
 from urllib.parse import urljoin, urlsplit
 
 from canonical.image_fingerprint import (
@@ -293,11 +293,72 @@ def _json_bytes(value: object) -> bytes:
     ).encode("ascii")
 
 
-def _dependency_manifest() -> tuple[str, str]:
+def _dependency_manifest(
+    run_lineage: Mapping[str, object] | None = None,
+) -> tuple[str, str]:
+    dependencies: dict[str, object] = dict(dependency_versions())
+    if run_lineage is not None:
+        dependencies["_run_lineage"] = dict(run_lineage)
     payload = json.dumps(
-        dependency_versions(), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        dependencies, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     )
     return payload, hashlib.sha256(payload.encode("ascii")).hexdigest()
+
+
+def _is_failure_recovery_lineage(dependency_manifest_json: str) -> bool:
+    try:
+        manifest = json.loads(dependency_manifest_json)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    if not isinstance(manifest, dict):
+        return False
+    lineage = manifest.get("_run_lineage")
+    if not isinstance(lineage, dict) or lineage.get("kind") != "failure_recovery_v1":
+        return False
+    required = {
+        "base_run_id",
+        "base_selection_manifest_sha256",
+        "base_sidecar_path",
+        "base_sidecar_sha256",
+        "base_source_db_sha256_before",
+        "base_source_db_sha256_after",
+        "base_fingerprint_contract_version",
+        "base_selection_version",
+        "base_dependency_manifest_sha256",
+        "http_404_sample_size",
+        "ordered_recovery_manifest_sha256",
+        "recovery_policy_version",
+        "recovery_seed",
+        "recovery_selection_count",
+        "recovery_strategy",
+    }
+    if not required <= set(lineage):
+        return False
+    sha_fields = (
+        "base_selection_manifest_sha256",
+        "base_sidecar_sha256",
+        "base_source_db_sha256_before",
+        "base_source_db_sha256_after",
+        "base_dependency_manifest_sha256",
+        "ordered_recovery_manifest_sha256",
+    )
+    if any(
+        not isinstance(lineage.get(field), str)
+        or len(str(lineage[field])) != 64
+        or any(character not in "0123456789abcdef" for character in str(lineage[field]))
+        for field in sha_fields
+    ):
+        return False
+    if lineage["base_source_db_sha256_before"] != lineage["base_source_db_sha256_after"]:
+        return False
+    return (
+        isinstance(lineage.get("recovery_selection_count"), int)
+        and int(lineage["recovery_selection_count"]) > 0
+        and lineage.get("recovery_strategy")
+        in {"per_error_n10", "all_non404_plus_404_sample"}
+        and isinstance(lineage.get("recovery_seed"), str)
+        and bool(str(lineage["recovery_seed"]).strip())
+    )
 
 
 def _effective_runner_version(dependency_sha256: str) -> str:
@@ -2203,6 +2264,14 @@ def _finish_run(
 
     connection = open_sidecar(partial, readonly=False)
     try:
+        run_row = connection.execute(
+            "SELECT dependency_manifest_json FROM fingerprint_runs WHERE run_id=?",
+            (run_id,),
+        ).fetchone()
+        failure_recovery = bool(
+            run_row is not None
+            and _is_failure_recovery_lineage(str(run_row["dependency_manifest_json"]))
+        )
         counts = {
             str(row[0]): int(row[1])
             for row in connection.execute(
@@ -2227,8 +2296,8 @@ def _finish_run(
             elif name == "fingerprint_accounting":
                 passed = bool(passed and pending_count == 0)
             elif name == "successful_attempt_linkage":
-                passed = bool(passed and success_count > 0)
-                if success_count == 0:
+                passed = bool(passed and (success_count > 0 or failure_recovery))
+                if success_count == 0 and not failure_recovery:
                     detail = {"reason": "no successful fingerprints", "counts": counts}
             adjusted.append((name, passed, expected, actual, detail))
 
@@ -2264,7 +2333,7 @@ def _finish_run(
             "complete"
             if passed and failure_count == 0
             else "complete_with_failures"
-            if passed and success_count > 0
+            if passed and (success_count > 0 or failure_recovery)
             else "failed_validation"
         )
         connection.execute("BEGIN IMMEDIATE")
@@ -2427,6 +2496,7 @@ def run_image_fingerprint_pipeline(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     wall_time: Callable[[], float] = time.time,
+    run_lineage: Mapping[str, object] | None = None,
 ) -> PipelineResult:
     """Run or exactly resume one source-neutral E1 sidecar build."""
 
@@ -2464,7 +2534,7 @@ def run_image_fingerprint_pipeline(
     try:
         _assert_source_snapshot(source_path)
         source_sha = _sha256_file(source_path)
-        dependency_json, dependency_sha = _dependency_manifest()
+        dependency_json, dependency_sha = _dependency_manifest(run_lineage)
         runner_version = _effective_runner_version(dependency_sha)
         default_inventory = asset_factory is None and inventory_factory is None
         active_inventory_factory = (

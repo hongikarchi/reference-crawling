@@ -876,12 +876,18 @@ def validate_sidecar(path: Path | str) -> SidecarValidation:
                    OR (r.status='complete_with_failures' AND (
                          NOT EXISTS (
                            SELECT 1 FROM fingerprints f
-                           WHERE f.run_id=r.run_id AND f.status='success'
-                         )
-                         OR NOT EXISTS (
-                           SELECT 1 FROM fingerprints f
                            WHERE f.run_id=r.run_id
                              AND f.status IN ('failed','skipped')
+                         )
+                         OR (
+                           NOT EXISTS (
+                             SELECT 1 FROM fingerprints f
+                             WHERE f.run_id=r.run_id AND f.status='success'
+                           )
+                           AND coalesce(json_extract(
+                                 r.dependency_manifest_json,
+                                 '$._run_lineage.kind'
+                               ), '')<>'failure_recovery_v1'
                          )
                        ))
                 """,

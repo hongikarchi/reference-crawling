@@ -92,6 +92,7 @@ def _run(
     output_name: str = "e1.db",
     resume: bool = False,
     max_attempts: int = 3,
+    run_lineage: dict[str, object] | None = None,
 ):
     source = tmp_path / "source.db"
     if not source.exists():
@@ -108,6 +109,7 @@ def _run(
         cooldown_seconds=0,
         sleep=lambda _: None,
         max_attempts=max_attempts,
+        run_lineage=run_lineage,
     )
 
 
@@ -140,6 +142,12 @@ def test_pipeline_publishes_valid_sidecar_without_mutating_source(tmp_path: Path
     try:
         run = connection.execute("SELECT * FROM fingerprint_runs").fetchone()
         assert run["source_db_sha256_before"] == run["source_db_sha256_after"]
+        assert run["dependency_manifest_json"] == json.dumps(
+            pipeline.dependency_versions(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
         assert hashlib.sha256(run["dependency_manifest_json"].encode()).hexdigest() == run[
             "dependency_manifest_sha256"
         ]
@@ -362,6 +370,118 @@ def test_full_preserves_adapter_order_and_manifest_is_repeatable(tmp_path: Path)
         ] == ["asset-008", "asset-002", "asset-005"]
     finally:
         connection.close()
+
+
+def test_all_failed_standard_run_still_fails_validation(tmp_path: Path) -> None:
+    assets = tuple(_asset(index) for index in range(10))
+
+    def missing(asset, _attempt_no, _call_no):
+        return FetchResponse(404, asset.effective_fetch_url, "text/plain", b"missing")
+
+    with pytest.raises(PipelineError, match="failed final validation"):
+        _run(tmp_path, assets, FakeFetcher(_png(), behavior=missing), max_attempts=1)
+
+    partial = tmp_path / "e1.db.partial"
+    connection = open_sidecar(partial)
+    try:
+        assert connection.execute(
+            "SELECT status FROM fingerprint_runs"
+        ).fetchone()[0] == "failed_validation"
+        assert connection.execute(
+            "SELECT count(*) FROM fingerprints WHERE status='failed'"
+        ).fetchone()[0] == 10
+    finally:
+        connection.close()
+
+
+def test_failure_recovery_lineage_all_failed_is_valid_terminal_sidecar(
+    tmp_path: Path,
+) -> None:
+    assets = tuple(_asset(index) for index in range(10))
+    # The generic pipeline only persists and shape-checks this internal
+    # lineage capability.  Production recovery trust is established by
+    # validate_failure_recovery_sidecar(), which independently binds these
+    # fields to the immutable parent/source and deterministic selection; a
+    # generic E1 validation alone is intentionally not that proof.
+    lineage = {
+        "kind": "failure_recovery_v1",
+        "base_run_id": "base-run",
+        "base_selection_manifest_sha256": "b" * 64,
+        "base_sidecar_path": "base.db",
+        "base_sidecar_sha256": "a" * 64,
+        "base_source_db_sha256_before": "c" * 64,
+        "base_source_db_sha256_after": "c" * 64,
+        "base_fingerprint_contract_version": "fixture-contract-v1",
+        "base_selection_version": "fixture-selection-v1",
+        "base_dependency_manifest_sha256": "d" * 64,
+        "http_404_sample_size": None,
+        "ordered_recovery_manifest_sha256": "e" * 64,
+        "recovery_policy_version": "failure-only-v1",
+        "recovery_seed": "fixture-seed",
+        "recovery_selection_count": 10,
+        "recovery_strategy": "per_error_n10",
+    }
+
+    def missing(asset, _attempt_no, _call_no):
+        return FetchResponse(404, asset.effective_fetch_url, "text/plain", b"missing")
+
+    result = _run(
+        tmp_path,
+        assets,
+        FakeFetcher(_png(), behavior=missing),
+        max_attempts=1,
+        run_lineage=lineage,
+    )
+
+    assert result.run_status == "complete_with_failures"
+    assert result.status_counts == {"failed": 10}
+    assert validate_sidecar(result.output_path).passed
+    connection = open_sidecar(result.output_path)
+    try:
+        run = connection.execute("SELECT * FROM fingerprint_runs").fetchone()
+        manifest = json.loads(run["dependency_manifest_json"])
+        assert manifest.pop("_run_lineage") == lineage
+        assert manifest == pipeline.dependency_versions()
+        assert run["runner_version"].startswith("archibe-e1-pipeline-v2+deps-")
+        required = dict(
+            connection.execute(
+                "SELECT validation_name,passed FROM validations WHERE severity='error'"
+            )
+        )
+        assert all(required[name] == 1 for name in pipeline.REQUIRED_VALIDATIONS)
+    finally:
+        connection.close()
+
+    never = FakeFetcher(_png(), behavior=lambda *_: pytest.fail("fetch called"))
+    resumed = _run(
+        tmp_path,
+        assets,
+        never,
+        resume=True,
+        max_attempts=1,
+        run_lineage=lineage,
+    )
+    assert resumed.already_complete
+    assert resumed.network_requests == 0
+    assert never.calls == []
+
+
+def test_incomplete_failure_recovery_lineage_cannot_authorize_all_failed(
+    tmp_path: Path,
+) -> None:
+    assets = tuple(_asset(index) for index in range(10))
+
+    def missing(asset, _attempt_no, _call_no):
+        return FetchResponse(404, asset.effective_fetch_url, "text/plain", b"missing")
+
+    with pytest.raises(PipelineError, match="failed final validation"):
+        _run(
+            tmp_path,
+            assets,
+            FakeFetcher(_png(), behavior=missing),
+            max_attempts=1,
+            run_lineage={"kind": "failure_recovery_v1"},
+        )
 
 
 def test_pending_batch_query_uses_rank_keyset_without_temp_sort(
