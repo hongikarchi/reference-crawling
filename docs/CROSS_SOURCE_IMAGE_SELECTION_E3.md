@@ -303,6 +303,7 @@ Whole repository: 854 passed, 22 skipped, 1453 subtests passed
 | P2 diagnostic N100 | PASS | 100 suppression cases / `0 / 0 / 0` | Independent manifest replay PASS |
 | Full read-only preflight | PASS | 91,803 buildings / `0 / 0 / 0` | Output file not created; disk and no-clobber gates PASS |
 | Full policy materialization | PASS | 91,803 buildings / `0 / 0 / 0` | 1,429,581 candidates; 810,560 shortlist rows; 43/43 independent checks PASS |
+| Semantic-coverage N10 plan | PASS | 10 buildings / `0 / 0 / 0` | 57 frozen occurrences; 18/18 independent replay checks PASS |
 | Vision N10 | Not started | Separate explicit gate | Separate future sidecar |
 
 The N10 artifact is 1,216,512 bytes, has byte SHA-256
@@ -397,3 +398,11 @@ planning-only range, not a current estimate or commitment. Current model cost,
 token accounting, rate limits, and weekly quota impact are unknown until an
 actual, separately approved Vision N10 measures them. E3 itself makes zero
 Vision calls and spends zero Vision tokens.
+
+The offline semantic-coverage preflight is now frozen and documented in
+`docs/CROSS_SOURCE_IMAGE_SEMANTIC_COVERAGE.md`. Its fixed source-balanced N10
+contains 10 buildings and 57 representative-plus-gallery occurrences. The
+canonical manifest is ignored under `data/reports/`; its file SHA-256 is
+`81fa13340e584e6d874ab7145a9d003ec57093db5a4dbe41f206c6e7ac85ce1f`.
+This closes selection planning only. No image was fetched and no Vision model
+was called; the actual N10 remains approval-gated.
