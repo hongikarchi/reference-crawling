@@ -2,13 +2,13 @@
 
 ## Status and boundary
 
-The fixed cross-source Vision N10 and the approved population-shaped N100 are
-complete and independently validated. N10 analyzed 57 frozen image
-occurrences from ten buildings. N100 selected 562 frozen occurrences from 100
-new buildings, obtained 555 exact inputs, and retained seven changed-source
-rows as failures without replacing the fixed sample. Neither run changed E1,
-E2, E3, curated metadata, canonical, Neon, or R2 data. Selective full Vision
-has not been approved or run.
+The fixed cross-source Vision v1 N10 and population-shaped v1 N100 are
+complete and independently validated. A subsequent prompt-only v1.1
+calibration also completed on a fresh disjoint N10: all 53 inputs and model
+results passed technical validation, but the blind semantic quality gate
+failed on medium classification and uncertainty sensitivity. Selective full
+Vision remains blocked. No v1.1 N100 or full run was started, and no run
+changed E1, E2, E3, curated metadata, canonical, Neon, or R2 data.
 
 The completed N100 boundary was:
 
@@ -226,6 +226,59 @@ isolated-object and low-legibility scope handling, and explicit uncertainty.
 It then needs a new disjoint N10 smoke and, if materially changed, a new N100.
 The seven changed-source rows also need a versioned refresh/reconciliation
 policy; they must not be silently replaced in this completed sample.
+
+### Prompt v1.1 disjoint N10 result
+
+Prompt v1.1 kept the v1 output schema, controlled vocabularies, normalization,
+derivations, and 1024-pixel transform unchanged. It shortened the instructions
+and targeted only the measured v1 N100 failures: project-versus-object scope,
+photo-versus-rendering evidence, low legibility, construction/ruin, and an
+independent uncertainty pass. The new manifest excluded every prior v1 N10 and
+N100 building, expected E1 pixel, fetch URL, and successful actual derivative.
+It selected 10 buildings and 53 occurrences: 35 Architizer and 18 Divisare
+occurrences across eight population-core buildings and two bounded risk
+sentinels.
+
+The run fetched all 53 frozen URLs exactly once. Response SHA, E1 pixel SHA,
+and actual 1024-pixel derivative identity matched for all 53; there were no
+redirects, retries, replacements, or prior-derivative collisions. Eleven
+fixed batches returned 53 schema-valid results. The independent validator
+passed all 30 checks, and completed resume made zero HTTP and model requests.
+
+| v1.1 N10 measure | Result |
+|---|---:|
+| Buildings / occurrences | 10 / 53 |
+| Exact inputs / semantic results | 53 / 53 |
+| HTTP / model calls | 53 / 11 |
+| Input / cached input / output tokens | 207,042 / 39,168 / 6,981 |
+| Acceptable-set field agreement | 457 / 477 (95.81%) |
+| Scope clear errors | 0 |
+| Medium clear errors | 1 |
+| Critical hero false positives | 0 |
+| Usable hero retention | 30 / 30 (100%) |
+| Reviewer / model uncertain rows | 11 / 5 |
+| Uncertainty row precision / recall | 20.00% / 9.09% |
+| Uncertainty axis TP / FP / FN | 0 / 7 / 12 |
+| Resolution-insufficient TP / FP / FN | 0 / 1 / 1 |
+
+The blind reference was frozen before model-result inspection and is an
+opaque-ID Codex `agent_reference`, not human gold. The 95.81% aggregate and
+zero scope/hero-critical errors are encouraging directional evidence, but the
+predeclared gate required zero medium errors, uncertainty row precision and
+recall of at least 50%, axis recall of at least 40%, and no missed
+resolution-insufficient case. The verdict is therefore `FAIL`; reasonable
+adjudication of the one medium boundary does not repair the uncertainty or
+resolution failures. Because the samples differ, v1 N100 versus v1.1 N10 is
+not a controlled statistical comparison.
+
+The next candidate should be a new immutable prompt version, not an edit to
+this completed artifact. The smallest measured delta is to clarify that text,
+watermarks, or page layout over one photograph do not by themselves make it
+mixed; require a per-axis uncertainty audit with visible evidence; and tighten
+framing, legibility, elevated-view, and resolution-insufficient rules. It must
+first pass another fresh disjoint N10 with two independently frozen blind
+references reconciled before unblinding. N100 remains unauthorized until all
+hard N10 gates pass.
 
 ## Beginner map
 
