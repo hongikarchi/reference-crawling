@@ -3,12 +3,13 @@
 ## Status and boundary
 
 The fixed cross-source Vision v1 N10 and population-shaped v1 N100 are
-complete and independently validated. A subsequent prompt-only v1.1
-calibration also completed on a fresh disjoint N10: all 53 inputs and model
-results passed technical validation, but the blind semantic quality gate
-failed on medium classification and uncertainty sensitivity. Selective full
-Vision remains blocked. No v1.1 N100 or full run was started, and no run
-changed E1, E2, E3, curated metadata, canonical, Neon, or R2 data.
+complete and independently validated. Prompt-only v1.1 and v1.2 calibrations
+then ran on separate fresh disjoint N10 samples. v1.1 produced all 53 results
+but failed its blind semantic gate. v1.2 fetched all 50 fixed inputs, but a
+batch-level schema rejection left only 45 results; its reconciled blind QA
+also failed. Selective full Vision remains blocked. No v1.1/v1.2 N100 or full
+run was started, and no run changed E1, E2, E3, curated metadata, canonical,
+Neon, or R2 data.
 
 The completed N100 boundary was:
 
@@ -279,6 +280,60 @@ framing, legibility, elevated-view, and resolution-insufficient rules. It must
 first pass another fresh disjoint N10 with two independently frozen blind
 references reconciled before unblinding. N100 remains unauthorized until all
 hard N10 gates pass.
+
+### Prompt v1.2 disjoint N10 result
+
+Prompt v1.2 applied only that measured delta. It retained the v1.1 output
+schema, vocabularies, normalization, derivations, model configuration, and
+1024-pixel transform. The prompt template grew 6.54% from v1.1 while remaining
+4.39% smaller than v1; its sentinel SHA-256 is
+`041d6b7b0c6de4abc9989c585cd7a45267932eb6812f0225e0d12f11b99f7d73`.
+
+Seed `archibe-semantic-coverage-n10-v1.2` selected 10 buildings and 50
+occurrences: 32 Architizer occurrences across seven buildings and 18 Divisare
+occurrences across three. Eight were population-core buildings and two were
+bounded risk sentinels. The manifest excluded all v1 N10, v1 N100, and v1.1
+N10 buildings, expected E1 pixels, fetch URLs, and successful actual
+derivatives. Independent replay was byte-identical and passed 7/7 checks.
+The manifest byte SHA-256 is
+`00d494c58590a9a0ca3d78de858f857f6a1e226390018f5426d799a846ead8fe`.
+
+All 50 frozen inputs materialized with exact response and E1 pixel identity
+before Vision began. The hardened runner durably reserved every external call
+and the independent terminal validator passed its integrity checks. However,
+batch 9 was rejected twice because one drawing result, `semv12_000043`, set a
+non-drawing framing axis instead of `not_applicable`. Batch-atomic validation
+therefore left all five rows `semv12_000041` through `semv12_000045` without a
+stored semantic result. The immutable run ended `complete_with_failures` with
+45/50 results. It used 50 HTTP requests and 12 model-call reservations (nine
+successful and three failed), with 225,713 input, 39,168 cached-input, and
+8,635 output tokens. Completed resume made zero HTTP and model requests.
+
+The 50 review images were independently labelled by two source-blind agents
+before model unblinding. Their ledgers were frozen separately, then 31 rows
+and 122 differing dimensions were reconciled from pixels with zero unresolved
+dimensions. This reconciled `agent_reference` is calibration evidence, not
+human gold. Inspection compared only the 45 rows that had model results:
+
+| v1.2 N10 measure | Result |
+|---|---:|
+| Result coverage | 45 / 50 (FAIL) |
+| Nine-field acceptable agreement | 380 / 405 (93.83%) |
+| Scope / medium clear errors | 2 / 1 (FAIL) |
+| Critical hero false positives | 5 (FAIL) |
+| Usable hero retention | 19 / 24 (79.17%, FAIL) |
+| Reference / model uncertain rows | 20 / 11 |
+| Uncertainty row precision / recall / F1 | 63.64% / 35.00% / 45.16% |
+| Uncertainty axis TP / FP / FN | 3 / 9 / 23 |
+| Uncertainty axis precision / recall / F1 | 25.00% / 11.54% / 15.79% |
+| Resolution-insufficient TP / FP / FN | 0 / 0 / 1 |
+
+The final verdict is `FAIL`: both the 100% result-coverage gate and multiple
+semantic gates failed. No v1.2 N100 or Full run was started. The stored raw
+batch payload could support a zero-network, zero-model v1.2.1 recovery that
+canonicalizes the drawing framing axis and revalidates all five batch rows,
+but that is only a proposal. The v1.2 DB and report remain immutable and were
+not patched.
 
 ## Beginner map
 
