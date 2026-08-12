@@ -2,25 +2,30 @@
 
 ## Status and boundary
 
-The fixed cross-source Vision N10 is complete and independently validated.
-It analyzed 57 frozen image occurrences from ten buildings (five Divisare and
-five Architizer) without changing E1, E2, E3, curated metadata, canonical,
-Neon, or R2 data. N100 and selective full Vision remain unapproved and were
-not run.
+The fixed cross-source Vision N10 and the approved population-shaped N100 are
+complete and independently validated. N10 analyzed 57 frozen image
+occurrences from ten buildings. N100 selected 562 frozen occurrences from 100
+new buildings, obtained 555 exact inputs, and retained seven changed-source
+rows as failures without replacing the fixed sample. Neither run changed E1,
+E2, E3, curated metadata, canonical, Neon, or R2 data. Selective full Vision
+has not been approved or run.
 
-The completed boundary was:
+The completed N100 boundary was:
 
 1. read the immutable E2 and E3 SQLite artifacts;
-2. use the already-frozen representative-versus-coverage N10 manifest;
-3. fetch only its 57 pinned image URLs and require exact E1 response and pixel
-   identity before inference;
-4. run the source-blind semantic contract in twelve batches;
-5. validate the sidecar independently, review all inputs through opaque-ID
-   contact sheets, and project N100;
-6. stop before N100 and selective full Vision.
+2. create and independently replay a population-shaped N100 manifest disjoint
+   from N10 by building, expected E1 pixel, and fetch URL;
+3. fetch only its 562 pinned image URLs and require exact E1 response and
+   pixel identity before inference;
+4. run the unchanged source-blind semantic contract on the 555 exact inputs;
+5. validate the sidecar independently, verify completed resume makes zero
+   HTTP and model requests, and freeze a source-blind agent-reference review;
+6. stop before selective full Vision.
 
-N100 requires a separate explicit approval based on the measurements below.
-A selective full Vision run remains a later, independent approval decision.
+The seven changed-source inputs need an explicit refresh/reconciliation policy
+in a new immutable version. A selective full Vision run remains a later,
+independent approval decision based on N100 quality results and exact queue
+sizes.
 
 The offline preflight used fixed seed
 `archibe-semantic-coverage-n10-v1` selected 10 buildings (five per source) and
@@ -127,24 +132,100 @@ The semantic N10 therefore passes its technical gate and its zero-clear-
 scope/medium-error gate, with uncertainty sensitivity carried as open QA into
 N100.
 
-### N100 projection and approval boundary
+### Actual Vision N100 result
 
-A simple 10x empirical projection, before selecting a disjoint population,
-is 100 buildings, about 570 images, 114 theoretical fully packed five-image
-batches or up to 120 by direct N10 scaling, 66,587,810 downloaded bytes,
-2,229,830 input tokens, 130,560 cached input tokens, and 70,500 output tokens.
-Cached tokens are a subset of input tokens and are not added twice; the
-projected total excluding that double count is 2,300,330 tokens. Straight
-wall-time scaling is about 2,502 seconds (41.7 minutes); operational planning
-should allow roughly 35-50 minutes and 8-12 MB for the result sidecar.
+The approved N100 used seed `archibe-semantic-coverage-n100-v1`. Its sample
+frame contained 91,173 eligible buildings after excluding the ten N10
+buildings. Hamilton allocation over source and population stratum selected 67
+Architizer and 33 Divisare buildings without deliberately over-sampling known
+failures. The frozen manifest contains 100 buildings, 562 occurrences, 562
+unique expected E1 pixels, and zero N10 building, E1-pixel, or fetch-URL
+overlap. Its byte SHA-256 is
+`37d917dc2c5b7c89308641b97035255e1fab5e469a0fc86935bf716559ead540`.
+
+| Measure | Observed result |
+|---|---:|
+| Buildings / fixed occurrences | 100 / 562 |
+| Exact E1 response and pixel matches | 555 / 562 |
+| Changed-source rows retained as failures | 7 |
+| Fetch attempts / retries | 562 / 0 |
+| Successful model batches / attempts | 113 / 116 |
+| Recovered model retries | 3 |
+| Valid schema results | 555 / 555 exact inputs |
+| Downloaded bytes | 83,719,902 |
+| Input / cached input / output tokens | 2,216,339 / 1,303,552 / 71,935 |
+| Non-double-counted input + output | 2,288,274 tokens |
+| Core run wall time | 2,168 seconds |
+| SQLite quick / integrity / FK | `ok` / `ok` / 0 |
+| Completed-run resume requests | fetch 0 / model 0 |
+
+The seven failures were all Architizer rows whose newly fetched response and
+normalized-pixel identities no longer matched frozen E1. Architizer produced
+361 exact inputs from 368 selected occurrences; Divisare produced 194/194.
+The immutable result is
+`data/enrichment/divisare_architizer_semantic_vision_n100_v1.db`: 7,106,560
+bytes, byte SHA-256
+`e2a03e004a27ce662a93f60ad16190014789abf60f9433926ff9e38e747c8a8e`,
+logical SHA-256
+`717abc3df21c9fa5e182a52fe099d8c52af71ba8c6ef5256673c41ac1c75205d`.
+Status is `complete_with_failures`: this is a valid, immutable calibration
+artifact, but its seven fixed-input failures block automatic Full promotion.
+
+The independent validator replayed the entire manifest and E2/E3/N10
+lineage, schema and trigger SQL, attempt and raw-payload ledgers, normalized
+results, hero and coverage derivations, the 125-call cap and observed
+client-side token stop thresholds, report binding,
+logical SHA, and temporary-file accounting. Every error-severity validation
+passed. Source-blind review used 93 opaque-ID sheets for the 555 exact inputs;
+the resulting labels are an `agent_reference`, not human gold. Final quality
+metrics and the selective-Full decision are recorded below after that review
+is frozen before model-result unblinding.
 
 The Codex runtime does not expose a reliable conversion from these tokens to
 weekly-quota percentage or an actual API charge, so neither is fabricated.
-N100 must use a new deterministic sample disjoint from N10 by both building
-and actual Vision-input pixel identity, mirror the source/gallery-depth
-population, include a source-blind reviewed reference ledger, and repeat every
-technical integrity and zero-resume-request gate. It must not start without
-explicit approval.
+
+### N100 blind quality result and Full decision
+
+All 555 exact inputs were reviewed on 93 opaque-ID sheets before model labels
+were opened. The frozen reference is a source-blind Codex
+`agent_reference`, not independent human gold. Its semantic ledger SHA-256 is
+`6365e16f7732afe0802700e18098f528c94a3e0f71264d8b0880c576a6612a10`.
+The post-freeze inspection made zero network, Vision, LLM, or database-write
+operations and preserved the semantic DB byte SHA.
+
+| Quality measure | Result |
+|---|---:|
+| Reviewed / semantic results | 555 / 555 |
+| Unrendered fixed-input failures | 7 |
+| Strict controlled-field agreement | 4,587 / 4,995 (91.83%) |
+| Acceptable-set field agreement | 4,644 / 4,995 (92.97%) |
+| Scope acceptable / clear errors | 545 / 555; 10 errors |
+| Medium acceptable / clear errors | 527 / 555; 28 errors |
+| Unique rows with scope or medium error | 37 |
+| Reviewer uncertain rows / model uncertain rows | 70 / 6 |
+| Uncertainty axis TP / FP / FN | 3 / 7 / 73 |
+| Uncertainty precision / recall / F1 | 30.00% / 3.95% / 6.98% |
+| Hero-tier disagreements / critical false positives | 89 / 26 |
+
+The aggregate acceptable-set rate exceeded 90%, but the predeclared gate also
+required zero unambiguous scope/medium errors. That requirement failed. The
+largest medium pattern was 15 photographs labelled as renderings. Uncertainty
+sensitivity also repeated the N10 weakness: the reviewer marked 12.61% of
+rows as genuine boundaries while the model marked 1.08%, and it missed all
+three reference resolution-insufficient cases.
+
+The expanded gallery lane remains useful independently of that failure.
+Reviewer-primary labels found at least one slot absent from P2 top three in
+70/100 buildings, adding 118 building-slot pairs from 267 expanded-only
+images (0.442 pairs per extra image). The model found the same 70 buildings
+and 112 pairs (0.419 per extra image).
+
+Selective Full is therefore blocked, not merely awaiting routine approval.
+The next semantic contract should improve photo/render discrimination,
+isolated-object and low-legibility scope handling, and explicit uncertainty.
+It then needs a new disjoint N10 smoke and, if materially changed, a new N100.
+The seven changed-source rows also need a versioned refresh/reconciliation
+policy; they must not be silently replaced in this completed sample.
 
 ## Beginner map
 
