@@ -16,6 +16,9 @@ logs/
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
+.test-tmp/
+.tmp-tests-v11/
 .venv/
 .venv-divisare/
 .venv-images/
