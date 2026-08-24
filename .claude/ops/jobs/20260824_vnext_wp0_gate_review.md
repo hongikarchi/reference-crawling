@@ -76,3 +76,13 @@
   fixes job card 값과 전부 일치), freeze manifest SHA 무변경
 - **WP0b 실행 승인.** 조건: read-only export + 독립 validator, 산출물 게이트는
   39,478행 × 44컬럼 + report/validation JSON 2종 제시. 이후 게이트 통과 시 WP1.
+
+## WP0b 산출물 게이트 (2026-08-24, 대상 d825c3d) — **PASS**
+
+- Claude 독립 검증: 파일 SHA-256 재계산 일치(`17e8da1d…f04527f`), JSONL 전행 스트리밍
+  검사 — 39,478행 정확, 44키 전행 균일, embedding 부재, canonical_bld_id 강한 오름차순
+  (bld_000000→bld_039775), 샘플 행 내용 타당.
+- report.json 증빙: `make_web` SELECT-only 롤, `transaction_read_only=on`,
+  `role_can_write_table=false`, `sql_writes=0`, live 45컬럼 exact-set 확인,
+  exporter/validator SHA가 F-fix card의 pin과 일치.
+- **WP1 발행** → `20260824_vnext_wp1_gallery_draft_order.md`.
