@@ -60,3 +60,19 @@
 1. Codex가 F1~F13 반영(전부 무비용) → Claude 재확인(F1~F5 중심)
 2. 사용자: `.env`(+`.env.make-web`) 저장소 루트 복구 → `python tools/verify_env.py`
 3. Codex WP0b 실행(read-only 덤프 + 독립 검증) → Claude 게이트 → WP1 착수
+
+## 재확인 판정 (2026-08-24, 대상 ad9f99f) — **PASS**
+
+- F1~F13 전부 파일 원문에서 직접 검증:
+  - F1 갤러리 계약 §7 — 전수 원격 금지 원문 + "WP3에서 재미결화 불가" 명시
+  - F2/F3 프로젝션 §1·§2·§5 — 태그 3테이블 재빌드 복원, R4 소유권(1:1 carry-over/신규 NULL)
+  - F4 익스포터 — 45컬럼 live exact-set fail-closed, embedding 제외 44컬럼 export,
+    `.env.make-web` SELECT-only 우선(+connection-level read-only) / writer fallback도
+    read-only 강제, report 2종 영속화
+  - F5 identity §1 — matcher 2파일 size/SHA pin, strict_sim ≥90 강화만 허용
+  - F13 identity §8 — gold 4어휘 매핑, 블라인드 1인+판정자, 불일치→defer
+  - F6~F12 minor 일괄 확인(중복 인덱스 제거, statement-boundary 스캔 등)
+- 독립 재현: pytest 18/18 PASS(전용 basetemp), 계약 validator PASS(파일 SHA가
+  fixes job card 값과 전부 일치), freeze manifest SHA 무변경
+- **WP0b 실행 승인.** 조건: read-only export + 독립 validator, 산출물 게이트는
+  39,478행 × 44컬럼 + report/validation JSON 2종 제시. 이후 게이트 통과 시 WP1.
