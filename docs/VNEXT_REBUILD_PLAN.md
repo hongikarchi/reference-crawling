@@ -117,7 +117,7 @@ validator·resume 0-request·표본 사후 교체 금지.
 | WP | 내용 | 산출물 |
 |---|---|---|
 | WP0a | 워크스페이스 동결 manifest: untracked 374 + data/enrichment 인벤토리(accepted만; rejected draft·partial은 목록만). ※ ACL 깨진 ~200개 tmp 디렉토리와 E2 v1/v2/v4 WAL ~32GB 정리는 **사용자 결정 후** 별도 실행 | `data/reports/vnext_workspace_freeze_v1.json` |
-| WP0b | Neon 현행 read-only 스냅샷 덤프(39,478행 + source_refs) → legacy crosswalk 기초 | `data/canonical/legacy_neon_snapshot_2026q3.jsonl` |
+| WP0b | Neon 현행 read-only 스냅샷 덤프: 39,478행 × **embedding 제외 전 컬럼**(crosswalk·serving-state baseline·R4 보존에 필요; source_refs만으로는 부족 — 2026-08-24 게이트 리뷰 F4) | `data/canonical/legacy_neon_snapshot_2026q3.jsonl` |
 | WP0c | 계약 문서 3개: identity(병합·증거 규칙), gallery+semantic(포함·제외, compact 라벨 필드=v2.7 축소판), cover(슬롯·선택·bundle 규칙) + `building_images` DDL + projection 명세 | `docs/vnext/CONTRACT_*.md` |
 | WP1 | P1 결정론 identity 빌더+validator, 건물군 N10 smoke | S2 초안 |
 | WP2 | P2 resolution 후보 생성 → N10 사람 검토 → 확대 | S1 |
