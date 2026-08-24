@@ -21,6 +21,7 @@
   대표에 직접 연결된 검증 edge만 star 형태로 부착한다. 대표와 direct edge가 없는
   member는 같은 group에 넣지 않으며 connected component/transitive closure를 쓰지 않는다.
 - direct edge의 동결 출처는 E2 `full_v5`이고, E3 P2의 대표 중심 부착 방식을 재사용한다.
+- direct-edge star 부착은 양 끝점이 같은 verified-pixel run에서 `exact_match`일 때만 허용하며, 어느 한쪽이라도 `source_changed`/`failed`이면 `unverifiable_edge_source_changed`로 split하고 edge 증거는 보존한다.
 - pHash 단독으로 multi-source duplicate를 확정하지 않는다. 갤러리 후보와
   cross-source 후보쌍에만 verified pixel/crop feature를 추가한다.
 - verified-pixel pass는 E1 SHA를 검증하고 파생 이미지를 로컬 cache에 1회 저장하며
