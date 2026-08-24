@@ -72,6 +72,24 @@ def test_build_and_validate_manifest(tmp_path: Path) -> None:
     assert scratch["size_bytes"] == (root / "scratch.txt").stat().st_size
     assert "sha256" not in scratch
 
+    # The frozen HEAD is provenance, not a permanent ban on later commits.
+    (root / "tracked.txt").write_text("later commit\n", encoding="utf-8")
+    _git(root, "add", "tracked.txt")
+    _git(root, "commit", "-m", "later")
+    (root / "scratch.txt").write_text("later workspace state\n", encoding="utf-8")
+    assert validate_manifest(root, manifest_path)["status"] == "PASS"
+    strict = validate_manifest(root, manifest_path, check_live_head=True)
+    assert strict["status"] == "FAIL"
+    assert any(row["name"] == "git_head_unchanged" for row in strict["failures"])
+    strict_workspace = validate_manifest(
+        root, manifest_path, check_live_workspace=True
+    )
+    assert strict_workspace["status"] == "FAIL"
+    assert any(
+        row["name"] == "workspace_file_size:scratch.txt"
+        for row in strict_workspace["failures"]
+    )
+
 
 def test_validator_detects_frozen_input_tamper(tmp_path: Path) -> None:
     root, specs = _repo(tmp_path)

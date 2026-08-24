@@ -87,7 +87,8 @@ def validate_manifest(
     root: Path,
     manifest_path: Path,
     *,
-    check_live_head: bool = True,
+    check_live_head: bool = False,
+    check_live_workspace: bool = False,
 ) -> dict[str, object]:
     root = root.resolve()
     raw = manifest_path.read_bytes()
@@ -145,7 +146,7 @@ def validate_manifest(
         for row in entries:
             relative = str(row.get("path"))
             entry_paths.append(relative)
-            if row.get("kind") != "file":
+            if not check_live_workspace or row.get("kind") != "file":
                 continue
             path = root / relative
             exists = path.is_file()
@@ -174,9 +175,9 @@ def validate_manifest(
             if isinstance(size, int):
                 bytes_by_class[str(row.get("classification"))] += size
             path = root / relative
-            if row.get("kind") == "file" and path.is_file():
+            if check_live_workspace and row.get("kind") == "file" and path.is_file():
                 _check(checks, f"inventory_size:{relative}", path.stat().st_size == size, {"stored": size, "actual": path.stat().st_size})
-            elif row.get("kind") == "directory":
+            elif check_live_workspace and row.get("kind") == "directory":
                 _check(checks, f"inventory_directory:{relative}", path.is_dir(), path.exists())
         _check(checks, "inventory_paths_unique", len(paths) == len(set(paths)), len(paths))
         _check(checks, "inventory_entry_count", inventory.get("entry_count") == len(inventory_entries), {"stored": inventory.get("entry_count"), "actual": len(inventory_entries)})
@@ -214,14 +215,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    parser.add_argument("--skip-live-head", action="store_true")
+    parser.add_argument(
+        "--require-live-head",
+        action="store_true",
+        help="also require the current checkout to remain at the frozen HEAD",
+    )
+    parser.add_argument(
+        "--require-live-workspace",
+        action="store_true",
+        help="also require inventoried workspace/enrichment paths to remain unchanged",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     manifest = args.manifest if args.manifest.is_absolute() else args.root / args.manifest
-    report = validate_manifest(args.root, manifest, check_live_head=not args.skip_live_head)
+    report = validate_manifest(
+        args.root,
+        manifest,
+        check_live_head=args.require_live_head,
+        check_live_workspace=args.require_live_workspace,
+    )
     print(f"vNext workspace freeze validation: {report['status']}")
     print(f"checks: {report['check_count']}")
     print(f"failures: {report['failure_count']}")

@@ -42,7 +42,10 @@ tmp/ACL 경로는 목록·크기만 기록했으며 내용 해시·정리·삭�
 ## Verification
 
 - `pytest tests/test_vnext_workspace_freeze.py`: **7 passed**
-- Independent validator: **PASS**, 985 checks, 0 failures
+- Creation-time strict validator: **PASS**, 985 checks, 0 failures
+- Post-commit durable validator: **PASS**, 38 checks, 0 failures. Frozen HEAD and
+  workspace inventory are point-in-time provenance; optional
+  `--require-live-head` / `--require-live-workspace` detect later checkout drift.
 - All six accepted files matched the expected byte size and SHA-256 and their
   SQLite schema metadata was independently re-read.
 
