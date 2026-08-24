@@ -1,7 +1,8 @@
 # vNext WP0c — identity/gallery/semantic/cover/projection contracts
 
 - Date: 2026-08-24 KST
-- Result: **PASS**
+- Result: **SUPERSEDED then REPAIRED** — 초기 validator는 PASS였으나 게이트 리뷰 F1
+  blocker/F2~F13을 놓쳤고, `20260824_vnext_wp0_gate_fixes_f1_f13.md`에서 수정·재검증함
 - Cost: $0; LLM/model calls 0; external network 0; DB connections 0
 - Neon/R2 writes: 0; schema execution: 0; deletions: 0
 
@@ -62,3 +63,6 @@ Supporting validator/test:
   no DROP/ALTER/TRUNCATE/INSERT/UPDATE/DELETE statement, no local evidence columns
 - SQL execution/schema mutation was not attempted; that remains P7 user-gated.
 - `core/vocab.py` and every frozen artifact were untouched.
+
+초기 SHA와 판정은 당시 실행 이력으로만 보존한다. 현재 유효 계약 SHA 및 PASS 판정은
+F1~F13 수정 job card를 기준으로 하며, 초기 gallery 계약을 release gate PASS로 인용하지 않는다.

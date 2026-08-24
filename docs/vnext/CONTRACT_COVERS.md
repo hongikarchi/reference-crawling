@@ -20,6 +20,10 @@
 - physical model, mixed, other는 gallery에는 남지만 v1 cover slot의 강제 fallback이 아니다.
 - 자격 이미지가 없으면 NULL + `review_required`; 다른 medium을 억지로 넣지 않는다.
 - 슬롯은 non-exclusive다. 동일 이미지가 여러 슬롯에서 실제 최선이면 재사용할 수 있다.
+- `covers_by_type`은 항상 `exterior`, `interior`, `drawing`, `aerial`, `detail` 정확히
+  5개 키를 가진다. 후보가 없는 슬롯은 값을 JSON `null`로 두며 키를 생략하지 않는다.
+- default가 NULL이면 `review_required=true`이고 serving projection의
+  `is_publishable=false`다. 임의 fallback으로 publishable을 유지하지 않는다.
 
 ## 2. 3단계 선택
 
@@ -33,9 +37,10 @@
 다른 건물 후보, source rank, 파일명, 저장된 정답은 보지 않는다. 반환값은 winner 또는
 `insufficient`와 acceptable candidate set이며 긴 건물 설명을 만들지 않는다.
 
-S4 selection 행은 `canonical_bld_id`, slot, nullable selected image, ordered candidates,
+S4 selection 행은 로컬 키 `vnx_bld_id`, slot, nullable selected image, ordered candidates,
 score/reason/margin, decision method(`deterministic`, `comparative_vision`, `human`),
 engine/version, `review_required`, supersession을 보존한다.
+`canonical_bld_id`는 S6 projection 단계에서 crosswalk 규칙으로만 붙인다.
 
 ## 3. default와 gallery
 

@@ -25,6 +25,63 @@ def _contains_all(text: str, values: Sequence[str]) -> list[str]:
     return [value for value in values if value not in text]
 
 
+def _strip_sql_comments_and_literals(text: str) -> str:
+    """Keep statement separators/tokens while blanking comments and literals."""
+
+    output: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("--", index):
+            end = text.find("\n", index + 2)
+            if end == -1:
+                output.extend(" " * (length - index))
+                break
+            output.extend(" " * (end - index))
+            output.append("\n")
+            index = end + 1
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            if end == -1:
+                output.extend(" " * (length - index))
+                break
+            output.extend("\n" if char == "\n" else " " for char in text[index : end + 2])
+            index = end + 2
+            continue
+        quote = text[index]
+        if quote in ("'", '"'):
+            output.append(" ")
+            index += 1
+            while index < length:
+                if text[index] == quote:
+                    if index + 1 < length and text[index + 1] == quote:
+                        output.extend((" ", " "))
+                        index += 2
+                        continue
+                    output.append(" ")
+                    index += 1
+                    break
+                output.append("\n" if text[index] == "\n" else " ")
+                index += 1
+            continue
+        if text[index] == "$":
+            match = re.match(r"\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$", text[index:])
+            if match:
+                delimiter = match.group(0)
+                end = text.find(delimiter, index + len(delimiter))
+                if end == -1:
+                    output.extend(" " * (length - index))
+                    break
+                stop = end + len(delimiter)
+                output.extend("\n" if char == "\n" else " " for char in text[index:stop])
+                index = stop
+                continue
+        output.append(text[index])
+        index += 1
+    return "".join(output)
+
+
 def validate_ddl_text(text: str) -> list[str]:
     errors: list[str] = []
     create_tables = re.findall(r"\bCREATE\s+TABLE\b", text, flags=re.IGNORECASE)
@@ -47,10 +104,13 @@ def validate_ddl_text(text: str) -> list[str]:
     )
     if len(unique_indexes) != 6:
         errors.append(f"DDL must define default + five unique cover indexes, got {len(unique_indexes)}")
-    executable = re.sub(r"(?m)^\s*--.*$", "", text)
-    for statement in ("DROP", "ALTER", "TRUNCATE", "INSERT", "UPDATE", "DELETE"):
-        if re.search(rf"(?im)^\s*{statement}\b", executable):
-            errors.append(f"DDL contains forbidden WP0c statement: {statement}")
+    executable = _strip_sql_comments_and_literals(text)
+    banned = ("DROP", "ALTER", "TRUNCATE", "INSERT", "UPDATE", "DELETE")
+    for match in re.finditer(
+        rf"(?is)(?:\A|;)\s*({'|'.join(banned)})\b", executable
+    ):
+        statement = match.group(1).upper()
+        errors.append(f"DDL contains forbidden WP0c statement: {statement}")
     for forbidden_column in ("evidence_json", "source_occurrences", "lineage_json"):
         if forbidden_column in executable:
             errors.append(f"serving DDL leaks local-only field: {forbidden_column}")
@@ -89,19 +149,29 @@ def validate_contracts(root: Path) -> dict[str, object]:
     required: dict[str, tuple[str, ...]] = {
         "CONTRACT_IDENTITY.md": (
             "91,803", "6,754", "9,026", "merge", "related", "reject", "defer",
-            "사람 승인", "직접", "one_to_one", "false merge",
+            "사람 승인", "직접", "one_to_one", "false merge", "strict_sim >= 90",
+            "3cf9592a9e54cd4e07512461ca08dc5ca7f8dd5e6cd97b2d6c118dd0b265d87b",
+            "related_but_separate", "블라인드 1인 리뷰",
         ),
         "CONTRACT_GALLERY_SEMANTICS.md": (
             "source occurrence", "exclusion ledger", "compact semantic", "in_scope",
-            "medium별 applicability", "perspective", "disagreement", "P6",
+            "medium별 applicability", "perspective", "disagreement", "P6", "E2 `full_v5`",
+            "transitive closure", "fail-closed", "`vnx_bld_*`",
+            "local 엔진 전수 + 저신뢰(이중판정 불일치·low score)·커버 후보만 remote 승격.",
+            "**1.43M 모집단 전수 원격 Vision은 WP3 결과와 무관하게 금지.**",
+            "WP3 N10은 엔진 선택·임계값 캘리브레이션만 결정한다.",
         ),
         "CONTRACT_COVERS.md": (
             "default", "exterior", "interior", "drawing", "aerial", "detail",
             "comparative_vision", "review_required", "acceptable top-3", "analysis bundle",
+            "5개 키를 가진다", "is_publishable=false", "`vnx_bld_id`",
         ),
         "PROJECTION_SPEC.md": (
             "S1", "S2", "S3", "S4", "S5", "canonical_v2_buildings",
             "building_images", "exact-set", "사용자 명시 승인", "롤백",
+            "canonical_v2_tag_stats", "canonical_v2_tag_centroids",
+            "canonical_v2_tag_vocabulary", "canonical_v2_tag_stats_build.py --with-r4",
+            "scale, structural_system, roof_type, facade_pattern", "delete-then-insert",
         ),
     }
     for name, anchors in required.items():

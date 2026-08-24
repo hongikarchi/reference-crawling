@@ -14,6 +14,14 @@ legacy ID 호환·비교용이다.
 - E2의 `metadata_building_pairs` 6,754행과
   `cross_source_building_candidates` 9,026행은 후보·증거다. E2 자체의
   `no_identity_decision`을 존중하며 이를 곧바로 merge 판정으로 읽지 않는다.
+- 기존 검증 matcher도 입력으로 고정한다.
+  - `canonical/match_buildings_sequential.py`: 26,812 bytes,
+    SHA-256 `3cf9592a9e54cd4e07512461ca08dc5ca7f8dd5e6cd97b2d6c118dd0b265d87b`
+  - `canonical/match_phash_check.py`: 5,450 bytes,
+    SHA-256 `3dcc73152d822fe2b8eaccbb333625672378a3f6cfa59d3099cda0ca28e64fe7`
+- 이름 positive 증거는 위 matcher에서 검증된 `strict_sim >= 90` 계보에 결박한다.
+  builder manifest는 이 임계값을 강화할 수만 있고 완화할 수 없다. architect+exact year
+  gate와 pass-2의 country/year±1·token-overlap 조건도 해당 matcher SHA와 함께 버전 고정한다.
 
 ## 2. 후보 생성과 판정은 분리한다
 
@@ -28,7 +36,7 @@ legacy ID 호환·비교용이다.
 | 상태 | 의미 | component 결합 |
 |---|---|---|
 | `merge` | 동일 건물/동일 프로젝트 레코드 | 사람 승인 뒤에만 결합 |
-| `related` | 같은 단지·단계·계열일 수 있으나 별도 건물 | 결합 금지 |
+| `related_but_separate` | 같은 단지·단계·계열일 수 있으나 별도 건물. 계획의 `related`를 정규화한 값 | 결합 금지 |
 | `reject` | 서로 다른 건물 | 결합 금지 |
 | `defer` | 증거 부족 또는 충돌 미해결 | 결합 금지 |
 
@@ -63,7 +71,7 @@ A-C image/building 관계를 추론하지 않는다.
 ## 4. component 불변조건
 
 - 승인된 `merge` edge만 union한다.
-- `related`, `reject`, `defer` edge는 union-find 입력이 아니다.
+- `related_but_separate`, `reject`, `defer` edge는 union-find 입력이 아니다.
 - component 내부에 `reject` 또는 `defer` pair가 생기면 산출물은 FAIL이며 배포하지 않는다.
 - source building은 정확히 한 active component에만 속한다.
 - decision, evidence, review row는 삭제하지 않고 supersession 관계로 버전 관리한다.
@@ -99,3 +107,23 @@ crosswalk 상태는 `one_to_one`, `many_to_one`, `one_to_many`, `unmatched`, `co
   registry 안정성, crosswalk 양방향 cardinality를 독립 재계산한다.
 
 Archello/Metalocus 추가, 자동 merge 승격, legacy swipe migration은 v1 범위 밖이다.
+
+## 8. gold 어휘와 N10 리뷰 프로토콜
+
+identity gold의 관찰 어휘와 S1 결정 어휘는 다음처럼 단일 매핑한다.
+
+| gold | S1 decision |
+|---|---|
+| `same` | `merge` |
+| `related` | `related_but_separate` |
+| `different` | `reject` |
+| `insufficient` | `defer` |
+
+계획이나 과거 아티팩트의 짧은 값 `related`는 ingest 시
+`related_but_separate`로 정규화하며 새 decision row에는 쓰지 않는다.
+
+N10은 후보 순서·source rank·matcher 점수·자동 결정 제안을 가린 블라인드 1인 리뷰로
+gold를 만든다. 리뷰어는 원본 메타데이터와 직접 이미지 증거만 보고 네 값 중 하나를
+선택하며 근거와 hard conflict를 기록한다. 이후 판정자가 reviewer label과 증거를 다시
+열어 계약 매핑·증거 family·conflict 적용을 재확인한다. 불일치는 자동 합의하지 않고
+`defer`로 남긴다. N100/승격의 2인+조정 프로토콜과 혼용하지 않는다.

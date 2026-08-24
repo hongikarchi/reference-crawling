@@ -9,10 +9,13 @@ S6 `vnext_projection_v*`는 같은 manifest 아래 다음 두 rowset을 고정�
 - `canonical_v2_buildings`: S1+S2+S4+S5에서 만든 parent
 - `building_images`: S2+S3+S4에서 만든 ordered gallery child
 
-태그 3형제는 현행 parent 컬럼인 `typology_tags`, `architectural_elements`,
-`source_categories`를 뜻한다. D4에 따라 별도 Neon evidence/lineage/tag 테이블은 만들지
-않는다. manifest에는 모든 입력 artifact SHA, builder/version, row count, ordered rowset SHA,
-계약/DDL SHA를 넣는다.
+Neon 태그 3형제는 `canonical_v2_tag_stats`, `canonical_v2_tag_centroids`,
+`canonical_v2_tag_vocabulary`다. parent의 `typology_tags`, `architectural_elements`,
+`source_categories`와 별개의 serving 파생 테이블이며, vNext parent 배포와 같은 릴리스·같은
+배포 사이클에서 `tools/canonical_v2_tag_stats_build.py --with-r4`로 재빌드한다.
+D4가 금지하는 것은 신규 evidence/lineage 테이블이며 이 기존 태그 테이블 재빌드는 유지한다.
+manifest에는 모든 입력 artifact SHA, builder/version, row count, ordered rowset SHA,
+계약/DDL/tag-builder SHA를 넣는다.
 
 ## 2. parent field ownership
 
@@ -25,6 +28,8 @@ S6 `vnext_projection_v*`는 같은 manifest 아래 다음 두 rowset을 고정�
 | all_images, best_image_per_cluster | S2 canonical gallery |
 | covers_by_type, cover_image_url_default, display_cover_url | S4 |
 | typology_tags, architectural_elements, source_categories | S5/tag derivation, 같은 parent row |
+| era | projection이 `project_year`에서 항상 결정론적으로 재계산 |
+| scale, structural_system, roof_type, facade_pattern | legacy 1:1은 WP0b 전체 스냅샷(또는 동일 SHA에 결박한 R4 sidecar)에서 1:1 carry-over; 신규/비1:1은 NULL·미해결 |
 | is_publishable, reasons, needs_image_derived_backfill | projection의 결정론 규칙 |
 
 `canonical_v2_buildings`의 컬럼 모양은 바꾸지 않는다.
@@ -32,13 +37,17 @@ S6 `vnext_projection_v*`는 같은 manifest 아래 다음 두 rowset을 고정�
 - S1 crosswalk가 명확한 1:1이면 legacy PK를 유지한다. 그 외에는 신규 serving ID다.
 - `all_images`는 S2 representative URL을 `sort_order` 순서로 투영하며 occurrence 중복을
   넣지 않는다.
-- `covers_by_type`은 5개 typed slot, `cover_image_url_default`와
-  `display_cover_url`은 default selection에서 만든다. 선택 없음은 NULL로 남긴다.
+- `covers_by_type`은 `exterior`, `interior`, `drawing`, `aerial`, `detail` 정확히 5개 키를
+  항상 포함하며 미선택 값은 JSON `null`이다. `cover_image_url_default`와
+  `display_cover_url`은 default selection에서 만든다. default가 없으면 두 값은 NULL,
+  `is_publishable=false`, `review_required` reason을 강제한다.
 - P6가 보류된 동안 legacy 1:1 행의 `image_derived`는 현재 값을 변경 없이 보존한다.
   신규/비1:1 행은 `{}`이며 `needs_image_derived_backfill`은 advisory다. publishability를
   막지 않는다.
 - R2 재호스팅은 범위 밖이다. 선택 이미지와 정확히 대응하는 검증된 기존 CDN 값이
   없으면 `cover_image_cdn_url`/`cover_blurhash`를 임의 생성하거나 이월하지 않는다.
+- R4 carry-over는 새 분류로 간주하지 않는다. `era` 외 4축의 신규 추론은 향후 별도 R4
+  pass에서만 수행하며, 그 전에는 신규/비1:1 행을 NULL로 유지한다.
 
 ## 3. child projection
 
@@ -74,10 +83,14 @@ validator FAIL이면 dry-run이나 Neon 쓰기로 넘어가지 않는다.
 1. S6 build + independent validation
 2. read-only 현행 snapshot과 exact-set diff 산출
 3. Neon dry-run transaction 후 ROLLBACK; insert/update/delete parent·child 수를 사용자에게 제시
-4. 사용자 명시 승인 뒤 한 transaction에서 parent, building_images, 태그 3형제를
-   exact-set으로 동기화하고 FK/row count를 재검사한 뒤 COMMIT
-5. 최종 publishable building에서 `canonical_v2_architects`를 재유도·검증
-6. make_web 벤치마크 10문항 PASS 확인
+4. 사용자 명시 승인 뒤 한 transaction에서 parent를 exact-set 동기화한다.
+   `building_images`는 같은 transaction 안에서 **건물 단위 delete-then-insert**로
+   동기화해 stale child를 남기지 않고 FK/row count를 재검사한 뒤 COMMIT한다.
+5. 같은 릴리스·같은 배포 사이클에서 `tools/canonical_v2_tag_stats_build.py --with-r4`로
+   `canonical_v2_tag_stats`, `canonical_v2_tag_centroids`,
+   `canonical_v2_tag_vocabulary`를 재빌드·검증한다.
+6. 최종 publishable building에서 `canonical_v2_architects`를 재유도·검증
+7. make_web 벤치마크 10문항 PASS 확인
 
 단순 upsert로 stale row를 남기지 않는다. exact-set delete도 dry-run diff와 사용자 승인을
 받은 P7에서만 수행한다. 롤백은 동일 절차로 직전 S6 artifact를 다시 exact-set 적용한다.

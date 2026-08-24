@@ -6,7 +6,7 @@
 - Neon connections: 0; SQL writes: 0; Neon/R2 mutations: 0
 - Snapshot/partial output: both absent
 
-## Intended scope
+## Original intended scope (F4로 실행 전 superseded)
 
 Read `canonical_bld_id, source_refs` from all 39,478 rows of
 `canonical_v2_buildings`, ordered by ID in a repeatable-read/read-only transaction,
@@ -51,3 +51,15 @@ keys. Then run exporter → independent validator. A successful resume must appe
 new PASS job card with row count, DB read-only proof, JSONL SHA, and validator result.
 
 WP1 must not start until this artifact exists and validates.
+
+## F4 pre-execution amendment
+
+게이트 리뷰 F4에 따라 위 2컬럼 구현은 **실행 전에 폐기**했다. 현재 exporter/validator는
+live `canonical_v2_buildings`의 알려진 45컬럼 exact-set을 먼저 확인하고 `embedding`만
+제외한 44컬럼 전부를 저장한다. `.env.make-web` SELECT-only 연결을 우선하며, immutable
+`legacy_neon_snapshot_2026q3.report.json`과 독립
+`legacy_neon_snapshot_2026q3.validation.json`을 아티팩트 옆에 남긴다.
+
+이 amendment 시점에도 `.env`/`.env.make-web`, snapshot, `.partial`, report는 모두 없고
+Neon connection/SQL write는 0이다. 상세 SHA와 검증은
+`20260824_vnext_wp0_gate_fixes_f1_f13.md`를 따른다.

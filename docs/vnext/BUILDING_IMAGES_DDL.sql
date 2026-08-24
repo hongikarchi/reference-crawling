@@ -80,8 +80,6 @@ CREATE TABLE IF NOT EXISTS building_images (
     CHECK (NOT (cover_slot @> ARRAY['drawing']::TEXT[]) OR medium = 'drawing')
 );
 
-CREATE INDEX IF NOT EXISTS idx_building_images_building_sort
-    ON building_images (canonical_bld_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_building_images_semantic_type
     ON building_images USING GIN (semantic_type);
 CREATE INDEX IF NOT EXISTS idx_building_images_cover_slot
