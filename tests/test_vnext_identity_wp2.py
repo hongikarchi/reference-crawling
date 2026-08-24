@@ -14,12 +14,31 @@ from canonical.vnext_identity_candidates import (
     normalize_country,
     normalize_text,
 )
+from canonical.vnext_identity_review import STAGE_B_SCHEMA
 
 
 def test_independent_validator_does_not_import_producer() -> None:
     source = Path("canonical/vnext_identity_candidates_validator.py").read_text(encoding="utf-8")
     assert "from canonical.vnext_identity_candidates import" not in source
     assert "import canonical.vnext_identity_candidates" not in source
+
+
+def test_stage_b_schema_adds_pins_manifest_and_blind_sheet_lineage() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.executescript("CREATE TABLE runs(run_id TEXT PRIMARY KEY);")
+    connection.executescript(
+        "CREATE TABLE sample_neighbourhoods(run_id TEXT,opaque_review_id TEXT,"
+        "PRIMARY KEY(run_id,opaque_review_id));"
+    )
+    connection.executescript(STAGE_B_SCHEMA)
+    tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"stage_b_input_pins", "stage_b_manifest", "review_sheets"} <= tables
+
+
+def test_stage_b_source_has_no_paid_model_client_import() -> None:
+    source = Path("canonical/vnext_identity_review.py").read_text(encoding="utf-8").casefold()
+    assert "import anthropic" not in source
+    assert "from openai" not in source
 
 
 def _building(

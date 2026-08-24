@@ -159,6 +159,20 @@ def _json(value: Any) -> str:
     return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"))
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, set):
+        return [_json_safe(item) for item in sorted(value)]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key):_json_safe(item) for key,item in value.items()}
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
 def _sha(value: Any) -> str:
     return hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
 
@@ -577,8 +591,8 @@ def validate_identity_candidates(
         if report.exists():raise FileExistsError(f"refusing to clobber validation report: {report}")
         payload={"status":"PASS" if result.passed else "FAIL","validator_version":VALIDATOR_VERSION,"artifact_path":str(artifact),"run_id":run_id,
             "passed_checks":sum(row.passed for row in checks),"total_checks":len(checks),"failed_checks":list(result.failed_check_names),
-            "checks":[{"name":row.name,"passed":row.passed,"expected":row.expected,"actual":row.actual,"detail":row.detail} for row in checks],
-            "metrics":metrics,"validated_at":datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00","Z")}
+            "checks":[{"name":row.name,"passed":row.passed,"expected":_json_safe(row.expected),"actual":_json_safe(row.actual),"detail":row.detail} for row in checks],
+            "metrics":_json_safe(metrics),"validated_at":datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00","Z")}
         temporary=report.with_name(report.name+".building")
         temporary.write_text(json.dumps(payload,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8")
         temporary.replace(report)
