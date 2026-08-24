@@ -17,10 +17,12 @@ from canonical.vnext_identity_candidates import (
 from canonical.vnext_identity_review import STAGE_B_SCHEMA
 
 
-def test_independent_validator_does_not_import_producer() -> None:
+def test_independent_validator_does_not_import_producers() -> None:
     source = Path("canonical/vnext_identity_candidates_validator.py").read_text(encoding="utf-8")
     assert "from canonical.vnext_identity_candidates import" not in source
     assert "import canonical.vnext_identity_candidates" not in source
+    assert "from canonical.vnext_identity_review import" not in source
+    assert "import canonical.vnext_identity_review" not in source
 
 
 def test_stage_b_schema_adds_pins_manifest_and_blind_sheet_lineage() -> None:

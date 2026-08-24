@@ -21,7 +21,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from rapidfuzz import fuzz
 
 
-VALIDATOR_VERSION = "vnext-identity-candidates-independent-validator-v1"
+VALIDATOR_VERSION = "vnext-identity-candidates-independent-validator-v2"
 APPLICATION_ID = 0x564E5832
 SCHEMA_VERSION = 1
 LOGICAL_VERSION = "vnext-identity-stage-a-logical-v1"
@@ -48,6 +48,39 @@ INPUT_SPECS: Mapping[str, tuple[Path, int, str]] = {
     "building_matcher": (MATCHER, 26_812, "3cf9592a9e54cd4e07512461ca08dc5ca7f8dd5e6cd97b2d6c118dd0b265d87b"),
     "phash_matcher": (PHASH_MATCHER, 5_450, "3dcc73152d822fe2b8eaccbb333625672378a3f6cfa59d3099cda0ca28e64fe7"),
 }
+STAGE_B_INPUT_SPECS: Mapping[str, tuple[Path, int, str]] = {
+    "cross_source_e2_full_v5": INPUT_SPECS["cross_source_e2_full_v5"],
+    "divisare_e1_v1_2": (
+        Path("data/enrichment/divisare_image_fingerprints_e1_full_v1_2.db"),
+        2_646_114_304,
+        "869a79fee9fd65ddeffa299fef4dd9e2ba15a9c7c7170964b03fee1f4c96a819",
+    ),
+    "architizer_e1_v1_2": (
+        Path("data/enrichment/architizer_image_fingerprints_e1_full_v1_2.db"),
+        4_373_962_752,
+        "58aecdcda936f7327ef7bb4bf3fe21a39ad070e784ab7061e989b62c2dcfe937",
+    ),
+}
+STAGE_B_VERSION = "vnext-identity-http-blind-review-n10-v1"
+ASSET_SELECTION_VERSION = "vnext-identity-two-assets-per-side-v1"
+TRANSFORM_VERSION = "vnext-identity-review-1024-jpeg-q92-s0-v1"
+WP1_TRANSFORM_VERSION = "vnext-p4b-shared-1024-jpeg-q92-s0-v1"
+BLIND_REVIEW_VERSION = "vnext-identity-blind-review-n10-v1"
+ADJUDICATION_VERSION = "vnext-identity-adjudication-n10-v1"
+GATE_VERSION = "vnext-identity-lane-c-gate-v1"
+MAX_ASSETS_PER_SIDE = 2
+MAX_LOGICAL_FETCHES = 40
+MAX_HTTP_REQUESTS_WITH_REDIRECTS = 160
+TERMINAL_ASSET_STATUSES = frozenset({"cache_hit", "exact", "delivery_changed", "source_changed", "failed"})
+REVIEW_LABELS = frozenset({"same", "related", "different", "insufficient"})
+GOLD_DECISIONS = {
+    "same": "merge",
+    "related": "related_but_separate",
+    "different": "reject",
+    "insufficient": "defer",
+}
+STAGE_B_REQUIRED_TABLES = frozenset({"stage_b_input_pins", "stage_b_manifest", "review_sheets"})
+DEFAULT_GATE_REPORT = Path("data/reports/vnext_identity_candidates_v1_n10_gate.json")
 EXPECTED_COUNTS = {"divisare": 29_891, "architizer": 61_912, "total": 91_803, "metadata": 6_754, "e2_candidates": 9_026}
 EVIDENCE_FAMILIES = (
     "name_alias_identity", "architect_firm_identity", "location_site_identity",
@@ -447,13 +480,273 @@ def _expected_sample(evaluated:Mapping[str,Mapping[str,Any]])->list[tuple[str,st
     return [(stratum,str(row["candidate_id"])) for stratum,row in selected]
 
 
+def _expected_review_assets(
+    connection:sqlite3.Connection,e2:sqlite3.Connection,run_id:str,candidate_id:str,
+)->list[tuple[str,int,str,str,str,str]]:
+    pair=connection.execute(
+        "SELECT left_source_building_id,right_source_building_id FROM candidate_pairs WHERE run_id=? AND candidate_id=?",
+        (run_id,candidate_id),
+    ).fetchone()
+    if pair is None:raise ValueError("sample candidate is missing")
+    selected:dict[str,list[tuple[str,str]]]={"left":[],"right":[]}
+    priorities={"exact_pixel":0,"identical_phash":1,"phash_le8":2,"phash_9_16":3}
+    direct=[dict(row) for row in connection.execute(
+        "SELECT * FROM direct_image_evidence WHERE run_id=? AND candidate_id=?",(run_id,candidate_id)
+    )]
+    direct.sort(key=lambda row:(priorities[str(row["evidence_kind"])],int(row["phash_distance"] or 0),str(row["e2_evidence_id"])))
+    for index,row in enumerate(direct,1):
+        for side,column in (("left","left_source_asset_id"),("right","right_source_asset_id")):
+            asset_id=str(row[column])
+            if len(selected[side])<MAX_ASSETS_PER_SIDE and asset_id not in {item[0] for item in selected[side]}:
+                selected[side].append((asset_id,f"direct_evidence_{index}"))
+        if all(len(values)>=MAX_ASSETS_PER_SIDE for values in selected.values()):break
+    result:list[tuple[str,int,str,str,str,str]]=[]
+    for side,source,building_id in (("left","divisare",str(pair[0])),("right","architizer",str(pair[1]))):
+        existing={item[0] for item in selected[side]}
+        if len(selected[side])<MAX_ASSETS_PER_SIDE:
+            for row in e2.execute(
+                "SELECT ba.source_asset_id,a.original_width,a.original_height FROM building_assets ba JOIN assets a "
+                "ON a.run_id=ba.run_id AND a.source=ba.source AND a.source_asset_id=ba.source_asset_id "
+                "WHERE ba.run_id=(SELECT run_id FROM e2_runs LIMIT 1) AND ba.source=? AND ba.source_building_id=? "
+                "AND a.fingerprint_status='success' ORDER BY "
+                "(coalesce(a.original_width,0)*coalesce(a.original_height,0)) DESC,"
+                "min(coalesce(a.original_width,0),coalesce(a.original_height,0)) DESC,ba.source_asset_id",
+                (source,building_id),
+            ):
+                asset_id=str(row[0])
+                if asset_id in existing:continue
+                selected[side].append((asset_id,"building_representative"));existing.add(asset_id)
+                if len(selected[side])>=MAX_ASSETS_PER_SIDE:break
+        for order,(asset_id,reason) in enumerate(selected[side],1):
+            result.append((side,order,source,building_id,asset_id,reason))
+    return result
+
+
+def _repo_file(root:Path,value:Any)->Path|None:
+    if not value:return None
+    candidate=Path(str(value));candidate=candidate if candidate.is_absolute() else root/candidate
+    resolved=candidate.resolve()
+    try:resolved.relative_to(root)
+    except ValueError:return None
+    return resolved if resolved.is_file() else None
+
+
+def _cached_file_sha(path:Path,cache:dict[Path,str],verify_full_hashes:bool,expected:str)->str:
+    if not verify_full_hashes:return expected
+    if path not in cache:cache[path]=_sha_file(path)
+    return cache[path]
+
+
+def _validate_stage_b(
+    *,connection:sqlite3.Connection,e2:sqlite3.Connection,root:Path,run_id:str,run:sqlite3.Row,
+    tables:set[str],checks:list[Check],metrics:dict[str,Any],verify_full_hashes:bool,
+    file_hashes:dict[Path,str],
+)->None:
+    _check(checks,"stage_b_required_tables",True,STAGE_B_REQUIRED_TABLES<=tables)
+    if not STAGE_B_REQUIRED_TABLES<=tables:return
+
+    stored_pins={str(row["role"]):row for row in connection.execute("SELECT * FROM stage_b_input_pins WHERE run_id=?",(run_id,))}
+    pin_failures=[];sidecars=[]
+    if set(stored_pins)!=set(STAGE_B_INPUT_SPECS):pin_failures.append("role_set")
+    for role,(relative,size,digest) in STAGE_B_INPUT_SPECS.items():
+        path=root/relative;row=stored_pins.get(role)
+        if not path.is_file():pin_failures.append(role+":missing");continue
+        for suffix in ("-wal","-shm","-journal"):
+            if Path(str(path)+suffix).exists():sidecars.append(relative.as_posix()+suffix)
+        actual_digest=_cached_file_sha(path,file_hashes,verify_full_hashes,digest)
+        actual=None if row is None else (str(row["path"]),int(row["size_bytes"]),str(row["sha256_before"]),str(row["sha256_after"] or ""))
+        expected=(relative.as_posix(),size,digest,digest)
+        if path.stat().st_size!=size or actual_digest!=digest or actual!=expected:pin_failures.append(role)
+        if row is not None:
+            payload={"role":role,"path":relative.as_posix(),"size_bytes":size,"sha256_before":digest,"sha256_after":digest}
+            if str(row["record_sha256"])!=_sha(payload):pin_failures.append(role+":record")
+    _check(checks,"stage_b_input_file_pins_pre_post",[],pin_failures)
+    _check(checks,"stage_b_inputs_no_sqlite_sidecars",[],sidecars)
+
+    manifests=connection.execute("SELECT * FROM stage_b_manifest WHERE run_id=?",(run_id,)).fetchall()
+    _check(checks,"stage_b_single_manifest",1,len(manifests))
+    if manifests:
+        manifest=manifests[0]
+        version_actual=tuple(str(manifest[column]) for column in (
+            "stage_b_version","asset_selection_version","transform_version","blind_review_version","adjudication_version"
+        ))
+        version_expected=(STAGE_B_VERSION,ASSET_SELECTION_VERSION,TRANSFORM_VERSION,BLIND_REVIEW_VERSION,ADJUDICATION_VERSION)
+        _check(checks,"stage_b_versions",version_expected,version_actual)
+        bounds_actual=tuple(int(manifest[column]) for column in (
+            "max_assets_per_side","max_logical_fetches","max_http_requests_with_redirects"
+        ))
+        _check(checks,"stage_b_bounds",(MAX_ASSETS_PER_SIDE,MAX_LOGICAL_FETCHES,MAX_HTTP_REQUESTS_WITH_REDIRECTS),bounds_actual)
+        _check(checks,"stage_b_stage_a_logical_sha",str(run["stage_a_logical_sha256"]),str(manifest["stage_a_logical_sha256"]))
+        initial_sha=str(manifest["stage_a_artifact_sha256_before"])
+        _check(checks,"stage_b_initial_artifact_sha_format",True,bool(re.fullmatch(r"[0-9a-f]{64}",initial_sha)))
+        _check(checks,"stage_b_manifest_complete",True,bool(manifest["completed_at"]))
+        payload={key:manifest[key] for key in manifest.keys() if key not in {"completed_at","record_sha256"}}
+        payload["completed_at"]=manifest["completed_at"]
+        _check(checks,"stage_b_manifest_record_sha",_sha(payload),str(manifest["record_sha256"]))
+
+    sample_rows=connection.execute(
+        "SELECT s.sample_rank,s.opaque_review_id,s.candidate_id,c.left_source_building_id,c.right_source_building_id "
+        "FROM sample_neighbourhoods s JOIN candidate_pairs c USING(run_id,candidate_id) "
+        "WHERE s.run_id=? ORDER BY s.sample_rank",(run_id,),
+    ).fetchall()
+    sample_ids={str(row["opaque_review_id"]) for row in sample_rows}
+    assets=connection.execute(
+        "SELECT * FROM review_assets WHERE run_id=? ORDER BY opaque_review_id,side,asset_order",(run_id,)
+    ).fetchall()
+    asset_count=len(assets);_check(checks,"stage_b_asset_count_bounded",True,20<=asset_count<=MAX_LOGICAL_FETCHES)
+    per_side=Counter((str(row["opaque_review_id"]),str(row["side"])) for row in assets)
+    _check(checks,"stage_b_max_two_assets_per_side",True,bool(per_side) and max(per_side.values())<=MAX_ASSETS_PER_SIDE)
+    covered={str(row["opaque_review_id"]) for row in assets}
+    _check(checks,"stage_b_all_n10_neighbourhoods_have_assets",sample_ids,covered)
+    expected_selection=[]
+    for sample in sample_rows:
+        opaque=str(sample["opaque_review_id"])
+        expected_selection.extend((opaque,*row) for row in _expected_review_assets(connection,e2,run_id,str(sample["candidate_id"])))
+    actual_selection=[(
+        str(row["opaque_review_id"]),str(row["side"]),int(row["asset_order"]),str(row["source"]),
+        str(row["source_building_id"]),str(row["source_asset_id"]),str(row["selection_reason"]),
+    ) for row in assets]
+    _check(checks,"stage_b_asset_selection_replay",True,sorted(expected_selection)==actual_selection,
+        f"expected={len(expected_selection)} actual={len(actual_selection)}")
+
+    e1_connections={source:_open(root/STAGE_B_INPUT_SPECS[f"{source}_e1_v1_2"][0]) for source in ("divisare","architizer")}
+    lineage_failures=[];status_failures=[];cache_failures=[]
+    transform_key=hashlib.sha256(TRANSFORM_VERSION.encode("utf-8")).hexdigest()[:12]
+    wp1_transform_key=hashlib.sha256(WP1_TRANSFORM_VERSION.encode("utf-8")).hexdigest()[:12]
+    try:
+        for row in assets:
+            opaque=str(row["opaque_review_id"]);side=str(row["side"]);source=str(row["source"]);asset_id=str(row["source_asset_id"])
+            e2_row=e2.execute(
+                "SELECT fingerprint_status,raw_response_sha256,normalized_pixel_sha256 FROM assets "
+                "WHERE run_id=(SELECT run_id FROM e2_runs LIMIT 1) AND source=? AND source_asset_id=?",(source,asset_id),
+            ).fetchone()
+            membership=e2.execute(
+                "SELECT 1 FROM building_assets WHERE run_id=(SELECT run_id FROM e2_runs LIMIT 1) AND source=? "
+                "AND source_building_id=? AND source_asset_id=?",(source,str(row["source_building_id"]),asset_id),
+            ).fetchone()
+            e1_row=e1_connections[source].execute(
+                "SELECT sa.fetch_url,f.status,f.raw_response_sha256,f.normalized_pixel_sha256 FROM source_assets sa "
+                "JOIN fingerprints f USING(run_id,source_asset_id) WHERE sa.run_id=(SELECT run_id FROM fingerprint_runs LIMIT 1) "
+                "AND sa.source_asset_id=?",(asset_id,),
+            ).fetchone()
+            expected_source="divisare" if side=="left" else "architizer"
+            lineage_ok=bool(e2_row and e1_row and membership and source==expected_source and e2_row["fingerprint_status"]=="success" and e1_row["status"]=="success")
+            if lineage_ok:
+                lineage_ok=(str(row["expected_url"] or ""),str(row["expected_raw_sha256"] or ""),str(row["expected_pixel_sha256"] or ""))==(
+                    str(e1_row["fetch_url"] or ""),str(e1_row["raw_response_sha256"] or ""),str(e1_row["normalized_pixel_sha256"] or "")
+                ) and (str(e2_row["raw_response_sha256"] or ""),str(e2_row["normalized_pixel_sha256"] or ""))==(
+                    str(e1_row["raw_response_sha256"] or ""),str(e1_row["normalized_pixel_sha256"] or "")
+                )
+            if not lineage_ok and len(lineage_failures)<10:lineage_failures.append(f"{opaque}/{side}/{asset_id}")
+            status=str(row["status"]);expected_raw=str(row["expected_raw_sha256"] or "");expected_pixel=str(row["expected_pixel_sha256"] or "")
+            actual_raw=str(row["actual_raw_sha256"] or "");actual_pixel=str(row["actual_pixel_sha256"] or "")
+            semantic_ok=status in TERMINAL_ASSET_STATUSES
+            if status=="cache_hit":semantic_ok=semantic_ok and int(row["request_count"])==0 and actual_pixel==expected_pixel
+            elif status=="exact":semantic_ok=semantic_ok and actual_raw==expected_raw and actual_pixel==expected_pixel and int(row["request_count"])>=1
+            elif status=="delivery_changed":semantic_ok=semantic_ok and actual_raw!=expected_raw and actual_pixel==expected_pixel and int(row["request_count"])>=1
+            elif status=="source_changed":semantic_ok=semantic_ok and bool(actual_raw) and bool(actual_pixel) and actual_pixel!=expected_pixel and int(row["request_count"])>=1
+            elif status=="failed":semantic_ok=semantic_ok and bool(row["error_kind"])
+            if not semantic_ok and len(status_failures)<10:status_failures.append(f"{opaque}/{side}/{asset_id}:{status}")
+            if status!="failed":
+                cache_path=_repo_file(root,row["cache_relative_path"])
+                expected_key=wp1_transform_key if status=="cache_hit" else transform_key
+                expected_name=f"{actual_pixel}.{expected_key}.jpg"
+                if cache_path is None or cache_path.name!=expected_name or cache_path.stat().st_size<=0:
+                    if len(cache_failures)<10:cache_failures.append(f"{opaque}/{side}/{asset_id}")
+    finally:
+        for e1_connection in e1_connections.values():e1_connection.close()
+    _check(checks,"stage_b_e1_e2_asset_lineage",[],lineage_failures)
+    _check(checks,"stage_b_fetch_status_semantics",[],status_failures)
+    _check(checks,"stage_b_current_derivative_cache",[],cache_failures)
+    status_counts=Counter(str(row["status"]) for row in assets)
+    _check(checks,"stage_b_asset_statuses_terminal",True,set(status_counts)<=TERMINAL_ASSET_STATUSES)
+    http_requests=sum(int(row["request_count"]) for row in assets)
+    stage_metrics={str(row["metric_name"]):int(row["metric_value"]) for row in connection.execute(
+        "SELECT metric_name,metric_value FROM metrics WHERE run_id=? AND phase='stage_b'",(run_id,)
+    )}
+    logical_expected=sum(str(row["status"])!="cache_hit" and str(row["error_kind"] or "")!="missing_frozen_lineage" for row in assets)
+    metric_expected={"selected_assets":asset_count,"cache_hits":status_counts.get("cache_hit",0),"logical_fetches":logical_expected,"http_requests":http_requests}
+    _check(checks,"stage_b_accounting_metrics",metric_expected,stage_metrics)
+    _check(checks,"stage_b_logical_fetch_cap",True,stage_metrics.get("logical_fetches",MAX_LOGICAL_FETCHES+1)<=MAX_LOGICAL_FETCHES)
+    _check(checks,"stage_b_http_request_accounting",(http_requests,True),(int(run["stage_b_http_requests"]),http_requests<=MAX_HTTP_REQUESTS_WITH_REDIRECTS))
+    _check(checks,"stage_b_paid_calls_zero",(0,0),(int(run["stage_b_vision_requests"]),int(run["stage_b_llm_requests"])))
+    metrics.update(stage_b_selected_assets=asset_count,stage_b_status_counts=dict(sorted(status_counts.items())),stage_b_http_requests=http_requests)
+
+    sheets=connection.execute("SELECT * FROM review_sheets WHERE run_id=? ORDER BY opaque_review_id",(run_id,)).fetchall()
+    _check(checks,"stage_b_blind_sheet_n10",sample_ids,{str(row["opaque_review_id"]) for row in sheets})
+    sheet_failures=[]
+    for row in sheets:
+        path=_repo_file(root,row["sheet_path"])
+        payload={"opaque_review_id":row["opaque_review_id"],"sheet_path":row["sheet_path"],"sheet_sha256":row["sheet_sha256"],"sheet_bytes":row["sheet_bytes"],"review_version":row["review_version"]}
+        if path is None or int(row["sheet_bytes"])!=(path.stat().st_size if path else -1) or str(row["sheet_sha256"])!=(_sha_file(path) if path else "") or str(row["review_version"])!=BLIND_REVIEW_VERSION or str(row["record_sha256"])!=_sha(payload):
+            if len(sheet_failures)<10:sheet_failures.append(str(row["opaque_review_id"]))
+    _check(checks,"stage_b_blind_sheet_lineage",[],sheet_failures)
+
+    reviews=connection.execute("SELECT * FROM blind_reviews WHERE run_id=? ORDER BY opaque_review_id",(run_id,)).fetchall()
+    _check(checks,"blind_review_n10",sample_ids,{str(row["opaque_review_id"]) for row in reviews})
+    review_failures=[]
+    for row in reviews:
+        payload={key:row[key] for key in ("opaque_review_id","label","rationale","hard_conflict_observed","reviewer","review_version","reviewed_at")}
+        if str(row["label"]) not in REVIEW_LABELS or not all(str(row[key] or "").strip() for key in ("rationale","hard_conflict_observed","reviewer")) or str(row["review_version"])!=BLIND_REVIEW_VERSION or str(row["record_sha256"])!=_sha(payload):
+            if len(review_failures)<10:review_failures.append(str(row["opaque_review_id"]))
+    _check(checks,"blind_review_records",[],review_failures)
+    _check(checks,"blind_review_single_reviewer",1,len({str(row["reviewer"]) for row in reviews}))
+
+    adjudications=connection.execute("SELECT * FROM adjudications WHERE run_id=? ORDER BY opaque_review_id",(run_id,)).fetchall()
+    _check(checks,"adjudication_n10",sample_ids,{str(row["opaque_review_id"]) for row in adjudications})
+    review_by_opaque={str(row["opaque_review_id"]):str(row["label"]) for row in reviews};adjudication_failures=[]
+    for row in adjudications:
+        opaque=str(row["opaque_review_id"]);reviewer_label=review_by_opaque.get(opaque,"");adjudicator_label=str(row["adjudicator_label"])
+        agrees=int(reviewer_label==adjudicator_label);final=reviewer_label if agrees else "insufficient"
+        payload={key:row[key] for key in (
+            "opaque_review_id","reviewer_label","adjudicator_label","agrees","final_gold_label","mapped_decision",
+            "rationale","adjudicator","adjudication_version","adjudicated_at",
+        )}
+        valid=reviewer_label in REVIEW_LABELS and adjudicator_label in REVIEW_LABELS and int(row["agrees"])==agrees and str(row["reviewer_label"])==reviewer_label
+        valid=valid and str(row["final_gold_label"])==final and str(row["mapped_decision"])==GOLD_DECISIONS[final]
+        valid=valid and bool(str(row["rationale"] or "").strip()) and bool(str(row["adjudicator"] or "").strip()) and str(row["adjudication_version"])==ADJUDICATION_VERSION and str(row["record_sha256"])==_sha(payload)
+        if not valid and len(adjudication_failures)<10:adjudication_failures.append(opaque)
+    _check(checks,"adjudication_records_and_disagreement_rule",[],adjudication_failures)
+    _check(checks,"adjudication_single_adjudicator",1,len({str(row["adjudicator"]) for row in adjudications}))
+
+    false_merge=int(connection.execute(
+        "SELECT count(*) FROM adjudications a JOIN sample_neighbourhoods s USING(run_id,opaque_review_id) "
+        "JOIN candidate_pairs c USING(run_id,candidate_id) WHERE a.run_id=? AND a.reviewer_label='different' AND c.auto_merge_eligible=1",
+        (run_id,),
+    ).fetchone()[0])
+    hard_violation=int(connection.execute(
+        "SELECT count(*) FROM candidate_pairs WHERE run_id=? AND auto_merge_eligible=1 AND hard_conflict_count>0",(run_id,)
+    ).fetchone()[0])
+    disagreements=sum(int(row["agrees"])==0 for row in adjudications)
+    _check(checks,"gate_false_merge_zero",0,false_merge)
+    _check(checks,"gate_hard_conflict_violation_zero",0,hard_violation)
+    _check(checks,"gate_run_status",("pass","complete","complete","complete"),(
+        str(run["status"]),str(run["stage_b_status"]),str(run["blind_review_status"]),str(run["adjudication_status"]),
+    ))
+    gate_path=root/DEFAULT_GATE_REPORT;gate_failures=[]
+    try:gate=json.loads(gate_path.read_text(encoding="utf-8"))
+    except (OSError,json.JSONDecodeError):gate=None
+    if not isinstance(gate,dict):gate_failures.append("missing_or_invalid")
+    else:
+        expected=(run_id,GATE_VERSION,"PASS",false_merge,hard_violation,disagreements,0,0,0,0)
+        actual=(str(gate.get("run_id")),str(gate.get("gate_version")),str(gate.get("status")),int(gate.get("false_merge_count",-1)),
+            int(gate.get("hard_conflict_violation_count",-1)),int(gate.get("review_adjudication_disagreement_count",-1)),
+            int(gate.get("cost",{}).get("vision_requests",-1)),int(gate.get("cost",{}).get("llm_requests",-1)),
+            int(gate.get("merge_executions",-1)),int(gate.get("vnx_id_issuances",-1)))
+        if actual!=expected:gate_failures.append("content")
+    _check(checks,"gate_report_lineage",[],gate_failures)
+    metrics.update(blind_review_labels=dict(sorted(Counter(str(row["label"]) for row in reviews).items())),
+        final_gold_labels=dict(sorted(Counter(str(row["final_gold_label"]) for row in adjudications).items())),
+        review_adjudication_disagreements=disagreements,false_merges=false_merge,hard_conflict_violations=hard_violation)
+
+
 def validate_identity_candidates(
     *,repo_root:Path,artifact_path:Path=DEFAULT_ARTIFACT,report_path:Path|None=DEFAULT_REPORT,
     verify_full_hashes:bool=True,
 )->ValidationResult:
     root=repo_root.resolve();artifact=artifact_path if artifact_path.is_absolute() else root/artifact_path
     report=None if report_path is None else (report_path if report_path.is_absolute() else root/report_path)
-    checks:list[Check]=[];metrics:dict[str,Any]={};run_id: str|None=None
+    checks:list[Check]=[];metrics:dict[str,Any]={};run_id: str|None=None;file_hashes:dict[Path,str]={}
     if not artifact.is_file():
         _check(checks,"artifact_exists",True,False)
         return ValidationResult(artifact,report,None,tuple(checks),metrics)
@@ -482,7 +775,7 @@ def validate_identity_candidates(
         pin_failures=[]
         for role,(relative,size,digest) in INPUT_SPECS.items():
             path=root/relative
-            actual_digest=_sha_file(path) if verify_full_hashes else digest
+            actual_digest=_cached_file_sha(path,file_hashes,verify_full_hashes,digest)
             row=actual_pins.get(role)
             if row is None or path.stat().st_size!=size or actual_digest!=digest or row["sha256_before"]!=digest or row["sha256_after"]!=digest:
                 pin_failures.append(role)
@@ -520,7 +813,7 @@ def validate_identity_candidates(
         stored_conflicts_by_candidate:dict[str,set[str]]=defaultdict(set)
         for conflict_row in connection.execute("SELECT candidate_id,conflict_type FROM hard_conflicts WHERE run_id=?",(run_id,)):
             stored_conflicts_by_candidate[str(conflict_row["candidate_id"])].add(str(conflict_row["conflict_type"]))
-        _check(checks,"candidate_universe_exact",set(universe),set(artifact_pairs),f"expected={len(universe)} actual={len(artifact_pairs)}")
+        _check(checks,"candidate_universe_exact",True,set(universe)==set(artifact_pairs),f"expected={len(universe)} actual={len(artifact_pairs)}")
         origin_failures=[];decision_failures=[];family_failures=[];conflict_failures=[];evaluated:dict[str,dict[str,Any]]={}
         for pair,origins in universe.items():
             row=artifact_pairs.get(pair)
@@ -571,18 +864,9 @@ def validate_identity_candidates(
         logical=_logical(connection,run_id);_check(checks,"stage_a_logical_sha",logical,str(run["stage_a_logical_sha256"]))
         integrity=str(connection.execute("PRAGMA integrity_check").fetchone()[0]);_check(checks,"sqlite_integrity","ok",integrity)
         stage_b_status=str(run["stage_b_status"]);metrics.update(source_buildings=len(buildings),candidate_pairs=len(universe),auto_merge_eligible=sum(x["auto"] for x in evaluated.values()),stage_b_status=stage_b_status)
-        if stage_b_status in {"complete","reviewed","adjudicated","pass","fail"} or str(run["status"]) in {"stage_b_complete","pass","fail"}:
-            review_assets=int(connection.execute("SELECT count(*) FROM review_assets WHERE run_id=?",(run_id,)).fetchone()[0])
-            pending=int(connection.execute("SELECT count(*) FROM review_assets WHERE run_id=? AND status='pending'",(run_id,)).fetchone()[0])
-            _check(checks,"stage_b_assets_present",True,review_assets>0);_check(checks,"stage_b_assets_terminal",0,pending)
-            _check(checks,"stage_b_paid_calls_zero",(0,0),(int(run["stage_b_vision_requests"]),int(run["stage_b_llm_requests"])))
-        if str(run["blind_review_status"])=="complete":
-            _check(checks,"blind_review_n10",10,int(connection.execute("SELECT count(*) FROM blind_reviews WHERE run_id=?",(run_id,)).fetchone()[0]))
-        if str(run["adjudication_status"])=="complete":
-            _check(checks,"adjudication_n10",10,int(connection.execute("SELECT count(*) FROM adjudications WHERE run_id=?",(run_id,)).fetchone()[0]))
-            false_merge=int(connection.execute("SELECT count(*) FROM adjudications a JOIN sample_neighbourhoods s USING(run_id,opaque_review_id) JOIN candidate_pairs c USING(run_id,candidate_id) WHERE a.run_id=? AND a.reviewer_label='different' AND c.auto_merge_eligible=1",(run_id,)).fetchone()[0])
-            hard_violation=int(connection.execute("SELECT count(*) FROM candidate_pairs WHERE run_id=? AND auto_merge_eligible=1 AND hard_conflict_count>0",(run_id,)).fetchone()[0])
-            _check(checks,"gate_false_merge_zero",0,false_merge);_check(checks,"gate_hard_conflict_violation_zero",0,hard_violation)
+        if stage_b_status=="complete" or str(run["status"]) in {"stage_b_complete","pass","fail"}:
+            _validate_stage_b(connection=connection,e2=e2,root=root,run_id=run_id,run=run,tables=tables,
+                checks=checks,metrics=metrics,verify_full_hashes=verify_full_hashes,file_hashes=file_hashes)
     finally:
         connection.close();divisare.close();architizer.close();e2.close()
     result=ValidationResult(artifact,report,run_id,tuple(checks),metrics)
