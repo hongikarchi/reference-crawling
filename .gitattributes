@@ -2,5 +2,14 @@
 # conversion, even when the global Git configuration enables core.autocrlf.
 canonical/divisare_d2_decisions_v1.json -text
 canonical/divisare_partial_text_decisions_v1.json -text
+canonical/match_buildings_sequential.py -text whitespace=cr-at-eol
+canonical/match_phash_check.py -text whitespace=cr-at-eol
+canonical/vnext_country_norm.py -text whitespace=cr-at-eol
+canonical/vnext_identity_candidates.py -text whitespace=cr-at-eol
+canonical/vnext_identity_candidates_v2.py -text whitespace=cr-at-eol
 docs/vnext/CONTRACT_GALLERY_SEMANTICS.md -text
-docs/vnext/CONTRACT_IDENTITY.md -text
+docs/vnext/CONTRACT_IDENTITY.md -text whitespace=cr-at-eol
+tools/build_strict_canonical.py -text whitespace=cr-at-eol
+tools/canonical_v2_c17_make_web_polish.py -text whitespace=cr-at-eol
+tools/canonical_v2_c21_make_web_polish.py -text whitespace=cr-at-eol
+tools/canonical_v2_c23_final.py -text whitespace=cr-at-eol

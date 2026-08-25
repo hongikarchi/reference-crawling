@@ -54,15 +54,29 @@ legacy ID 호환·비교용이다.
 - source URL 또는 외부 stable ID
 - 검증된 pixel/image overlap
 
-같은 family 안의 여러 점수나 여러 pHash 쌍은 증거 1종으로 센다. merge 후보는
-독립 family 2종 이상이 양성이며 hard conflict가 0일 때만 가능하다. 정확한 threshold와
-normalizer는 builder manifest에 버전·SHA로 고정하며 계약 변경 없이 조정하지 않는다.
+같은 family 안의 여러 점수나 여러 pHash 쌍은 증거 1종으로 센다. `merge_candidate`
+제안은 독립 family 2종 이상이 양성이며 hard conflict가 0일 때 만들 수 있다. 단,
+`auto_merge_eligible`에는 그중 최소 1종이 이름·별칭 identity(`strict_sim >= 90`의
+고정 matcher 계보) 또는 검증된 직접 pixel/image overlap인 anchor여야 한다.
+architect/firm+연도 조합만으로는 제안은 남길 수 있어도 자동 병합 자격을 주지 않는다.
+정확한 threshold와 normalizer는 builder manifest에 버전·SHA로 고정하며 계약 변경 없이
+조정하지 않는다.
 
 hard conflict에는 최소한 다음이 포함된다.
 
 - 기존 matcher의 architect/year gate가 명시적으로 차단
 - 충분한 양쪽 이미지 집합에서 검증된 pHash veto가 차단
 - 국가/site는 양쪽 국가가 모두 known canonical 값으로 정규화될 때만 동일값+동일 locality를 positive로, 서로 다른 값을 hard conflict로 판정하며 정규화 불가·모호 값은 둘 다 중립으로 처리한다. 프로젝트 phase가 서로 양립할 수 없는 경우도 hard conflict다.
+- known-country 집합은 manifest에 SHA 고정한 ISO 3166-1 영문 short/official/common-name
+  스냅샷 전량으로 구성하며, `Georgia`처럼 국가와 비국가 지명이 충돌하는 고정 중의어는
+  ISO 이름보다 먼저 모호·중립으로 처리한다. legacy C21 대비 추가 canonical/alias 전량을
+  manifest `additions`에 기록한다.
+- anchor 적용 직후의 eligible 그래프를 한 번 동결한다. 한 source building이 서로 직접
+  candidate/related가 아닌 같은-source 상대 2개 이상과 동시에 eligible이면 incident
+  eligible 전부를 `defer`로 강등하고 `fanout_conflict`를 기록한다. 같은-source 상대 관계는
+  이름·별칭 `strict_sim >= 90`에 더해 firm, known-country+locality, 또는 호환 연도 중 직접
+  증거 1종 이상과 hard conflict 0을 요구한다. 모든 상대 쌍이 이를 직접 만족할 때만
+  정당한 분할 예외이며 transitive closure와 순차 재계산은 금지한다.
 - `reject`로 확정된 두 source building을 같은 component에 넣는 경로
 
 pHash/crop은 pair의 직접 증거 또는 veto로만 사용한다. A-B, B-C가 가깝다는 이유로

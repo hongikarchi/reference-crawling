@@ -17,6 +17,7 @@ from canonical.vnext_identity_review import (  # noqa: E402
     DEFAULT_ADJUDICATION_FORM,
     DEFAULT_ADJUDICATION_PACKET,
     DEFAULT_ARTIFACT,
+    DEFAULT_CACHE,
     DEFAULT_GATE_REPORT,
     DEFAULT_REVIEW_FORM,
     DEFAULT_REVIEW_PREFIX,
@@ -38,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     prepare.add_argument("--review-form", type=Path, default=DEFAULT_REVIEW_FORM)
     prepare.add_argument("--manifest", type=Path, default=DEFAULT_STAGE_B_MANIFEST)
     prepare.add_argument("--report", type=Path, default=DEFAULT_STAGE_B_REPORT)
+    prepare.add_argument("--cache-root", type=Path, default=DEFAULT_CACHE)
     prepare.add_argument("--workers", type=int, default=4)
     prepare.add_argument("--skip-full-hash", action="store_true", help="Tests only; production must not use this.")
     requeue = sub.add_parser("requeue-connection-failures", help="Archive an all-connection-failed attempt and requeue it.")
@@ -56,7 +58,8 @@ def main(argv: list[str] | None = None) -> int:
         result = run_stage_b(
             repo_root=ROOT, artifact_path=args.artifact, review_prefix=args.review_prefix,
             review_form=args.review_form, manifest_path=args.manifest, report_path=args.report,
-            workers=args.workers, verify_full_hashes=not args.skip_full_hash,
+            cache_root=args.cache_root, workers=args.workers,
+            verify_full_hashes=not args.skip_full_hash,
         )
         payload = {
             "action":"wp2_stage_b_prepare","status":"PASS","run_id":result.run_id,
