@@ -62,7 +62,7 @@ hard conflict에는 최소한 다음이 포함된다.
 
 - 기존 matcher의 architect/year gate가 명시적으로 차단
 - 충분한 양쪽 이미지 집합에서 검증된 pHash veto가 차단
-- 서로 양립할 수 없는 국가/site 또는 프로젝트 phase
+- 국가/site는 양쪽 국가가 모두 known canonical 값으로 정규화될 때만 동일값+동일 locality를 positive로, 서로 다른 값을 hard conflict로 판정하며 정규화 불가·모호 값은 둘 다 중립으로 처리한다. 프로젝트 phase가 서로 양립할 수 없는 경우도 hard conflict다.
 - `reject`로 확정된 두 source building을 같은 component에 넣는 경로
 
 pHash/crop은 pair의 직접 증거 또는 veto로만 사용한다. A-B, B-C가 가깝다는 이유로

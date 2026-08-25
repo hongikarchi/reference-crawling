@@ -193,7 +193,7 @@ def _json(value: Any) -> str:
 
 
 def _json_safe(value: Any) -> Any:
-    if isinstance(value, set):
+    if isinstance(value, (set, frozenset)):
         return [_json_safe(item) for item in sorted(value)]
     if isinstance(value, tuple):
         return [_json_safe(item) for item in value]
@@ -540,7 +540,7 @@ def _cached_file_sha(path:Path,cache:dict[Path,str],verify_full_hashes:bool,expe
 def _validate_stage_b(
     *,connection:sqlite3.Connection,e2:sqlite3.Connection,root:Path,run_id:str,run:sqlite3.Row,
     tables:set[str],checks:list[Check],metrics:dict[str,Any],verify_full_hashes:bool,
-    file_hashes:dict[Path,str],
+    file_hashes:dict[Path,str],gate_report_path:Path=DEFAULT_GATE_REPORT,
 )->None:
     _check(checks,"stage_b_required_tables",True,STAGE_B_REQUIRED_TABLES<=tables)
     if not STAGE_B_REQUIRED_TABLES<=tables:return
@@ -723,7 +723,7 @@ def _validate_stage_b(
     _check(checks,"gate_run_status",("pass","complete","complete","complete"),(
         str(run["status"]),str(run["stage_b_status"]),str(run["blind_review_status"]),str(run["adjudication_status"]),
     ))
-    gate_path=root/DEFAULT_GATE_REPORT;gate_failures=[]
+    gate_path=root/gate_report_path;gate_failures=[]
     try:gate=json.loads(gate_path.read_text(encoding="utf-8"))
     except (OSError,json.JSONDecodeError):gate=None
     if not isinstance(gate,dict):gate_failures.append("missing_or_invalid")
@@ -866,7 +866,8 @@ def validate_identity_candidates(
         stage_b_status=str(run["stage_b_status"]);metrics.update(source_buildings=len(buildings),candidate_pairs=len(universe),auto_merge_eligible=sum(x["auto"] for x in evaluated.values()),stage_b_status=stage_b_status)
         if stage_b_status=="complete" or str(run["status"]) in {"stage_b_complete","pass","fail"}:
             _validate_stage_b(connection=connection,e2=e2,root=root,run_id=run_id,run=run,tables=tables,
-                checks=checks,metrics=metrics,verify_full_hashes=verify_full_hashes,file_hashes=file_hashes)
+                checks=checks,metrics=metrics,verify_full_hashes=verify_full_hashes,file_hashes=file_hashes,
+                gate_report_path=DEFAULT_GATE_REPORT)
     finally:
         connection.close();divisare.close();architizer.close();e2.close()
     result=ValidationResult(artifact,report,run_id,tuple(checks),metrics)

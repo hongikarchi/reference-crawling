@@ -24,6 +24,7 @@ from canonical.vnext_identity_review import (  # noqa: E402
     DEFAULT_STAGE_B_REPORT,
     apply_adjudication,
     apply_blind_review,
+    requeue_connection_failures,
     run_stage_b,
 )
 
@@ -39,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     prepare.add_argument("--report", type=Path, default=DEFAULT_STAGE_B_REPORT)
     prepare.add_argument("--workers", type=int, default=4)
     prepare.add_argument("--skip-full-hash", action="store_true", help="Tests only; production must not use this.")
+    requeue = sub.add_parser("requeue-connection-failures", help="Archive an all-connection-failed attempt and requeue it.")
+    requeue.add_argument("--artifact", type=Path, default=DEFAULT_ARTIFACT)
     review = sub.add_parser("apply-review", help="Lock the completed blind review and emit the unblinded adjudication packet.")
     review.add_argument("--artifact", type=Path, default=DEFAULT_ARTIFACT)
     review.add_argument("--review-form", type=Path, default=DEFAULT_REVIEW_FORM)
@@ -63,6 +66,10 @@ def main(argv: list[str] | None = None) -> int:
             "review_form_path":str(result.review_form_path),"vision_requests":0,"llm_requests":0,
             "elapsed_seconds":round(result.elapsed_seconds,3),
         }
+    elif args.action == "requeue-connection-failures":
+        run_id,attempt_no,asset_count=requeue_connection_failures(repo_root=ROOT,artifact_path=args.artifact)
+        payload={"action":"wp2_requeue_connection_failures","status":"PASS","run_id":run_id,
+            "archived_attempt_no":attempt_no,"requeued_asset_count":asset_count}
     elif args.action == "apply-review":
         packet, form = apply_blind_review(
             repo_root=ROOT,artifact_path=args.artifact,review_form_path=args.review_form,

@@ -15,6 +15,7 @@ import os
 import sqlite3
 import textwrap
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -87,6 +88,26 @@ CREATE TABLE IF NOT EXISTS review_sheets(
   review_version TEXT NOT NULL, record_sha256 TEXT NOT NULL,
   PRIMARY KEY(run_id,opaque_review_id),
   FOREIGN KEY(run_id,opaque_review_id) REFERENCES sample_neighbourhoods(run_id,opaque_review_id)
+);
+CREATE TABLE IF NOT EXISTS stage_b_retry_attempts(
+  run_id TEXT NOT NULL REFERENCES runs(run_id), attempt_no INTEGER NOT NULL,
+  retry_reason TEXT NOT NULL, asset_status_counts_json TEXT NOT NULL,
+  error_kind_counts_json TEXT NOT NULL, http_request_count INTEGER NOT NULL,
+  review_sheet_count INTEGER NOT NULL, archived_at TEXT NOT NULL,
+  record_sha256 TEXT NOT NULL, PRIMARY KEY(run_id,attempt_no)
+);
+CREATE TABLE IF NOT EXISTS stage_b_retry_asset_snapshots(
+  run_id TEXT NOT NULL, attempt_no INTEGER NOT NULL, opaque_review_id TEXT NOT NULL,
+  side TEXT NOT NULL, asset_order INTEGER NOT NULL, snapshot_json TEXT NOT NULL,
+  record_sha256 TEXT NOT NULL,
+  PRIMARY KEY(run_id,attempt_no,opaque_review_id,side,asset_order),
+  FOREIGN KEY(run_id,attempt_no) REFERENCES stage_b_retry_attempts(run_id,attempt_no)
+);
+CREATE TABLE IF NOT EXISTS stage_b_retry_sheet_snapshots(
+  run_id TEXT NOT NULL, attempt_no INTEGER NOT NULL, opaque_review_id TEXT NOT NULL,
+  snapshot_json TEXT NOT NULL, record_sha256 TEXT NOT NULL,
+  PRIMARY KEY(run_id,attempt_no,opaque_review_id),
+  FOREIGN KEY(run_id,attempt_no) REFERENCES stage_b_retry_attempts(run_id,attempt_no)
 );
 """
 
@@ -517,6 +538,91 @@ def _render_review_artifacts(
     return tuple(paths),form_path
 
 
+def requeue_connection_failures(
+    *,repo_root:Path,artifact_path:Path=DEFAULT_ARTIFACT,
+) -> tuple[str,int,int]:
+    """Archive a connection-blocked Stage-B attempt and requeue its assets.
+
+    This is deliberately narrow: every selected asset must have terminated as
+    a connection failure, no blind review may have started, and the previous
+    sheet rows are copied into an append-only retry ledger before requeueing.
+    Existing rendered files are preserved; the caller must use new output
+    paths for the retry.
+    """
+    root=repo_root.resolve();artifact=artifact_path if artifact_path.is_absolute() else root/artifact_path
+    _assert_no_sidecars(artifact);database=sqlite3.connect(artifact);database.row_factory=sqlite3.Row
+    database.execute("PRAGMA journal_mode=DELETE");database.execute("PRAGMA synchronous=FULL");database.execute("PRAGMA foreign_keys=ON")
+    try:
+        database.executescript(STAGE_B_SCHEMA)
+        run=database.execute("SELECT * FROM runs").fetchone()
+        if run is None:raise IdentityReviewError("retry artifact has no run")
+        run_id=str(run["run_id"])
+        if (str(run["status"]),str(run["stage_b_status"]),str(run["blind_review_status"]))!=("stage_b_complete","complete","pending"):
+            raise IdentityReviewError("artifact is not at the connection-retry boundary")
+        if database.execute("SELECT count(*) FROM blind_reviews WHERE run_id=?",(run_id,)).fetchone()[0]:
+            raise IdentityReviewError("blind review already started; retry is forbidden")
+        assets=database.execute(
+            "SELECT * FROM review_assets WHERE run_id=? ORDER BY opaque_review_id,side,asset_order",(run_id,)
+        ).fetchall()
+        if not assets or any(str(row["status"])!="failed" or str(row["error_kind"])!="connection" for row in assets):
+            raise IdentityReviewError("retry requires all selected assets to be connection failures")
+        sheets=database.execute(
+            "SELECT * FROM review_sheets WHERE run_id=? ORDER BY opaque_review_id",(run_id,)
+        ).fetchall()
+        attempt_no=int(database.execute(
+            "SELECT coalesce(max(attempt_no),0)+1 FROM stage_b_retry_attempts WHERE run_id=?",(run_id,)
+        ).fetchone()[0]);archived_at=utc_now()
+        statuses=dict(sorted(Counter(str(row["status"]) for row in assets).items()))
+        error_kinds=dict(sorted(Counter(str(row["error_kind"] or "") for row in assets).items()))
+        http_requests=sum(int(row["request_count"] or 0) for row in assets)
+        attempt_payload={
+            "attempt_no":attempt_no,"retry_reason":"sandbox_connection_block_winerror_10013",
+            "asset_status_counts":statuses,"error_kind_counts":error_kinds,
+            "http_request_count":http_requests,"review_sheet_count":len(sheets),"archived_at":archived_at,
+        }
+        database.execute(
+            "INSERT INTO stage_b_retry_attempts VALUES(?,?,?,?,?,?,?,?,?)",
+            (run_id,attempt_no,attempt_payload["retry_reason"],canonical_json(statuses),canonical_json(error_kinds),
+             http_requests,len(sheets),archived_at,_record(attempt_payload)),
+        )
+        for row in assets:
+            snapshot={key:row[key] for key in row.keys()}
+            payload={"attempt_no":attempt_no,"opaque_review_id":row["opaque_review_id"],"side":row["side"],
+                "asset_order":row["asset_order"],"snapshot":snapshot}
+            database.execute(
+                "INSERT INTO stage_b_retry_asset_snapshots VALUES(?,?,?,?,?,?,?)",
+                (run_id,attempt_no,row["opaque_review_id"],row["side"],row["asset_order"],canonical_json(snapshot),_record(payload)),
+            )
+        for row in sheets:
+            snapshot={key:row[key] for key in row.keys()}
+            payload={"attempt_no":attempt_no,"opaque_review_id":row["opaque_review_id"],"snapshot":snapshot}
+            database.execute(
+                "INSERT INTO stage_b_retry_sheet_snapshots VALUES(?,?,?,?,?)",
+                (run_id,attempt_no,row["opaque_review_id"],canonical_json(snapshot),_record(payload)),
+            )
+        database.execute("DELETE FROM review_sheets WHERE run_id=?",(run_id,))
+        database.execute(
+            "UPDATE review_assets SET status='pending',cache_relative_path=NULL,actual_final_url=NULL,actual_raw_sha256=NULL,"
+            "actual_pixel_sha256=NULL,http_status=NULL,response_bytes=NULL,request_count=0,error_kind=NULL,error_message=NULL,record_sha256=NULL "
+            "WHERE run_id=?",(run_id,),
+        )
+        manifest=database.execute("SELECT * FROM stage_b_manifest WHERE run_id=?",(run_id,)).fetchone()
+        manifest_payload={key:manifest[key] for key in manifest.keys() if key not in {"completed_at","record_sha256"}}
+        database.execute(
+            "UPDATE stage_b_manifest SET completed_at=NULL,record_sha256=? WHERE run_id=?",
+            (_record(manifest_payload),run_id),
+        )
+        database.execute(
+            "UPDATE runs SET status='stage_a_complete',stage_b_status='pending',stage_b_http_requests=0,blind_review_status='pending' WHERE run_id=?",
+            (run_id,),
+        )
+        database.execute("DELETE FROM metrics WHERE run_id=? AND phase='stage_b'",(run_id,))
+        database.commit()
+        return run_id,attempt_no,len(assets)
+    finally:
+        database.close()
+
+
 def run_stage_b(
     *,
     repo_root: Path,
@@ -736,5 +842,5 @@ __all__=[
     "ADJUDICATION_VERSION","BLIND_REVIEW_VERSION","DEFAULT_ADJUDICATION_FORM","DEFAULT_ADJUDICATION_PACKET",
     "DEFAULT_ARTIFACT","DEFAULT_GATE_REPORT","DEFAULT_REVIEW_FORM","DEFAULT_REVIEW_PREFIX","DEFAULT_STAGE_B_MANIFEST",
     "DEFAULT_STAGE_B_REPORT","GATE_VERSION","IdentityReviewError","StageBResult","GateResult","apply_adjudication",
-    "apply_blind_review","run_stage_b",
+    "apply_blind_review","requeue_connection_failures","run_stage_b",
 ]
