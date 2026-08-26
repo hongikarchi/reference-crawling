@@ -10,8 +10,10 @@ canonical/vnext_identity_candidates_v2.py -text whitespace=cr-at-eol
 docs/vnext/CONTRACT_GALLERY_SEMANTICS.md -text
 docs/vnext/CONTRACT_IDENTITY.md -text whitespace=cr-at-eol
 docs/vnext/IDENTITY_N100_PROTOCOL.md -text whitespace=cr-at-eol
+docs/vnext/IDENTITY_BAND_PRECISION_PROTOCOL.md -text whitespace=cr-at-eol
 .claude/ops/jobs/20260826_vnext_wp23_identity_n100_order.md -text whitespace=cr-at-eol
 .claude/ops/jobs/20260826_vnext_wp24_rule_revision_order.md -text whitespace=cr-at-eol
+.claude/ops/jobs/20260826_vnext_wp25_band_precision_order.md -text whitespace=cr-at-eol
 tools/build_strict_canonical.py -text whitespace=cr-at-eol
 tools/canonical_v2_c17_make_web_polish.py -text whitespace=cr-at-eol
 tools/canonical_v2_c21_make_web_polish.py -text whitespace=cr-at-eol
