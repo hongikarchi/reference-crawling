@@ -1,8 +1,8 @@
-# vNext identity contract v1
+# vNext identity contract v1.1
 
-상태: WP0c 확정 계약. 대상은 Divisare 29,891건 + Architizer 61,912건,
-총 91,803 source building이다. 기존 canonical 39,478건은 정답 집합이 아니라
-legacy ID 호환·비교용이다.
+상태: WP0c 확정 계약에 WP2.4 N100 진단 기반 규칙 개정을 반영했다. 대상은
+Divisare 29,891건 + Architizer 61,912건, 총 91,803 source building이다. 기존
+canonical 39,478건은 정답 집합이 아니라 legacy ID 호환·비교용이다.
 
 ## 1. 안정 키와 입력
 
@@ -21,7 +21,9 @@ legacy ID 호환·비교용이다.
     SHA-256 `3dcc73152d822fe2b8eaccbb333625672378a3f6cfa59d3099cda0ca28e64fe7`
 - 이름 positive 증거는 위 matcher에서 검증된 `strict_sim >= 90` 계보에 결박한다.
   builder manifest는 이 임계값을 강화할 수만 있고 완화할 수 없다. architect+exact year
-  gate와 pass-2의 country/year±1·token-overlap 조건도 해당 matcher SHA와 함께 버전 고정한다.
+  gate와 pass-2의 country/year±1·token-overlap 조건도 해당 matcher SHA와 함께 버전
+  고정하되, 이는 후보 생성 blocking 계보다. 후보에 들어온 뒤 architect/year blocking을
+  hard conflict로 다시 승격하지 않는다.
 
 ## 2. 후보 생성과 판정은 분리한다
 
@@ -62,22 +64,37 @@ architect/firm+연도 조합만으로는 제안은 남길 수 있어도 자동 �
 정확한 threshold와 normalizer는 builder manifest에 버전·SHA로 고정하며 계약 변경 없이
 조정하지 않는다.
 
+연도 family는 양쪽 범위의 최소 gap을 기준으로 gap ≤1이면 positive, gap 2–5이면
+neutral, gap ≥6이면 weak negative다. 연도 음성만으로는 hard conflict가 아니다.
+
 hard conflict에는 최소한 다음이 포함된다.
 
-- 기존 matcher의 architect/year gate가 명시적으로 차단
-- 충분한 양쪽 이미지 집합에서 검증된 pHash veto가 차단
+- 충분한 양쪽 이미지 집합에서 검증된 pHash veto가 차단. 단,
+  `name_alias_identity`와 `architect_firm_identity`가 모두 positive이면 veto를 hard
+  conflict로 쓰지 않고 `phash_veto_review_required` policy flag로 강등한다. 다른 hard
+  conflict가 없을 때 제안은 `merge_candidate`로 두되 `auto_merge_eligible=false`다.
+  firm이 충돌하거나 positive가 아니면 기존 pHash veto hard conflict를 유지한다.
 - 국가/site는 양쪽 국가가 모두 known canonical 값으로 정규화될 때만 동일값+동일 locality를 positive로, 서로 다른 값을 hard conflict로 판정하며 정규화 불가·모호 값은 둘 다 중립으로 처리한다. 프로젝트 phase가 서로 양립할 수 없는 경우도 hard conflict다.
+- `project_phase_incompatible`은 gap ≥6이면서 `verified_pixel_image_overlap`과
+  `architect_firm_identity`가 모두 positive가 아닐 때만 hard conflict다. 공유 사진이나
+  동일 firm 증거가 있으면 준공·발표 연도 차이가 그 증거를 뒤집지 않는다.
 - known-country 집합은 manifest에 SHA 고정한 ISO 3166-1 영문 short/official/common-name
   스냅샷 전량으로 구성하며, `Georgia`처럼 국가와 비국가 지명이 충돌하는 고정 중의어는
   ISO 이름보다 먼저 모호·중립으로 처리한다. legacy C21 대비 추가 canonical/alias 전량을
   manifest `additions`에 기록한다.
 - anchor 적용 직후의 eligible 그래프를 한 번 동결한다. 한 source building이 서로 직접
-  candidate/related가 아닌 같은-source 상대 2개 이상과 동시에 eligible이면 incident
-  eligible 전부를 `defer`로 강등하고 `fanout_conflict`를 기록한다. 같은-source 상대 관계는
-  이름·별칭 `strict_sim >= 90`에 더해 firm, known-country+locality, 또는 호환 연도 중 직접
-  증거 1종 이상과 hard conflict 0을 요구한다. 모든 상대 쌍이 이를 직접 만족할 때만
-  정당한 분할 예외이며 transitive closure와 순차 재계산은 금지한다.
+  candidate/related가 아닌 같은-source 상대 2개 이상과 동시에 eligible이면 fan-out
+  guard를 발화한다. 같은-source 상대 관계는 이름·별칭 `strict_sim >= 90`에 더해 firm,
+  known-country+locality, 또는 호환 연도 중 직접 증거 1종 이상과 hard conflict 0을
+  요구한다. 모든 상대 쌍이 이를 직접 만족할 때만 정당한 분할 예외다.
+  transitive closure와 순차 재계산은 금지한다. guard에 걸린 incident가 anchor를 포함한 positive
+  family 2종 이상이면 `merge_candidate` + `fanout_review_required`로 사람 큐에 보내고
+  `auto_merge_eligible=false`로 둔다. 그 미만만 `defer`다. v3의 `fanout_conflict`를 새
+  hard conflict로 기록하지 않는다.
 - `reject`로 확정된 두 source building을 같은 component에 넣는 경로
+
+strict-name positive 하나뿐인 name-only 밴드는 계속 merge 후보가 아니다. known-country
+충돌과 anchor 요건도 위 예외로 완화하지 않는다.
 
 pHash/crop은 pair의 직접 증거 또는 veto로만 사용한다. A-B, B-C가 가깝다는 이유로
 A-C image/building 관계를 추론하지 않는다.
@@ -89,6 +106,9 @@ A-C image/building 관계를 추론하지 않는다.
 - component 내부에 `reject` 또는 `defer` pair가 생기면 산출물은 FAIL이며 배포하지 않는다.
 - source building은 정확히 한 active component에만 속한다.
 - decision, evidence, review row는 삭제하지 않고 supersession 관계로 버전 관리한다.
+- 사람 승인 큐에는 모든 `merge_candidate`를 포함한다. 여기에 더해 proposal이 `defer`여도
+  anchor를 포함한 positive family가 2종 이상이면 반드시 큐에 넣는다. 이 R4 defer를 큐에서
+  누락해 조용한 거절로 만드는 것은 계약 위반이다.
 
 ## 5. vNext registry
 
