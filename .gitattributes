@@ -20,6 +20,7 @@ docs/vnext/IDENTITY_INSTRUMENT_V21_PROTOCOL.md -text whitespace=-blank-at-eof,cr
 .claude/ops/jobs/20260827_vnext_wp26_instrument_calibration_order.md -text whitespace=cr-at-eol
 .claude/ops/jobs/20260827_vnext_wp27_instrument_v2_order.md -text whitespace=cr-at-eol
 .claude/ops/jobs/20260827_vnext_wp28_instrument_v21_order.md -text whitespace=cr-at-eol
+.claude/ops/jobs/20260827_vnext_wp28r_packet_repair_order.md -text whitespace=cr-at-eol
 tools/build_strict_canonical.py -text whitespace=cr-at-eol
 tools/canonical_v2_c17_make_web_polish.py -text whitespace=cr-at-eol
 tools/canonical_v2_c21_make_web_polish.py -text whitespace=cr-at-eol
