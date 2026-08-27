@@ -49,13 +49,33 @@
 ## Stage C — 사용자 표본 감사 패킷
 
 - 병합된 티어에서 **100쌍 층화 표본**(component 크기별, 증거 프로파일별). seed 고정.
-- **로컬 리뷰 앱**을 만든다 — `tools/covers_by_type_review_app.py` 패턴 재사용.
-  브라우저에서 소스 CDN URL을 직접 로드하고(원격 이미지 정상 표시), 좌우 나란히 +
-  메타데이터(이름·설계사·연도·도시·소스 URL) + 버튼 4개(same / related / different /
-  unclear) + 키보드 단축키. 판정은 JSONL로 저장, 재개 가능.
-- **에이전트가 라벨을 미리 채우지 말 것.** 이것은 사용자 본인의 감사다. 규칙 점수는
-  보여도 되지만 추천 라벨은 표시 금지.
-- 예상 소요 30분~1시간.
+- **리뷰 앱은 Claude가 이미 작성했다: `tools/vnext_merge_audit_app.html`.
+  이 파일을 수정하지 말 것.** Codex가 할 일은 데이터 파일 하나를 생성하는 것뿐이다:
+  같은 폴더에 `tools/vnext_merge_audit_pairs.js`, 내용은
+
+  ```js
+  window.AUDIT_DATA = {
+    run_id: "<registry run id>",
+    sample_version: "<sample version>",
+    pairs: [
+      { id: "idc_...",
+        left:  { source:"divisare",  name:"...", architect:"...", year:2019,
+                 city:"...", country:"...", url:"https://...",
+                 images:["<이미지 URL 1>","<이미지 URL 2>"] },
+        right: { source:"architizer", ... },
+        evidence: { name_score:100, firm_score:100, year_gap:0,
+                    exact:0, identical_phash:3, component_size:2 } }
+    ]
+  };
+  ```
+
+  - `images`는 측당 최대 2개, **원본 CDN URL 그대로**(다운로드·임베드 불필요).
+    드리프트로 접근 불가한 URL은 넣지 말고 그 측을 빈 배열로 둔다.
+  - `evidence`는 기본 숨김이며 `E` 키로만 보인다 — **추천 라벨·제안 상태는 넣지 말 것.**
+  - 표본 manifest(seed, 층화, candidate_id 목록)는 별도 JSON으로도 남긴다.
+- **에이전트가 라벨을 미리 채우지 말 것.** 이것은 사용자 본인의 감사다.
+- 사용자는 `tools/vnext_merge_audit_app.html`을 브라우저로 열어 판정하고, 완료 후
+  `JSONL 저장` 버튼으로 결과 파일을 내려받아 Codex에 전달한다. 예상 30분~1시간.
 
 ## 사전 선언 판정 기준 (사후 변경 금지)
 

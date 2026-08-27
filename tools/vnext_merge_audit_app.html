@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>vNext 병합 감사</title>
+<script src="./vnext_merge_audit_pairs.js"></script>
+<style>
+  :root{
+    --bg:#0f1113; --panel:#17191d; --line:#2a2e34; --fg:#e8eaed; --dim:#9aa0a6;
+    --same:#2e7d32; --related:#b26a00; --diff:#c62828; --unclear:#455a64;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif;
+       display:flex;flex-direction:column;overflow:hidden}
+
+  header{flex:0 0 auto;border-bottom:1px solid var(--line);padding:10px 16px;
+         display:flex;align-items:center;gap:16px}
+  .q{font-size:15px;font-weight:600;white-space:nowrap}
+  .keys{color:var(--dim);font-size:12.5px;white-space:nowrap}
+  .keys b{color:var(--fg);font-weight:600}
+  .spacer{flex:1}
+  .count{font-variant-numeric:tabular-nums;color:var(--dim);font-size:13px;white-space:nowrap}
+  .bar{position:absolute;left:0;top:0;height:2px;background:#3d7dd8;transition:width .15s}
+
+  main{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px;
+       padding:12px 16px;min-height:0}
+  .side{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+        display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .meta{padding:10px 12px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .src{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .name{font-size:16px;font-weight:600;margin:2px 0 3px;word-break:break-word}
+  .sub{font-size:12.5px;color:var(--dim);word-break:break-word}
+  .sub .hit{color:#e8eaed}
+  .shots{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px;min-height:0}
+  .shots.one{grid-template-columns:1fr}
+  .shot{background:#000;border-radius:5px;overflow:hidden;display:flex;
+        align-items:center;justify-content:center;min-height:0;cursor:zoom-in}
+  .shot img{width:100%;height:100%;object-fit:contain;display:block}
+  .noimg{color:#6b7075;font-size:12px}
+
+  footer{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+         padding:10px 16px 14px}
+  button.v{border:1px solid var(--line);border-radius:8px;padding:11px 8px;cursor:pointer;
+           color:var(--fg);background:#1d2025;font:inherit;font-weight:600;
+           display:flex;align-items:center;justify-content:center;gap:9px}
+  button.v:hover{filter:brightness(1.35)}
+  button.v kbd{background:#000;border:1px solid var(--line);border-radius:4px;
+               padding:1px 6px;font:600 12px/1.4 ui-monospace,monospace;color:var(--dim)}
+  button.v small{color:var(--dim);font-weight:400}
+  .b-same{border-left:4px solid var(--same)} .b-rel{border-left:4px solid var(--related)}
+  .b-diff{border-left:4px solid var(--diff)} .b-unc{border-left:4px solid var(--unclear)}
+
+  #zoom{position:fixed;inset:0;background:#000e;display:none;z-index:50;cursor:zoom-out;
+        align-items:center;justify-content:center;padding:24px}
+  #zoom img{max-width:100%;max-height:100%;object-fit:contain}
+
+  #ev{position:fixed;right:16px;bottom:78px;background:#000d;border:1px solid var(--line);
+      border-radius:8px;padding:10px 12px;font:12px/1.7 ui-monospace,monospace;
+      color:var(--dim);display:none;z-index:20}
+  #done{position:fixed;inset:0;background:var(--bg);display:none;z-index:60;
+        flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center}
+  #done h2{margin:0;font-size:22px}
+  #done .tally{color:var(--dim);font:14px/2 ui-monospace,monospace}
+  .act{display:flex;gap:10px}
+  .act button{padding:10px 18px;border-radius:8px;border:1px solid var(--line);
+              background:#1d2025;color:var(--fg);font:inherit;font-weight:600;cursor:pointer}
+  .warn{padding:40px;max-width:620px;margin:auto;color:var(--dim);line-height:1.8}
+  .warn code{color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+
+<header>
+  <span class="q">이 둘은 같은 건물인가?</span>
+  <span class="keys">
+    <b>S</b> 같음 · <b>R</b> 부분/상위 관계 · <b>D</b> 다름 · <b>U</b> 모르겠음
+    &nbsp;|&nbsp; <b>←</b> 이전 · <b>E</b> 근거 · 이미지 클릭 = 확대
+  </span>
+  <span class="spacer"></span>
+  <span class="count" id="count"></span>
+</header>
+
+<main id="main">
+  <section class="side" id="L"></section>
+  <section class="side" id="R"></section>
+</main>
+
+<footer>
+  <button class="v b-same" data-v="same"><kbd>S</kbd> 같음</button>
+  <button class="v b-rel" data-v="related"><kbd>R</kbd> 부분/상위 <small>단지·단계</small></button>
+  <button class="v b-diff" data-v="different"><kbd>D</kbd> 다름</button>
+  <button class="v b-unc" data-v="unclear"><kbd>U</kbd> 모르겠음</button>
+</footer>
+
+<div id="zoom"><img alt=""></div>
+<div id="ev"></div>
+
+<div id="done">
+  <h2>감사 완료</h2>
+  <div class="tally" id="tally"></div>
+  <div class="act">
+    <button id="dl">JSONL 저장</button>
+    <button id="cp">클립보드 복사</button>
+    <button id="re">처음부터 다시</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const DATA = window.AUDIT_DATA;
+  if(!DATA || !Array.isArray(DATA.pairs) || !DATA.pairs.length){
+    document.body.innerHTML = '<div class="warn"><h2>데이터가 없습니다</h2>'+
+      '이 파일과 같은 폴더에 <code>vnext_merge_audit_pairs.js</code> 가 있어야 합니다. '+
+      '그 파일은 <code>window.AUDIT_DATA = { run_id, sample_version, pairs:[...] }</code> 형태여야 합니다.'+
+      '</div>';
+    return;
+  }
+
+  const KEY = 'vnext_audit_' + (DATA.run_id || 'default');
+  const pairs = DATA.pairs;
+  let verdicts = {};
+  try{ verdicts = JSON.parse(localStorage.getItem(KEY) || '{}'); }catch(e){ verdicts = {}; }
+
+  const $ = id => document.getElementById(id);
+  let i = 0;
+
+  function firstUnjudged(){
+    for(let k=0;k<pairs.length;k++) if(!verdicts[pairs[k].id]) return k;
+    return pairs.length;
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function sideHTML(s, other){
+    if(!s) return '<div class="meta"><div class="src">—</div></div>';
+    const bits = [];
+    const mark = (val, otherVal) => {
+      if(val==null || val==='') return '';
+      const same = otherVal!=null && String(otherVal).toLowerCase()===String(val).toLowerCase();
+      return '<span class="'+(same?'hit':'')+'">'+esc(val)+'</span>';
+    };
+    if(s.architect) bits.push(mark(s.architect, other && other.architect));
+    if(s.year!=null) bits.push(mark(s.year, other && other.year));
+    const place = [s.city, s.country].filter(Boolean).join(', ');
+    const oplace = other ? [other.city, other.country].filter(Boolean).join(', ') : '';
+    if(place) bits.push(mark(place, oplace));
+
+    const imgs = (s.images||[]).slice(0,2);
+    const shots = imgs.length
+      ? imgs.map(u=>'<div class="shot"><img loading="lazy" src="'+esc(u)+'" alt=""></div>').join('')
+      : '<div class="shot"><span class="noimg">이미지 없음</span></div>';
+
+    return '<div class="meta">'+
+      '<div class="src">'+esc(s.source||'')+'</div>'+
+      '<div class="name">'+esc(s.name||'(이름 없음)')+'</div>'+
+      '<div class="sub">'+bits.join(' · ')+'</div>'+
+      '</div><div class="shots'+(imgs.length<2?' one':'')+'">'+shots+'</div>';
+  }
+
+  function render(){
+    if(i >= pairs.length){ finish(); return; }
+    $('done').style.display='none';
+    const p = pairs[i];
+    $('L').innerHTML = sideHTML(p.left, p.right);
+    $('R').innerHTML = sideHTML(p.right, p.left);
+    const n = Object.keys(verdicts).length;
+    $('count').textContent = (i+1)+' / '+pairs.length+'  (판정 '+n+')';
+    $('bar').style.width = (100*n/pairs.length)+'%';
+    const e = p.evidence||{};
+    $('ev').innerHTML = Object.keys(e).length
+      ? Object.entries(e).map(([k,v])=>esc(k)+' = '+esc(v)).join('<br>')
+      : '근거 데이터 없음';
+  }
+
+  function judge(v){
+    if(i >= pairs.length) return;
+    verdicts[pairs[i].id] = { verdict:v, at:new Date().toISOString() };
+    localStorage.setItem(KEY, JSON.stringify(verdicts));
+    i++;
+    render();
+  }
+
+  function back(){ if(i>0){ i--; render(); } }
+
+  function finish(){
+    const t = {same:0, related:0, different:0, unclear:0};
+    Object.values(verdicts).forEach(v=>{ if(t[v.verdict]!=null) t[v.verdict]++; });
+    $('tally').innerHTML =
+      '같음 '+t.same+'<br>부분/상위 '+t.related+'<br>다름 '+t.different+'<br>모르겠음 '+t.unclear;
+    $('done').style.display='flex';
+    $('count').textContent = pairs.length+' / '+pairs.length+'  (완료)';
+    $('bar').style.width='100%';
+  }
+
+  function jsonl(){
+    return pairs.filter(p=>verdicts[p.id]).map(p=>JSON.stringify({
+      candidate_id: p.id,
+      verdict: verdicts[p.id].verdict,
+      decided_at: verdicts[p.id].at,
+      run_id: DATA.run_id || null,
+      sample_version: DATA.sample_version || null
+    })).join('\n')+'\n';
+  }
+
+  document.querySelectorAll('button.v').forEach(b=>b.onclick=()=>judge(b.dataset.v));
+
+  document.addEventListener('keydown', ev=>{
+    if(ev.metaKey||ev.ctrlKey||ev.altKey) return;
+    const k = ev.key.toLowerCase();
+    if($('zoom').style.display==='flex'){ $('zoom').style.display='none'; return; }
+    if(k==='s'||k==='1') judge('same');
+    else if(k==='r'||k==='2') judge('related');
+    else if(k==='d'||k==='3') judge('different');
+    else if(k==='u'||k==='4') judge('unclear');
+    else if(ev.key==='ArrowLeft') back();
+    else if(ev.key==='ArrowRight'){ if(i<pairs.length-1){ i++; render(); } }
+    else if(k==='e') $('ev').style.display = $('ev').style.display==='block'?'none':'block';
+    else return;
+    ev.preventDefault();
+  });
+
+  $('main').addEventListener('click', ev=>{
+    const img = ev.target.closest('.shot img');
+    if(!img) return;
+    const z = $('zoom'); z.querySelector('img').src = img.src; z.style.display='flex';
+  });
+  $('zoom').onclick = ()=>{ $('zoom').style.display='none'; };
+
+  $('dl').onclick = ()=>{
+    const blob = new Blob([jsonl()], {type:'application/x-ndjson'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'vnext_merge_audit_' + (DATA.run_id||'run') + '.jsonl';
+    a.click();
+  };
+  $('cp').onclick = ()=>{ navigator.clipboard.writeText(jsonl()).then(()=>{ $('cp').textContent='복사됨'; }); };
+  $('re').onclick = ()=>{
+    if(!confirm('판정을 모두 지우고 처음부터 다시 시작합니다.')) return;
+    verdicts = {}; localStorage.removeItem(KEY); i = 0; render();
+  };
+
+  i = firstUnjudged();
+  render();
+})();
+</script>
+</body>
+</html>
