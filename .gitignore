@@ -6,6 +6,7 @@ data/
 !/data/canonical/
 /data/canonical/*
 !/data/canonical/tag_vocabulary_labels.json
+!/data/canonical/remediation_typmat_changed_rem2026q2.jsonl
 images/
 
 # Logs
@@ -28,6 +29,8 @@ venv/
 # Environment / secrets
 .env
 .env.*
+!.env.example
+!.env.make-web.example
 
 # OS
 .DS_Store
@@ -49,3 +52,14 @@ __pycache__/
 # DB Ops — local terminal snapshots can contain transient screen state
 .claude/ops/snapshots/
 # (.env.* above already covers .env.make-web; older .env.makeweb-* glob removed)
+
+# Scratch / sandbox temp dirs at repo root (2026-10-16 cleanup; old ones archived
+# to ../reference-crawling_archive_20261016/scratch)
+/.tmp*/
+/.pytest_tmp*/
+/.test-tmp*/
+/.blind_*/
+/.wp2*_*/
+/.uv-cache*/
+/tmp/
+/tmp*/
