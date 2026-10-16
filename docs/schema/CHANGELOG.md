@@ -22,6 +22,18 @@ Not applied. Spec: `docs/VNEXT_REBUILD_PLAN.md`, `docs/vnext/PROJECTION_SPEC.md`
 - Pre-release: available only as MOCK in `vnext_preview.building_images` on the
   `dev-ksangjo` branch (`engine = 'mock_preview'`).
 
+## 2026-10-16 — data fix: Architizer image host migration (no schema change)
+
+Architizer moved its image CDN: `architizer-prod.imgix.net` returns HTTP 410; the same path on
+`images.architizer.com` serves the same file. `tools/architizer_image_host_migrate.py` rewrote
+every such URL in `canonical_v2_buildings` (`display_cover_url`, `cover_image_url_default`,
+`covers_by_type`, `all_images`, `best_image_per_cluster`) to
+`https://images.architizer.com<path>?width=1680&quality=60` (old imgix params are ignored by the
+new host). **9,695 rows**, `updated_at` bumped; 0 old-host URLs left; 60/60 sampled publishable
+covers live. Applied to prod and `dev-ksangjo`. Backup of old values (local, gitignored):
+`data/reports/architizer_host_migrate/*.jsonl`. Schema, row counts, tag tables unchanged.
+Note: non-ASCII filenames must be percent-encoded by HTTP clients (browsers do this).
+
 ## 2026-10-16 — baseline: c27 (`completeness_c27_cover2026q3`)
 
 First recorded baseline. Live state verified read-only 2026-10-16. pgvector 0.8.0.
@@ -42,5 +54,5 @@ First recorded baseline. Live state verified read-only 2026-10-16. pgvector 0.8.
   deployed 2026-06-14; audit remediation F1/F3 2026-06-15; typology/program refinements
   2026-06-21/24.
 - Known data caveats at baseline: `updated_at` not maintained (max 2026-05-23);
-  `cover_image_cdn_url` all NULL (R2 unused); architizer-prod.imgix.net covers return
-  HTTP 410 (7,375 publishable rows); 203 rows missing `display_cover_url`.
+  `cover_image_cdn_url` all NULL (R2 unused); architizer-prod.imgix.net covers returned
+  HTTP 410 (7,375 publishable rows; fixed same day, entry above); 203 rows missing `display_cover_url`.

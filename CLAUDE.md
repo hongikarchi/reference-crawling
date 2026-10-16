@@ -159,8 +159,11 @@ This file is the operating manual. For schema/vocab/tool detail see
   produced them.
 - **Windows:** run tools with `.venv/Scripts/python.exe` — system python lacks
   psycopg2. The c27 artifact and `r4_results.merged.jsonl` are not on this machine.
-- **Architizer covers are dead:** `architizer-prod.imgix.net` URLs return HTTP 410
-  (`disabled_source`) — 7,375 publishable rows. Fix belongs to vNext covers; R2 unused.
+- **Architizer image host moved (fixed in Neon 2026-10-16):** `architizer-prod.imgix.net`
+  returns 410; Neon now uses `images.architizer.com<path>?width=1680&quality=60` (9,695 rows,
+  `tools/architizer_image_host_migrate.py`, prod + dev-ksangjo). Local artifacts (c27, E1/E2/
+  curated DBs) still hold the old host — vNext S2/S4 projection must apply the same mapping.
+  Source CDNs can move again; R2 rehosting is the durable fix.
 
 ## Documents
 

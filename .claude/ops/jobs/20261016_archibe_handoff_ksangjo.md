@@ -34,3 +34,11 @@ Neon branch compute/storage only (Launch plan). No LLM spend.
 - After every dev branch reset: re-rotate dev passwords, re-run vnext_preview seed.
 - Plaintext secrets in Dropbox `06_Archibe/make_db_migrate/.env*` -> delete.
 - PR #437 merge -> `make migrate-prod`.
+
+## Follow-up 2026-10-16: Architizer image host migration (user-approved "반영해")
+- Found via Aside: Architizer serves images from `images.architizer.com` (same path); old
+  `architizer-prod.imgix.net` = 410. 400/400 sampled URLs live after rewrite.
+- `tools/architizer_image_host_migrate.py --apply --confirm-db-write` run by the user: dev-ksangjo
+  then prod, each 9,695 rows, checks PASS, committed. Old host left 0; 60/60 publishable covers live.
+- Backups: `data/reports/architizer_host_migrate/*_{dev_owner_dsn,prod}_*.jsonl` (157 MB each, gitignored).
+- Schema unchanged → no snapshot refresh needed; CHANGELOG entry added; handoff C7 resolved.

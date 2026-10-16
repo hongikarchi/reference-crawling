@@ -111,7 +111,7 @@
 | `confidence_tier` | text NOT NULL | T1(≥3 소스)/T2(2)/T3(1) | CHECK |
 | `n_sources` | integer NOT NULL | 소스 수 (≥1) | |
 | `cover_image_url_default` | text | 파이프라인 원래 기본 커버 | 구값. **서빙은 `display_cover_url` 사용** |
-| `display_cover_url` | text | **서빙용 커버 URL** (소스 CDN 직링크) | 203행 NULL. architizer-prod.imgix.net 커버는 HTTP 410(§7) |
+| `display_cover_url` | text | **서빙용 커버 URL** (소스 CDN 직링크) | 203행 NULL. Architizer는 `images.architizer.com` (2026-10-16 이전, §7 C7) |
 | `cover_image_cdn_url` | text | R2 재호스팅 URL | 전부 NULL (R2 미사용) |
 | `cover_blurhash` | text | 블러해시 | 미채움 |
 | `is_publishable` | boolean NOT NULL false | **서비스 노출 가능 여부** | 서비스 쿼리는 항상 `WHERE is_publishable` |
@@ -187,7 +187,6 @@ SELECT canonical_bld_id, name, location_country, project_year, program, style,
        display_cover_url
 FROM canonical_v2_buildings
 WHERE is_publishable AND display_cover_url IS NOT NULL
-  AND display_cover_url NOT LIKE '%architizer-prod.imgix.net%'   -- 410 회피(§7)
 LIMIT 50;
 
 -- (2) cosine kNN: 좋아요한 건물과 비슷한 건물 (embedding 비정규화 → <=> 사용)
@@ -238,7 +237,7 @@ SELECT DISTINCT corpus_version, max(computed_at) OVER () FROM canonical_v2_tag_s
 | C4 | `image_derived` 약 24% 어휘 밖 | advisory, 필터·매칭 키로 쓰지 말 것 |
 | C5 | `updated_at` 미유지 (max 2026-05-23) | 변경 감지는 `corpus_version`·CHANGELOG로 |
 | C6 | 이미지 URL은 소스 CDN 직링크. R2 미사용, `cover_image_cdn_url` 전부 NULL | 프론트에서 로드 실패 fallback 필요 |
-| C7 | **architizer-prod.imgix.net 커버 → HTTP 410 `disabled_source`** (publishable 7,375행) | 해당 URL 필터 또는 `all_images`의 다른 소스 이미지로 대체. 근본 수정은 vNext |
+| C7 | **(해결 2026-10-16)** Architizer가 이미지 CDN을 `architizer-prod.imgix.net`(410)→`images.architizer.com`으로 이전. prod·dev 9,695행 URL 일괄 교체 완료 (`?width=1680&quality=60`) | 필터 불필요. 파일명에 비ASCII 문자가 있으니 서버 측 fetch는 path percent-encode. 소스 CDN 직링크 구조라 재발 가능 → 이미지 로드 실패 fallback 유지(C6) |
 | C8 | `display_cover_url` NULL 203행 | 서빙 쿼리에 `display_cover_url IS NOT NULL` |
 | C9 | 서빙 커버는 `display_cover_url` (`cover_image_url_default`와 대부분 다름) | 커버엔 항상 display_cover_url |
 | C10 | `canonical_v2_architects.email` 항상 NULL | UI에 노출하지 말 것 |
@@ -268,7 +267,7 @@ SELECT DISTINCT corpus_version, max(computed_at) OVER () FROM canonical_v2_tag_s
 - [ ] owner에게 dev-ksangjo 브랜치 endpoint + `make_web`(RO) / `make_web_app` 자격증명을 보안 채널로 받기
 - [ ] archi-tinder `docs/runbooks/local-setup.md`대로 로컬 셋업, `DB_*`·`BUILDINGS_DB_*` HOST가 **dev 브랜치**인지 확인 (prod 호스트 금지)
 - [ ] `make migrate-local` 후 앱 기동, 샘플 SQL(§6) 몇 개 실행해 행수 확인 (39,478 / 36,673 / 14,216 / 4,348 / 15,655)
-- [ ] §7 Caveats 확인 — 특히 C1(cosine), C2(R4 NULL), C7(architizer 410)
+- [ ] §7 Caveats 확인 — 특히 C1(cosine), C2(R4 NULL), C7(이미지 호스트 이전, 해결됨)
 - [ ] PR #431(algo-taste-start), #437(algo-feedback, 마이그레이션 포함) 리베이스 시: 마이그레이션은 `user_data`에만, merge 후 owner가 `make migrate-prod`
 - [ ] DB 관련 PR merge 전 `tools/neon_schema_snapshot.py --compare` 결과 첨부
 - [ ] vNext 실험 코드는 feature flag + `vnext_preview` 스키마로만
