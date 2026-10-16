@@ -7,9 +7,11 @@ from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
+from urllib.parse import quote, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = "data/reports/vnext_identity_registry_v1"
@@ -18,7 +20,29 @@ V4 = "data/enrichment/vnext_identity_candidates_v4.db"
 E2 = "data/enrichment/divisare_architizer_image_evidence_e2_full_v5.db"
 LEGACY = "data/canonical/legacy_neon_snapshot_2026q3.jsonl"
 SEED = "vnext-wp29-merge-audit-20260827-v1"
+RUN_ID = "wp29r_20261016"
+SIZE3_AUDIT = PREFIX + "r_size3_audit.json"
+STAGE_A = PREFIX + "_stage_a.json"
+STAGE_A_SHA = "2241f2979f32ad7a253556c4a017b37a067673310b9ab2fc64fe157fe07376ac"
+SIZE3_KEEP = "within_source_duplicate"
+SIZE3_DROP = ("distinct_buildings", "unclear")
+MANDATORY_STRATUM = "mandatory_wp29r_size3_components"
+RUN_FAIL = PREFIX + "r_FAIL.json"
+LEGACY_FAIL = PREFIX + "_FAIL.json"
+LEGACY_FAIL_SHA = "8aa98a37d7cbd6372748c1cc8707a5636e9c6de5b4ca693db789bca1dc4e0278"
 CHECKS = []
+POLICIES = ("predeclared_live_only", "live_then_local", "predeclared_live_host_migrated")
+CODE_PATHS = ("canonical/vnext_identity_registry.py", "tools/validate_vnext_identity_registry.py")
+OLD_ATZ_HOST, NEW_ATZ_HOST, NEW_ATZ_QUERY = "architizer-prod.imgix.net", "images.architizer.com", "width=1680&quality=60"
+
+
+def migrated_url(url):
+    """Independent copy of the producer's host migration (deliberately not imported)."""
+    u = urlsplit(url)
+    if u.hostname != OLD_ATZ_HOST:
+        return url, "original"
+    return (urlunsplit(("https", NEW_ATZ_HOST, quote(u.path, safe="/%"), NEW_ATZ_QUERY, "")),
+            "host_migrated:%s->%s" % (OLD_ATZ_HOST, NEW_ATZ_HOST))
 
 
 def check(name, ok, detail=None):
@@ -99,6 +123,49 @@ def independent_components(pairs, flagged):
             comp["reasons"].add("internal_policy_flag")
     final = set().union(*(c["tier"] for c in components if not c["reasons"]))
     return qualifying, final, components
+
+
+def apply_size3_exclusions(components, audit):
+    """WP2.9-R: replay the size-3 audit on independently built components (matched by member set)."""
+    drop = {}
+    for c in audit["components"]:
+        if c["classification"] not in (SIZE3_KEEP,) + SIZE3_DROP:
+            raise ValueError("unknown size-3 classification " + str(c["classification"]))
+        if c["classification"] in SIZE3_DROP:
+            drop[frozenset(tuple(k) for k in c["members"])] = c["classification"]
+    audited = {frozenset(tuple(k) for k in c["members"]) for c in audit["components"]}
+    size3 = {frozenset(c["members"]) for c in components if len(c["members"]) == 3}
+    if audited != size3:
+        raise ValueError("size-3 audit does not cover exactly the size-3 components")
+    for comp in components:
+        cls = drop.get(frozenset(comp["members"]))
+        if cls:
+            comp["reasons"].add("wp29r_size3_audit:" + cls)
+    return set().union(*(c["tier"] for c in components if not c["reasons"])), len(drop)
+
+
+def replay_sample(rows, sizes, mandatory, n=100):
+    """Independent replay of the fixed-seed stratified sample with a mandatory census stratum."""
+    h = lambda kind, cid: hashlib.sha256((SEED + "|" + kind + "|" + cid).encode()).hexdigest()
+    mandatory = sorted(set(mandatory), key=lambda cid: (h("select", cid), cid))
+    groups = defaultdict(list)
+    for cid, row in rows.items():
+        if cid in mandatory:
+            continue
+        profile = "exact_and_identical_phash" if row["exact_asset_pair_count"] and row["identical_phash_pair_count"] else "exact_only" if row["exact_asset_pair_count"] else "identical_phash_only"
+        groups[f"size_{sizes[cid]}|{profile}"].append(cid)
+    seats = n - len(mandatory)
+    weights = {s: len(cids) - 1 for s, cids in groups.items()}
+    remaining = seats - len(groups)
+    denominator = sum(weights.values())
+    q = {s: 1 + (remaining * weights[s] // denominator if denominator else 0) for s in groups}
+    extras = sorted(groups, key=lambda s: (-(remaining * weights[s] % denominator if denominator else 0), s))[:seats - sum(q.values())]
+    for s in extras:
+        q[s] += 1
+    strata = ([{"stratum": MANDATORY_STRATUM, "population": len(mandatory), "quota": len(mandatory), "candidate_ids": mandatory}] if mandatory else [])
+    strata += [{"stratum": s, "population": len(groups[s]), "quota": q[s], "candidate_ids": sorted(groups[s], key=lambda cid: (h("select", cid), cid))[:q[s]]} for s in sorted(groups)]
+    ids = sorted([cid for s in strata for cid in s["candidate_ids"]], key=lambda cid: (h("display", cid), cid))
+    return strata, ids
 
 
 def validate_crosswalk(db, active, e2):
@@ -186,7 +253,18 @@ def validate_b(manifest):
         check("sqlite_foreign_keys", not db.execute("PRAGMA foreign_key_check").fetchall())
         pairs = [dict(r) for r in frozen.execute("SELECT * FROM candidate_pairs")]
         flags = {r[0] for r in frozen.execute("SELECT DISTINCT candidate_id FROM candidate_policy_flags")}
-        initial, final, comps = independent_components(pairs, flags)
+        initial, _, comps = independent_components(pairs, flags)
+        check("run_provenance_fixed", manifest["run_id"] == RUN_ID)
+        check("size3_audit_pinned", any(p["path"] == SIZE3_AUDIT for p in manifest["input_pins"]))
+        # Stage A reuse: the independent pre-exclusion replay must equal the SHA-pinned original artifact.
+        check("stage_a_original_sha_pinned", hash_file(STAGE_A) == STAGE_A_SHA)
+        original_a = read(STAGE_A)
+        replayed = {(frozenset(c["members"]), frozenset(c["tier"]), frozenset(c["reasons"])) for c in comps}
+        stored = {(frozenset(tuple(k) for k in c["members"]), frozenset(c["tier_candidate_ids"]), frozenset(c["reasons"])) for c in original_a["components"]}
+        check("stage_a_original_equals_independent_replay", replayed == stored and len(initial) == original_a["initial_tier_pairs"],
+              {"replayed_components": len(replayed), "stored_components": len(stored)})
+        final, dropped = apply_size3_exclusions(comps, read(SIZE3_AUDIT))
+        check("size3_exclusions_replayed", True, {"excluded_components": dropped, "final_pairs": len(final)})
         expected_components = {frozenset(c["members"]): c for c in comps}
         actual_comps = list(db.execute("SELECT * FROM components"))
         check("component_count", len(actual_comps) == len(comps))
@@ -261,6 +339,50 @@ def validate_b(manifest):
         validate_crosswalk(db, expected_active, e2)
 
 
+def expected_side_images(selected, record, health, policy, e2, e2_run, source, label):
+    """Replay the side's image emission from manifest provenance, verifying any local copy independently."""
+    prov = record["image_provenance"]
+    check("image_provenance_matches_selection:" + label, [a["source_asset_id"] for a in prov] == [a["source_asset_id"] for a in selected]
+          and [a["occurrence_url"] for a in prov] == [a["occurrence_url"] for a in selected])
+    if policy in ("predeclared_live_only", "predeclared_live_host_migrated"):
+        mapped = [migrated_url(a["occurrence_url"]) if policy == "predeclared_live_host_migrated"
+                  else (a["occurrence_url"], "original") for a in selected]
+        if policy == "predeclared_live_host_migrated":
+            check("host_migration_replayed:" + label, [(a["checked_url"], a["url_provenance"]) for a in prov] == mapped)
+            provs = sorted({x for _, x in mapped if x != "original"})
+            expected_prov = "original" if not provs else provs[0] if len(provs) == 1 else "mixed:" + ",".join(provs)
+            check("side_image_provenance:" + label, record["side_image_provenance"] == expected_prov)
+        ok = bool(selected) and all(health[u]["accessible"] for u, _ in mapped)
+        check("predeclared_no_local_copies:" + label, all(a["local_copy"] is None for a in prov))
+        return [u for u, _ in mapped] if ok else []
+    out = []
+    for a in prov:
+        if health[a["occurrence_url"]]["accessible"]:
+            check("live_preferred:" + label, a["local_copy"] is None)
+            out.append(a["occurrence_url"])
+            continue
+        loc = a["local_copy"]
+        if not loc:
+            continue
+        f = (ROOT / loc["file"]).resolve()
+        db_path = ROOT / loc["availability_db"]
+        cache = Path(str(db_path)[:-3] + "_cache").resolve()
+        ok = cache in f.parents and f.is_file() and hash_file(loc["file"]) == loc["sha256"]
+        ok = ok and Path(os.path.relpath(f, ROOT / "tools")).as_posix() == loc["app_src"]
+        if ok:
+            with closing(connect(loc["availability_db"])) as av:
+                row = av.execute("""SELECT a.derivative_relative_path,a.derivative_snapshot_sha256,a.actual_e1_pixel_sha256
+                    FROM availability_results a JOIN pool_occurrences p USING(run_id,census_id)
+                    WHERE p.source=? AND p.source_asset_id=? AND a.outcome='exact_match' AND a.derivative_snapshot_sha256=?""",
+                    (source, a["source_asset_id"], loc["sha256"])).fetchone()
+            pixel = e2.execute("SELECT normalized_pixel_sha256 FROM assets WHERE run_id=? AND source=? AND source_asset_id=?",
+                               (e2_run, source, a["source_asset_id"])).fetchone()
+            ok = bool(row and pixel) and (cache / row[0]).resolve() == f and row[2] == pixel[0] == loc["e1_pixel_sha256"]
+        check("local_copy_provenance:" + label + a["source_asset_id"], ok)
+        out.append(loc["app_src"])
+    return out
+
+
 def validate_c(manifest):
     b = read(PREFIX + "_stage_b_validation.json")
     check("stage_b_pass_bound_to_registry", b["status"] == "PASS" and b["registry_sha256"] == hash_file(DB) == manifest["registry"]["sha256"])
@@ -279,21 +401,31 @@ def validate_c(manifest):
         rows = {r["candidate_id"]: dict(r) for r in db.execute("SELECT p.* FROM v4_candidate_pairs p JOIN candidate_edges e USING(candidate_id) WHERE e.final_tier=1")}
         sizes = {r[0]: r[1] for r in db.execute("SELECT e.candidate_id,c.size FROM candidate_edges e JOIN components c USING(component_id) WHERE e.final_tier=1")}
         check("sample_merged_population", set(ids) <= set(rows) and len(rows) == sample["population"])
-        groups = defaultdict(list)
-        for cid, row in rows.items():
-            profile = "exact_and_identical_phash" if row["exact_asset_pair_count"] and row["identical_phash_pair_count"] else "exact_only" if row["exact_asset_pair_count"] else "identical_phash_only"
-            groups[f"size_{sizes[cid]}|{profile}"].append(cid)
-        weights = {s: len(cids) - 1 for s, cids in groups.items()}
-        remaining = 100 - len(groups)
-        denominator = sum(weights.values())
-        q = {s: 1 + remaining * weights[s] // denominator for s in groups}
-        extras = sorted(groups, key=lambda s: (-(remaining * weights[s] % denominator), s))[:100 - sum(q.values())]
-        for s in extras:
-            q[s] += 1
-        h = lambda kind, cid: hashlib.sha256((SEED + "|" + kind + "|" + cid).encode()).hexdigest()
-        expected_strata = [{"stratum": s, "population": len(groups[s]), "quota": q[s], "candidate_ids": sorted(groups[s], key=lambda cid: (h("select", cid), cid))[:q[s]]} for s in sorted(groups)]
-        expected_ids = sorted([cid for s in expected_strata for cid in s["candidate_ids"]], key=lambda cid: (h("display", cid), cid))
+        audit_pin = next((x for x in manifest["input_pins"] if x["path"] == SIZE3_AUDIT), None)
+        check("size3_audit_pin_unchanged", audit_pin is not None and hash_file(SIZE3_AUDIT) == audit_pin["sha256"])
+        audit = read(SIZE3_AUDIT)
+        requested = sorted(audit["mandatory_audit_candidate_ids"])
+        size3_tier = sorted(cid for r in db.execute("SELECT tier_candidate_ids_json FROM components WHERE size=3") for cid in json.loads(r[0]))
+        check("mandatory_list_equals_all_size3_tier_pairs", requested == size3_tier, {"requested": len(requested), "size3_tier_pairs": len(size3_tier)})
+        included = sorted(cid for cid in requested if cid in rows)
+        not_merged = sorted(set(requested) - set(included))
+        states = {r[0]: r[1] for r in db.execute("SELECT candidate_id,final_tier FROM candidate_edges WHERE candidate_id IN (%s)" % ",".join("?" * len(requested)), requested)} if requested else {}
+        mi = sample["mandatory_inclusion"]
+        check("mandatory_size3_pairs_included", set(included) <= set(ids) and sorted(mi["requested"]) == requested
+              and sorted(mi["included"]) == included and sorted(x["candidate_id"] for x in mi["excluded_not_merged"]) == not_merged
+              and set(states) == set(requested) and not any(states[c] for c in not_merged),
+              {"requested": len(requested), "included": len(included), "excluded_not_merged": len(not_merged)})
+        expected_strata, expected_ids = replay_sample(rows, sizes, included)
         check("fixed_seed_stratification_replayed", sample["seed"] == SEED and sample["strata"] == expected_strata and ids == expected_ids)
+        policy = sample.get("image_policy")
+        check("image_policy_known", policy in POLICIES, policy)
+        if "code_pins" in sample:
+            cp = sample["code_pins"]
+            check("code_pins_stage_b_match_manifest", cp["stage_b"] == [x for x in manifest["input_pins"] if x["path"] in CODE_PATHS])
+            check("code_pins_stage_c_current", [x["path"] for x in cp["stage_c"]] == list(CODE_PATHS) and all(hash_file(x["path"]) == x["sha256"] for x in cp["stage_c"]))
+        e2_run = [r[0] for r in e2.execute("SELECT run_id FROM e2_runs")]
+        check("e2_single_run", len(e2_run) == 1)
+        e2_run = e2_run[0]
         side_records = {(s["candidate_id"], s["side"]): s for s in sample["sides"]}
         health = {u["url"]: u for u in sample["url_checks"]}
         check("all_200_sides_accounted", len(side_records) == 200)
@@ -309,13 +441,12 @@ def validate_c(manifest):
                 record = side_records[(p["id"], side)]
                 selected = record["selected_original_assets"]
                 for asset in selected:
-                    exists = e2.execute("""SELECT 1 FROM project_asset_occurrences o JOIN source_project_buildings b
-                        ON o.source=b.source AND o.source_project_id=b.source_project_id
-                        WHERE b.source=? AND b.source_building_id=? AND o.source_asset_id=? AND o.occurrence_url=? AND o.source_record_sha256=?""",
-                        (*sk, asset["source_asset_id"], asset["occurrence_url"], asset["source_record_sha256"])).fetchone()
+                    exists = e2.execute("""SELECT 1 FROM source_project_buildings b CROSS JOIN project_asset_occurrences o
+                        ON o.run_id=b.run_id AND o.source=b.source AND o.source_project_id=b.source_project_id
+                        WHERE b.run_id=? AND b.source=? AND b.source_building_id=? AND o.source_asset_id=? AND o.occurrence_url=? AND o.source_record_sha256=?""",
+                        (e2_run, *sk, asset["source_asset_id"], asset["occurrence_url"], asset["source_record_sha256"])).fetchone()
                     check("original_cdn_provenance:" + p["id"] + side + asset["source_asset_id"], bool(exists))
-                ok = bool(selected) and all(health[a["occurrence_url"]]["accessible"] for a in selected)
-                expected_urls = [a["occurrence_url"] for a in selected] if ok else []
+                expected_urls = expected_side_images(selected, record, health, policy, e2, e2_run, sk[0], p["id"] + side)
                 check("inaccessible_side_empty:" + p["id"] + side, s["images"] == record["emitted_urls"] == expected_urls)
                 bld = buildings[sk]
                 source_urls = json.loads(bld["source_urls_json"])
@@ -333,8 +464,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", choices=("b", "c"), required=True)
     args = parser.parse_args()
-    if (ROOT / (PREFIX + "_FAIL.json")).exists():
-        raise SystemExit("WP2.9 is stopped by FAIL report")
+    if (ROOT / RUN_FAIL).exists():
+        raise SystemExit("WP2.9-R is stopped by FAIL report")
+    if (ROOT / LEGACY_FAIL).exists() and hash_file(LEGACY_FAIL) != LEGACY_FAIL_SHA:
+        raise SystemExit("WP2.9 FAIL report changed since the resume order")
     manifest = read(PREFIX + "_manifest.json")
     result = {"stage": args.stage, "run_id": manifest["run_id"], "registry_sha256": manifest["registry"]["sha256"], "at": datetime.now(timezone.utc).isoformat()}
     try:
@@ -346,7 +479,7 @@ def main():
     result["checks_count"] = len(CHECKS)
     write(PREFIX + "_stage_" + args.stage + "_validation.json", result)
     if result["status"] == "FAIL":
-        write(PREFIX + "_FAIL.json", result)
+        write(RUN_FAIL, result)
     print(json.dumps({k: v for k, v in result.items() if k != "checks"}, ensure_ascii=False))
     raise SystemExit(0 if result["status"] == "PASS" else 1)
 
