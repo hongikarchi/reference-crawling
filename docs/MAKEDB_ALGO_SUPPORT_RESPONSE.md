@@ -91,7 +91,7 @@ is_generic BOOLEAN, sort_rank INTEGER, PRIMARY KEY (axis, tag)
 |---|---|
 | Source invariant | all stats computed over `is_publishable = true` only |
 | Refresh | every crawl/canonical reload, one transaction (`DELETE` + `INSERT` + in-txn QC; FAIL → full ROLLBACK). Readers never see a partial state (MVCC). |
-| `corpus_version` | `c23_final+matstrip+r4` (current; was `c23_final+matstrip` at the R1-R3 deploy) |
+| `corpus_version` | `c23_final+matstrip+r4+rem2026q2+prog2026q2` (current, verified 2026-10-16; history: `c23_final+matstrip` at R1-R3 deploy → `+r4` 2026-06-14 → `+rem2026q2` audit remediation → `+prog2026q2` program re-derive) |
 | Grants | `make_web` gets SELECT automatically (ALTER DEFAULT PRIVILEGES, 2026-05-24) — verified live in dry-run |
 | Tag normalization | tags stored exactly as in `canonical_v2_buildings` columns (controlled axes Title Case, material lowercase free-text) — three tables join with buildings as-is |
 | QC gate | 19 checks: total_n parity, per-axis doc_freq sums, OOV=0, idf formula, R1==R2 key parity, centroid norms, label coverage, grant probe |
@@ -113,8 +113,9 @@ All R1-R3 stats above are computed on the post-migration state.
 ## 5. R4 — new discriminative axes (SHIPPED 2026-06-14)
 
 Five new axes are live as columns on `canonical_v2_buildings` and as tag rows
-in all three precompute tables (now **11 axes**, 18,655 rows each,
-`corpus_version = c23_final+matstrip+r4`). Vocabularies are owner-approved and
+in all three precompute tables (now **11 axes**; 18,655 rows each at the R4 deploy, **15,655 rows each** since the
+2026-06-15 `material_visual` noise cleanup; current `corpus_version =
+c23_final+matstrip+r4+rem2026q2+prog2026q2`). Vocabularies are owner-approved and
 in `core/vocab.py`. **`Unknown` is stored as `NULL`** — never the string
 `'Unknown'`.
 

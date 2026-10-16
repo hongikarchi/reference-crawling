@@ -9,9 +9,14 @@ This file is the operating manual. For schema/vocab/tool detail see
 
 ## Operating model
 
-- **Single operator.** Claude runs the whole pipeline end to end. There is no
-  multi-team / cmux / Codex-dispatch layer — that was retired in the 2026-05
-  refactor (recover from git history if ever needed).
+- **Owner + collaborator (since 2026-10-16).** The owner (with Claude) runs the
+  make_db pipeline and vNext and is the **sole writer of `archi_data`** (via the
+  loaders below). Collaborator **ksangjo** owns the archi-tinder (Archibe) backend /
+  recommendation algorithm and works against the Neon branch `dev-ksangjo` (prod copy
+  + `vnext_preview` mock schema), never prod archi_data. Handoff, data dictionary and
+  the dev/prod consistency rules: **`docs/HANDOFF_ARCHIBE_DB.md`**; schema snapshot +
+  release log: **`docs/schema/`** (`archi_data.schema.json`, `CHANGELOG.md`; snapshot/
+  compare via `tools/neon_schema_snapshot.py`). Every release updates `docs/schema/`.
 - **State lives in files, never terminal memory.** The durable record is: the
   data artifacts, `.claude/ops/jobs/` job cards, and the dashboard. Re-derive
   state by reading those — never assume in-memory continuity between sessions.
@@ -46,8 +51,7 @@ This file is the operating manual. For schema/vocab/tool detail see
     LLM re-derivation (9,403 rows, `typology_primary_source='llm_rederive_2026q2'`,
     typology↔program contradictions 2,825→828); F3 `material_visual` noise cleanup
     (14,654 rows, tag rows 18,655→15,655). Benchmark still 10 PASS/0 FAIL.
-    **Pending user approval:** architect top_typologies refresh
-    (`tools/refresh_architect_typologies.py`, 6,899 rows). F2 style over-generality
+    Architect top_typologies refresh applied 2026-06-15 (6,899 rows). F2 style over-generality
     NOT fixed (re-enrich empirically unreliable — make_web product decision).
     Reports: `data/reports/full_census_audit_2026Q2.md`,
     `remediation_log_2026Q2.md`; job cards `20260614_full_census_audit.md`,
@@ -153,6 +157,10 @@ This file is the operating manual. For schema/vocab/tool detail see
 - Don't re-run `enrich/dedup.py` on already-processed buildings.
 - `data/` and `images/` stay at repo root regardless of which code subpackage
   produced them.
+- **Windows:** run tools with `.venv/Scripts/python.exe` — system python lacks
+  psycopg2. The c27 artifact and `r4_results.merged.jsonl` are not on this machine.
+- **Architizer covers are dead:** `architizer-prod.imgix.net` URLs return HTTP 410
+  (`disabled_source`) — 7,375 publishable rows. Fix belongs to vNext covers; R2 unused.
 
 ## Documents
 
@@ -161,8 +169,17 @@ This file is the operating manual. For schema/vocab/tool detail see
 - `docs/ARCHITECT_RECOMMENDATION.md` — architects table schema + cold-start + cosine SQL templates
 - `docs/dashboard.html` — live pipeline + DB state (regenerate: `python3 tools/build_dashboard.py`)
 - `data/reports/db_quality_audit.md` — 2026-05 database quality audit (verdict: PASS with WARNINGS)
-- `docs/MIGRATION_WINDOWS.md` — **machine move (Mac→Windows).** If the user says they
-  moved environments, follow this: `pip install -r requirements-eval.txt`, copy the
-  gitignored secrets + 2 data files it lists, run `python tools/verify_env.py`, then
-  resume from its "Current state → Next" (pending: approve the 164 cover re-picks).
+- `docs/HANDOFF_ARCHIBE_DB.md` — archi-tinder/Archibe DB handoff (Korean): ownership,
+  environments, data dictionary, sample SQL, caveats, vNext changes, dev/prod rules
+- `docs/schema/` — `archi_data.schema.json` snapshot + `CHANGELOG.md` (per release)
+- `docs/DATA_QUALITY_BENCHMARK.md` — 10-question make_web benchmark
+- `docs/VNEXT_REBUILD_PLAN.md` + `docs/vnext/` (`CONTRACT_*.md`, `PROJECTION_SPEC.md`,
+  `BUILDING_IMAGES_DDL.sql`) — vNext rebuild plan and contracts
+- `docs/MIGRATION_WINDOWS.md` — machine move (Mac→Windows) setup; cover re-pick item
+  is done (145 applied 2026-07-06 → c27)
+- `docs/archive/` — retired docs: source-curation (ARCHITIZER_*, DIVISARE_*,
+  PROMPT_ARCHITIZER_SOURCE_CURATION), CROSS_SOURCE_IMAGE_*, IMAGE_FINGERPRINT_METHOD,
+  HANDOFF_20260731_PARALLEL_SOURCE_CURATION, CROSS_PC_HANDOFF, `manifests/`, DIVISARE_IMAGE_IDENTITY_V24.
+  Evidence only; not current guidance. (`docs/vnext/IDENTITY_*_PROTOCOL.md` stay in
+  place: tracked `canonical/vnext_identity_*` scripts reference them by path/checksum.)
 - `.claude/ops/jobs/` — job cards = run history

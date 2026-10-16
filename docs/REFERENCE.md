@@ -154,7 +154,7 @@ GIN on `top_programs/top_typologies/countries`; HNSW (`vector_cosine_ops`) on
 `portfolio_embedding`. Recommendation algorithm + SQL templates:
 `docs/ARCHITECT_RECOMMENDATION.md`. Loader: `tools/canonical_v2_architects_neon_loader.py`.
 
-**Coverage at C-A3**: 14,216 firms / 4,357 recommendable / 86 distinct countries.
+**Coverage (c27, live 2026-10-16)**: 14,216 firms / 4,348 recommendable.
 25,417 registry firms without ≥1 building in canonical are not loaded.
 
 ## 2c. Schema — Neon tag precompute tables (make_web algo support)
@@ -218,10 +218,13 @@ Canonical artifacts are **immutable stage snapshots** — never mutated in place
 A "completeness Cn" pass reviews a small evidence-backed set of location/year
 backfills, writes a new `completeness_cN` artifact + an affected-rows file,
 runs QC, then upserts only the affected rows to Neon. Lineage to date:
-`resume10_complete` → C3 → C4 → C6 → C7 → **C8 (current Neon release)** → C9
-(post-audit data corrections) → C10 (matcher-recall recovery — drops 107 merge
-duplicates) → **C11 (fine-grained taxonomy; 39,669 rows, built + QC-clean,
-Neon upsert pending user approval)**.
+`resume10_complete` → C3 → C4 → C6 → C7 → C8 → C9 (post-audit data corrections)
+→ C10 (matcher-recall recovery) → C11 (fine-grained taxonomy) → … → C23_final →
+c26_rem2026q2 (2026-Q2 audit remediation + program re-derive) →
+**c27 = `completeness_c27_cover2026q3` (current Neon release: 39,478 rows / 36,673
+publishable; c26 + 145 `display_cover_url` re-picks applied 2026-07-06)**. The loader's
+`DEFAULT_INPUT` points at c27; R4 columns are overlaid at upsert from
+`data/canonical/r4_results.merged.jsonl`. Release history: `docs/schema/CHANGELOG.md`.
 Artifacts live under `data/canonical/country_conflict_refresh/`.
 
 ## 5. Tool inventory (`tools/`)

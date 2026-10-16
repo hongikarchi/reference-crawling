@@ -81,10 +81,10 @@ LIMIT 10;
   `!= ALL(...)`.
 - **Geographic spread**: `array_length(countries, 1) > 1` for international firms.
 
-## Coverage at C23
+## Coverage (live Neon, c27 release, verified 2026-10-16)
 
 - Architects in table: 14,216 (firms with ≥1 building in canonical_v2_buildings)
-- `is_recommendable = TRUE`: 4,159 (29%)
+- `is_recommendable = TRUE`: 4,348 (31%) — post material-noise reclassify (2026-06-12)
 - Distinct `primary_country`: 606
 - Architects with ≥3 publishable: 4,365
 

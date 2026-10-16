@@ -48,21 +48,26 @@ full context; read the latest job card. Everything here is cross-platform (tools
 - Steps 3-4 (junk sweep, filter labels): low-yield / already-good — deferred.
 - **Neon was never written. Reversible throughout.**
 
-## Next (pending user decision — resume here)
+## Next — DONE (cover re-picks applied)
 
-**The deliverable awaiting approval:** `data/reports/cover_audit/repick_chunk1k/confirmed.jsonl`
-— **164 Haiku-confirmed cover re-picks** (current→proposed `display_cover_url`, with
-scores + reasons), from a 1,000-building sample.
+The 164-cover deliverable was re-reviewed (273 pairs, stronger judge + human review app)
+and **145 `display_cover_url` swaps were applied to Neon on 2026-07-06** (user-gated,
+QC PASS, reversal sidecar kept). The result was baked into the artifact
+**`completeness_c27_cover2026q3`**, which is the current production release and the
+loader's `DEFAULT_INPUT`. Job card: `.claude/ops/jobs/20260705_cover_repick_rereview.md`.
+Full-census cover re-pick remains an optional, unscheduled follow-up.
 
-1. User reviews the 164 (spot-check a few before/after). **Watch for the edge case:**
-   buildings whose architecture *is* the interior (chapels, galleries, religious/
-   cultural spaces) — the "good = exterior" rule may wrongly swap a deliberate interior
-   cover for a blander exterior. Flag those, don't rubber-stamp.
-2. On approval → apply the `display_cover_url` swaps (old value preserved in
-   confirmed.jsonl = reversible) → re-upload via the loader. **User-gated Neon write —
-   dry-run + present counts first, per project rules.**
-3. Optional scale-up to full census (~6k expected): run streaming (do NOT blast 150k
-   downloads at divisare) or fold cover re-pick into the crawl/enrich pipeline where
-   images are already local.
+## Status of this Windows machine (checked 2026-10-16)
 
-Tools: `cover_repick.py` (--sample), `cover_repick_confirm.py`, `cover_classify_siglip.py`.
+- **Use the project venv:** `.venv/Scripts/python.exe <tool>` — the system `python`
+  lacks `psycopg2`, so Neon tools fail outside the venv.
+- **Not present locally:** the c27 artifact
+  (`data/canonical/country_conflict_refresh/canonical_buildings_strict_embedded.completeness_c27_cover2026q3.json`)
+  and the R4 sidecar `data/canonical/r4_results.merged.jsonl` (the c26 file is also absent).
+  Live Neon is the source of the current state; any re-upsert from this machine needs
+  those two files copied in first. Read-only inspection works without them.
+- Current work is vNext (`docs/VNEXT_REBUILD_PLAN.md`) and the archi-tinder handoff
+  (`docs/HANDOFF_ARCHIBE_DB.md`).
+
+Tools: `cover_repick.py` (--sample), `cover_repick_confirm.py`, `cover_classify_siglip.py`,
+`cover_repick_review_app.py`.

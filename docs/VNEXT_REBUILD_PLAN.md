@@ -19,7 +19,7 @@ Claude(설계·게이트 판정) / Codex(WP 단위 실행) 분업 계약. 이 �
 
 ### 동결 증거 (수정 금지, 읽기 전용)
 - curated: `divisare_metadata_v2_4.db`, `architizer_curated_v2_0.db`
-- E1 v1.2 ×2 / E2 full_v5 / E3 full_v1 (SHA는 docs/CROSS_SOURCE_IMAGE_SEMANTIC_COVERAGE.md)
+- E1 v1.2 ×2 / E2 full_v5 / E3 full_v1 (SHA는 docs/archive/CROSS_SOURCE_IMAGE_SEMANTIC_COVERAGE.md)
 - 시맨틱 v1.0~v2.7 실험 일체 — 증거로만 보존, 어떤 결과도 production 승격 금지
 
 ### 신규 derived store (전부 로컬, 버전별 불변, builder+독립 validator 쌍)

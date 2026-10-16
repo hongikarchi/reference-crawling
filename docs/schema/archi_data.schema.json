@@ -1,0 +1,689 @@
+{
+  "data": {
+    "corpus_versions": {
+      "public.canonical_v2_tag_centroids": [
+        "c23_final+matstrip+r4+rem2026q2+prog2026q2"
+      ],
+      "public.canonical_v2_tag_stats": [
+        "c23_final+matstrip+r4+rem2026q2+prog2026q2"
+      ]
+    },
+    "row_counts": {
+      "public.canonical_v2_architects": 14216,
+      "public.canonical_v2_buildings": 39478,
+      "public.canonical_v2_tag_centroids": 15655,
+      "public.canonical_v2_tag_stats": 15655,
+      "public.canonical_v2_tag_vocabulary": 15655
+    }
+  },
+  "extensions": {
+    "plpgsql": "1.0",
+    "vector": "0.8.0"
+  },
+  "format": "neon_schema_snapshot/v1",
+  "schemas": [
+    "public"
+  ],
+  "server_version_major": 17,
+  "tables": {
+    "public.canonical_v2_architects": {
+      "columns": {
+        "building_ids": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "canonical_arch_id": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "canonical_name": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "cities": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "confidence_tier": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "countries": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "created_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "description": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "earliest_project_year": {
+          "default": null,
+          "nullable": true,
+          "type": "integer"
+        },
+        "email": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "feature_distribution": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "hero_building_id": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "is_recommendable": {
+          "default": "false",
+          "nullable": false,
+          "type": "boolean"
+        },
+        "latest_project_year": {
+          "default": null,
+          "nullable": true,
+          "type": "integer"
+        },
+        "logo_url": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "n_buildings": {
+          "default": "0",
+          "nullable": false,
+          "type": "integer"
+        },
+        "n_buildings_publishable": {
+          "default": "0",
+          "nullable": false,
+          "type": "integer"
+        },
+        "n_sources": {
+          "default": null,
+          "nullable": false,
+          "type": "integer"
+        },
+        "name_alts": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "office_locations": {
+          "default": "'[]'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "phone": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "portfolio_embedding": {
+          "default": null,
+          "nullable": false,
+          "type": "vector(384)"
+        },
+        "primary_city": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "primary_country": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "social_links": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "source_descriptions": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "source_refs": {
+          "default": null,
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "source_urls": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "top_arch_elements": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "top_atmospheres": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "top_color_tones": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "top_materials": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "top_programs": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "top_styles": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "top_typologies": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "updated_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "website": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        }
+      },
+      "constraints": {
+        "canonical_v2_architects_confidence_tier_check": {
+          "definition": "CHECK (confidence_tier = ANY (ARRAY['T1'::text, 'T2'::text, 'T3'::text]))",
+          "type": "c"
+        },
+        "canonical_v2_architects_n_sources_check": {
+          "definition": "CHECK (n_sources >= 1)",
+          "type": "c"
+        },
+        "canonical_v2_architects_pkey": {
+          "definition": "PRIMARY KEY (canonical_arch_id)",
+          "type": "p"
+        }
+      },
+      "indexes": {
+        "canonical_v2_architects_pkey": "CREATE UNIQUE INDEX canonical_v2_architects_pkey ON public.canonical_v2_architects USING btree (canonical_arch_id)",
+        "idx_canonical_v2_architects_city": "CREATE INDEX idx_canonical_v2_architects_city ON public.canonical_v2_architects USING btree (primary_city)",
+        "idx_canonical_v2_architects_country": "CREATE INDEX idx_canonical_v2_architects_country ON public.canonical_v2_architects USING btree (primary_country)",
+        "idx_canonical_v2_architects_country_arr": "CREATE INDEX idx_canonical_v2_architects_country_arr ON public.canonical_v2_architects USING gin (countries)",
+        "idx_canonical_v2_architects_embed_hnsw": "CREATE INDEX idx_canonical_v2_architects_embed_hnsw ON public.canonical_v2_architects USING hnsw (portfolio_embedding vector_cosine_ops)",
+        "idx_canonical_v2_architects_program": "CREATE INDEX idx_canonical_v2_architects_program ON public.canonical_v2_architects USING gin (top_programs)",
+        "idx_canonical_v2_architects_recommend": "CREATE INDEX idx_canonical_v2_architects_recommend ON public.canonical_v2_architects USING btree (is_recommendable)",
+        "idx_canonical_v2_architects_tier": "CREATE INDEX idx_canonical_v2_architects_tier ON public.canonical_v2_architects USING btree (confidence_tier)",
+        "idx_canonical_v2_architects_typology": "CREATE INDEX idx_canonical_v2_architects_typology ON public.canonical_v2_architects USING gin (top_typologies)"
+      },
+      "kind": "table"
+    },
+    "public.canonical_v2_buildings": {
+      "columns": {
+        "all_images": {
+          "default": "'[]'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "architect_canonical_ids": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "architect_names": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "architects_text": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "architectural_elements": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "atmosphere": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "best_image_per_cluster": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "canonical_bld_id": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "color_tone": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "confidence_tier": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "cover_blurhash": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "cover_image_cdn_url": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "cover_image_url_default": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "covers_by_type": {
+          "default": null,
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "created_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "display_cover_url": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "embedding": {
+          "default": null,
+          "nullable": false,
+          "type": "vector(384)"
+        },
+        "era": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "facade_pattern": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "identity_source": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "image_derived": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "is_publishable": {
+          "default": "false",
+          "nullable": false,
+          "type": "boolean"
+        },
+        "location_city": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "location_country": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "material_visual": {
+          "default": null,
+          "nullable": false,
+          "type": "text[]"
+        },
+        "n_sources": {
+          "default": null,
+          "nullable": false,
+          "type": "integer"
+        },
+        "name": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "names_alts": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "needs_image_derived_backfill": {
+          "default": "false",
+          "nullable": false,
+          "type": "boolean"
+        },
+        "program": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "project_year": {
+          "default": null,
+          "nullable": true,
+          "type": "integer"
+        },
+        "publishability_reasons": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "roof_type": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "scale": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "source_categories": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "source_refs": {
+          "default": null,
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "source_urls": {
+          "default": "'{}'::jsonb",
+          "nullable": false,
+          "type": "jsonb"
+        },
+        "structural_system": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "style": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "typology_primary": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "typology_primary_source": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "typology_tags": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "updated_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "visual_description": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "year_kind": {
+          "default": "'unknown'::text",
+          "nullable": false,
+          "type": "text"
+        }
+      },
+      "constraints": {
+        "canonical_v2_buildings_confidence_tier_check": {
+          "definition": "CHECK (confidence_tier = ANY (ARRAY['T1'::text, 'T2'::text, 'T3'::text]))",
+          "type": "c"
+        },
+        "canonical_v2_buildings_era_check": {
+          "definition": "CHECK (era IS NULL OR (era = ANY (ARRAY['Pre-1900'::text, '1900-1945'::text, '1945-1980'::text, '1980-2000'::text, '2000-2015'::text, '2015+'::text])))",
+          "type": "c"
+        },
+        "canonical_v2_buildings_facade_pattern_check": {
+          "definition": "CHECK (facade_pattern IS NULL OR (facade_pattern = ANY (ARRAY['Grid'::text, 'Louvered'::text, 'Solid/Mass'::text, 'Glazed Curtain'::text, 'Perforated'::text, 'Organic'::text, 'Layered'::text, 'Rhythmic Openings'::text])))",
+          "type": "c"
+        },
+        "canonical_v2_buildings_pkey": {
+          "definition": "PRIMARY KEY (canonical_bld_id)",
+          "type": "p"
+        },
+        "canonical_v2_buildings_roof_type_check": {
+          "definition": "CHECK (roof_type IS NULL OR (roof_type = ANY (ARRAY['Flat'::text, 'Gabled'::text, 'Hipped'::text, 'Shed'::text, 'Curved'::text, 'Green Roof'::text, 'Vaulted/Domed'::text, 'Sawtooth'::text])))",
+          "type": "c"
+        },
+        "canonical_v2_buildings_scale_check": {
+          "definition": "CHECK (scale IS NULL OR (scale = ANY (ARRAY['XS'::text, 'S'::text, 'M'::text, 'L'::text, 'XL'::text])))",
+          "type": "c"
+        },
+        "canonical_v2_buildings_structural_system_check": {
+          "definition": "CHECK (structural_system IS NULL OR (structural_system = ANY (ARRAY['Masonry'::text, 'Reinforced Concrete'::text, 'Steel Frame'::text, 'Timber Frame'::text, 'Hybrid'::text, 'Shell/Membrane'::text, 'Earth'::text])))",
+          "type": "c"
+        },
+        "canonical_v2_buildings_year_kind_check": {
+          "definition": "CHECK (year_kind = ANY (ARRAY['completed'::text, 'future'::text, 'unknown'::text]))",
+          "type": "c"
+        }
+      },
+      "indexes": {
+        "canonical_v2_buildings_pkey": "CREATE UNIQUE INDEX canonical_v2_buildings_pkey ON public.canonical_v2_buildings USING btree (canonical_bld_id)",
+        "idx_canonical_v2_buildings_arch_elements": "CREATE INDEX idx_canonical_v2_buildings_arch_elements ON public.canonical_v2_buildings USING gin (architectural_elements)",
+        "idx_canonical_v2_buildings_arch_ids": "CREATE INDEX idx_canonical_v2_buildings_arch_ids ON public.canonical_v2_buildings USING gin (architect_canonical_ids)",
+        "idx_canonical_v2_buildings_city": "CREATE INDEX idx_canonical_v2_buildings_city ON public.canonical_v2_buildings USING btree (location_city)",
+        "idx_canonical_v2_buildings_country": "CREATE INDEX idx_canonical_v2_buildings_country ON public.canonical_v2_buildings USING btree (location_country)",
+        "idx_canonical_v2_buildings_embedding_hnsw": "CREATE INDEX idx_canonical_v2_buildings_embedding_hnsw ON public.canonical_v2_buildings USING hnsw (embedding vector_cosine_ops)",
+        "idx_canonical_v2_buildings_era": "CREATE INDEX idx_canonical_v2_buildings_era ON public.canonical_v2_buildings USING btree (era)",
+        "idx_canonical_v2_buildings_facade_pattern": "CREATE INDEX idx_canonical_v2_buildings_facade_pattern ON public.canonical_v2_buildings USING btree (facade_pattern)",
+        "idx_canonical_v2_buildings_program": "CREATE INDEX idx_canonical_v2_buildings_program ON public.canonical_v2_buildings USING btree (program)",
+        "idx_canonical_v2_buildings_publish": "CREATE INDEX idx_canonical_v2_buildings_publish ON public.canonical_v2_buildings USING btree (is_publishable)",
+        "idx_canonical_v2_buildings_roof_type": "CREATE INDEX idx_canonical_v2_buildings_roof_type ON public.canonical_v2_buildings USING btree (roof_type)",
+        "idx_canonical_v2_buildings_scale": "CREATE INDEX idx_canonical_v2_buildings_scale ON public.canonical_v2_buildings USING btree (scale)",
+        "idx_canonical_v2_buildings_source_categories": "CREATE INDEX idx_canonical_v2_buildings_source_categories ON public.canonical_v2_buildings USING gin (source_categories)",
+        "idx_canonical_v2_buildings_source_refs": "CREATE INDEX idx_canonical_v2_buildings_source_refs ON public.canonical_v2_buildings USING gin (source_refs)",
+        "idx_canonical_v2_buildings_structural_system": "CREATE INDEX idx_canonical_v2_buildings_structural_system ON public.canonical_v2_buildings USING btree (structural_system)",
+        "idx_canonical_v2_buildings_style": "CREATE INDEX idx_canonical_v2_buildings_style ON public.canonical_v2_buildings USING btree (style)",
+        "idx_canonical_v2_buildings_tier": "CREATE INDEX idx_canonical_v2_buildings_tier ON public.canonical_v2_buildings USING btree (confidence_tier)",
+        "idx_canonical_v2_buildings_typology_primary": "CREATE INDEX idx_canonical_v2_buildings_typology_primary ON public.canonical_v2_buildings USING btree (typology_primary)",
+        "idx_canonical_v2_buildings_typology_tags": "CREATE INDEX idx_canonical_v2_buildings_typology_tags ON public.canonical_v2_buildings USING gin (typology_tags)",
+        "idx_canonical_v2_buildings_year": "CREATE INDEX idx_canonical_v2_buildings_year ON public.canonical_v2_buildings USING btree (project_year)",
+        "idx_canonical_v2_buildings_year_kind": "CREATE INDEX idx_canonical_v2_buildings_year_kind ON public.canonical_v2_buildings USING btree (year_kind)"
+      },
+      "kind": "table"
+    },
+    "public.canonical_v2_tag_centroids": {
+      "columns": {
+        "axis": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "centroid": {
+          "default": null,
+          "nullable": false,
+          "type": "vector(384)"
+        },
+        "computed_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "corpus_version": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "n_buildings": {
+          "default": null,
+          "nullable": false,
+          "type": "integer"
+        },
+        "tag": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        }
+      },
+      "constraints": {
+        "canonical_v2_tag_centroids_axis_check": {
+          "definition": "CHECK (axis = ANY (ARRAY['program'::text, 'style'::text, 'color_tone'::text, 'atmosphere'::text, 'era'::text, 'scale'::text, 'structural_system'::text, 'roof_type'::text, 'facade_pattern'::text, 'material_visual'::text, 'architectural_elements'::text]))",
+          "type": "c"
+        },
+        "canonical_v2_tag_centroids_n_buildings_check": {
+          "definition": "CHECK (n_buildings >= 1)",
+          "type": "c"
+        },
+        "canonical_v2_tag_centroids_pkey": {
+          "definition": "PRIMARY KEY (axis, tag)",
+          "type": "p"
+        }
+      },
+      "indexes": {
+        "canonical_v2_tag_centroids_pkey": "CREATE UNIQUE INDEX canonical_v2_tag_centroids_pkey ON public.canonical_v2_tag_centroids USING btree (axis, tag)"
+      },
+      "kind": "table"
+    },
+    "public.canonical_v2_tag_stats": {
+      "columns": {
+        "axis": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "computed_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "corpus_version": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "doc_freq": {
+          "default": null,
+          "nullable": false,
+          "type": "integer"
+        },
+        "idf": {
+          "default": null,
+          "nullable": false,
+          "type": "double precision"
+        },
+        "tag": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "total_n": {
+          "default": null,
+          "nullable": false,
+          "type": "integer"
+        }
+      },
+      "constraints": {
+        "canonical_v2_tag_stats_axis_check": {
+          "definition": "CHECK (axis = ANY (ARRAY['program'::text, 'style'::text, 'color_tone'::text, 'atmosphere'::text, 'era'::text, 'scale'::text, 'structural_system'::text, 'roof_type'::text, 'facade_pattern'::text, 'material_visual'::text, 'architectural_elements'::text]))",
+          "type": "c"
+        },
+        "canonical_v2_tag_stats_doc_freq_check": {
+          "definition": "CHECK (doc_freq >= 1)",
+          "type": "c"
+        },
+        "canonical_v2_tag_stats_pkey": {
+          "definition": "PRIMARY KEY (axis, tag)",
+          "type": "p"
+        }
+      },
+      "indexes": {
+        "canonical_v2_tag_stats_pkey": "CREATE UNIQUE INDEX canonical_v2_tag_stats_pkey ON public.canonical_v2_tag_stats USING btree (axis, tag)"
+      },
+      "kind": "table"
+    },
+    "public.canonical_v2_tag_vocabulary": {
+      "columns": {
+        "axis": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "display_en": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "display_ko": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "is_generic": {
+          "default": "false",
+          "nullable": false,
+          "type": "boolean"
+        },
+        "sort_rank": {
+          "default": null,
+          "nullable": true,
+          "type": "integer"
+        },
+        "tag": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        }
+      },
+      "constraints": {
+        "canonical_v2_tag_vocabulary_axis_check": {
+          "definition": "CHECK (axis = ANY (ARRAY['program'::text, 'style'::text, 'color_tone'::text, 'atmosphere'::text, 'era'::text, 'scale'::text, 'structural_system'::text, 'roof_type'::text, 'facade_pattern'::text, 'material_visual'::text, 'architectural_elements'::text]))",
+          "type": "c"
+        },
+        "canonical_v2_tag_vocabulary_pkey": {
+          "definition": "PRIMARY KEY (axis, tag)",
+          "type": "p"
+        }
+      },
+      "indexes": {
+        "canonical_v2_tag_vocabulary_pkey": "CREATE UNIQUE INDEX canonical_v2_tag_vocabulary_pkey ON public.canonical_v2_tag_vocabulary USING btree (axis, tag)"
+      },
+      "kind": "table"
+    }
+  }
+}
