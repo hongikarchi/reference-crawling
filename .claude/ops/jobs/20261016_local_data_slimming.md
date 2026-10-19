@@ -14,3 +14,8 @@
   - Known: `tools/validate_vnext_workspace_freeze.py` live-workspace check already failed after the morning pass; this move removes 125 more of its listed paths. `frozen_inputs` unaffected.
 - **Docs:** `docs/DATA_LAYOUT.md` updated with actual numbers and verification. Not committed.
 - **Cost:** $0 (no LLM / network).
+
+## Follow-up 2026-10-19: archive deleted (user: "ㅇㅇ 그러면 지우고")
+- `C:/Users/user/reference-crawling_archive_20261016/` (79 GB: data_superseded 74.6 GB, data_cold 8.95 GB, scratch, code_semantic_v2x) deleted with `rm -rf`. **Restore paths in this card and MANIFEST no longer work.**
+- Residue: ~312 KB of ACL-locked scratch dirs (needs an elevated takeown/icacls; harmless).
+- Irreplaceable raw crawl (`architizer_source_recrawl_v2.db`, `architizer_html_snapshots_v2/`) was never moved; still in `data/enrichment/`. Off-machine backup recommended (user decision).

@@ -5,7 +5,9 @@
 
 > 상태: **이동 완료 (2026-10-16 23:2x KST).** 계획 `C:/Users/user/reference-crawling_archive_20261016/data_cold_PLAN.tsv`는
 > 처음 380행(17.60 GB)이었고, challenge 검토에서 48행(8.65 GB)을 빼 **332행(8.95 GB)**을 옮겼다.
-> 332개 모두 OK, 건너뜀 0, 되돌림 0. 삭제는 하지 않았다. 로그: `.move_log_data_cold.tsv`.
+> 332개 모두 OK, 건너뜀 0, 되돌림 0. 로그: `.move_log_data_cold.tsv`.
+>
+> **2026-10-19: 아카이브 폴더 전체(79 GB, 오전분 `data_superseded/` 포함)를 사용자 승인으로 삭제했다. 아래 §3 복원 방법은 더 이상 쓸 수 없다.**
 
 ## 1. 현재 규모
 
