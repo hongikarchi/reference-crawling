@@ -193,6 +193,8 @@ seed `vnext-asset-continuity-v2`, source별 E2 success 1,000, 2026-10-23 00:15:4
 
 참고(규칙 조정 없음): Architizer 1건(`atz_asset_afcbc18f…`, 크기 동일 1024×549)이 Hamming **32 = 임계값 경계**,
 다음 26, 나머지 ≤ 18. 2% 경계 ±1e-6 행 0. 경계 사례는 S3 per-asset 픽셀 pass에서 다시 본다.
+(2026-10-23 리뷰가 v2 jsonl에서 재계산: Architizer Hamming > 26은 [32] 1행뿐, Divisare max 14 → 규칙 ≤32상 continuous,
+gate 변경 없음. S3 watch list 유지.)
 
 ### 8.3 사다리 + FULL (같은 v2 summary, 같은 contract)
 | 단계 | 건물 (A/D) | 입력 자산 | gallery member | group | exclusion | unresolved | deferred edge | 빌드 | validator |
@@ -226,8 +228,17 @@ run `vnx_gallery_full_2824179e4d9ff0cc661838aa`, logical SHA `ab8ebc1050a43c838a
 | Architizer Neon 형식 불일치 | 0 | – | 0 |
 
 회계: 1,419,480 + 3,165 + 9,943 = 1,432,588 (건물별·전체·테이블 행 모두 일치). sort 근거 100% source page
-order(1,416,641 / e3_rank 0). star 부착 0, multi-pixel group 0. Divisare unresolved 9,943 < r2에서 센 E2 success 비-raster 9,985 (차이 42는 cover `f_jpg` fallback으로
-서빙 가능하거나 앞선 exclusion 사유에 걸린 자산으로 추정, 미분해).
+order(1,416,641 / e3_rank 0). star 부착 0, multi-pixel group 0. Divisare unresolved 9,943 vs r2에서 센 E2 success 비-raster 9,985 — **분해 완료(2026-10-23 리뷰, 검증됨)**:
+비-raster gallery occurrence가 있는 success 자산 9,985 − 다른 raster occurrence(cover `f_jpg` 경로)로 서빙 가능 41
+= raster occurrence가 전혀 없는 자산 9,944 − 앞선 exclusion `low_information` 1 = **9,943** = `unresolved_ledger` 행 수
+= distinct unresolved 자산 수. unresolved 자산 중 raster occurrence 보유 0. (스크립트 `C:/Users/user/AppData/Local/Temp/claude/C--Users-user-reference-crawling/c1cc4388-e0ee-442c-8371-05d6e3a8c7fc/scratchpad/fri_review_s2/gap.py`,
+frozen E2 + FULL gallery DB read-only, 재실행 결과 동일.)
+
+**서빙 rendition 크기(리뷰 관찰, S2 변경 없음)**: live GET 30건 모두 200·image/*·decode OK, E1 대비 종횡비 차 ≤0.17%.
+단 rendition 크기 상한이 없다 — Divisare `f_auto,q_auto,w_auto` 원본 예 2,582,980 B(4961×2030), 1,985,036 B(5434×6617),
+Architizer PNG(`…Manuel_S%C3%A1.png?width=1680&quality=60`) 4,971,935 B. Divisare URL은 frozen `//images/f_auto,q_auto,w_auto/`
+(이중 슬래시) 그대로이며 현재 동작하나 정규화되지 않았다. 계약 §2.1은 renderability만 보장(크기 보장 없음) → 위반 아님.
+보류 중인 Divisare URL rewrite 결정(예: `w_`/`c_limit` 상한 변환)과 make_web 이미지 사이징의 입력으로 기록.
 
 ### 8.4 산출물 pin
 | 파일 | bytes | SHA-256 |
