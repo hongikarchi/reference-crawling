@@ -1,6 +1,6 @@
 # vNext gallery + shallow semantics contract v1
 
-상태: WP0c 확정 계약. S2는 사용자 gallery와 계보를 만들고, S3는 그 gallery의
+상태: WP0c 확정 계약, §2 v1.2 개정(2026-10-20, §2.1), v1.3 개정(2026-10-23, §2.1 D1/D2/D3). S2는 사용자 gallery와 계보를 만들고, S3는 그 gallery의
 대표 이미지별 얕은 분류만 저장한다. 건물에 대한 심층 시각 분석은 P6이며 보류다.
 
 ## 1. gallery 포함 단위
@@ -28,6 +28,64 @@
   P4B와 공유한다.
 - 대표 변형은 검증 성공, usable resolution, crop/overlay 손실, E3 quality 신호 순으로
   고르고 마지막 tie는 stable image key로 결정한다. 실제 score/config는 manifest에 고정한다.
+
+### 2.1 v1.2 개정 (2026-10-20) + v1.3 (2026-10-23): population continuity attestation
+
+Architizer host 이전(imgix 410 → images.architizer.com, 새 인코더)으로 E1 pixel SHA 연속성은
+원천적으로 불가하다. 근거: `20261019_vnext_asset_refresh_probe.md`, 지시서
+`20261020_vnext_wp4_s2_full_order.md`(v1.3 = 같은 지시서의 결정 D1/D2/D3). S2 full v1에서는 이 절이
+위 per-asset 규칙보다 우선한다.
+
+- **건물 키(§1 예외)**: S2 full v1 store는 source building `(source, source_building_id)`로 키를 잡는다.
+  `vnx_bld_*` re-key는 S1 감사 확정 후 P3에서 별도 단계로 한다.
+
+- **continuity attestation (규칙 v2, v1.3)**: source × fetch-profile 단위 고정 표본(seed
+  `vnext-asset-continuity-v2`, source별 E2 success N=1000)에서 `continuous` 비율 ≥ 99.0% 이고
+  `content_changed` = 0 이면 그 source의 E1 success 자산은 `continuity_attested`다.
+  - `continuous` = HTTP 200 ∧ pHash-256 Hamming ≤ 32 ∧ 종횡비 상대차 ≤ 2%.
+  - `content_changed` = HTTP 200 ∧ (Hamming > 32 ∨ 종횡비 상대차 > 2%).
+  - 종횡비 상대차 = `|(w·h_E1)/(h·w_E1) − 1|`. 크기 절대값(재렌더·리사이즈 반올림)은 판정에 쓰지 않는다.
+    pixel SHA 일치는 요구하지 않는다.
+  - 404/410은 `unavailable`로 집계·보고한다. 분모에서 빼지 않으며 attestation 실패 사유가 아니다.
+  - 도구: `tools/vnext_asset_continuity_sample.py --rule-version v2` →
+    `data/reports/vnext_asset_continuity_sample_v2.jsonl` + `_summary.json` (바이트 저장 없음).
+    summary의 `rule_version`은 `vnext-asset-continuity-rule-v2`, `sample_seed`는 위 seed여야 한다.
+  - 이력: 규칙 v1(v1.2, seed `vnext-asset-continuity-v1`, 크기 각 축 ±2px)은 같은 그림의 재렌더 크기
+    변화 3건을 `content_changed`로 오탐해 FAIL했다. v1 표본·FAIL 기록은 보존하고 `--rule-version v1`로
+    재현 가능하다. v2는 실행 전 고정한 규칙을 새 seed 표본으로 판정한다(사후 조정 아님).
+  - attestation이 증명하는 것은 **그림 동일성(identity)**이다. 표본 profile(Architizer
+    `?width=1024&height=1024&fit=max&quality=85&format=jpg`, Divisare = E1 `fetch_url`)은 서빙 URL
+    profile과 다르므로 서빙 rendition(포맷·크기·바이트)을 증명하지 않는다. 서빙 URL의 렌더 가능성은
+    아래 서빙 URL 규칙(정적 검사)으로만 보장한다.
+- **S2 full v1 대표 자격** = E1 fingerprint success ∧ `continuity_attested` ∧ §3 exclusion 규칙 통과
+  ∧ 브라우저 렌더 가능한 서빙 URL 존재(없으면 `unresolved`/`no_browser_renderable_serving_url`).
+  per-asset `exact_match`(WP1.1 규칙)는 S3 픽셀 pass(P4B)에서 사후 기록한다(다운로드 1회 원칙).
+- **S2 full v1은 direct-edge star 부착을 적용하지 않는다.** group은 exact normalized-pixel SHA
+  동치류뿐이다. E2 direct edge(pHash/crop)는 `direct_edge_evidence`에 보존만 하고
+  `attachment_status='deferred_no_per_asset_verification'`으로 둔다.
+  - 보존 범위 = 같은 건물의 서로 다른 두 group 대표 node를 잇는 E2 `phash_edges` 전 scope
+    (`global_le8` Hamming 1–8, `metadata_9_16` Hamming 10–16).
+  - 같은 pHash node(Hamming 0)를 공유하는 서로 다른 exact class는 E2에 edge 행이 없으므로 evidence
+    행을 만들지 않는다. 그 관계는 `gallery_groups.representative_phash_node_id`로 복원하며 report에
+    `same_phash_node_group_pairs`로 집계한다(S3/P4B 검증 후보).
+- **서빙 URL**: frozen `source_asset_id`를 유지하고 key를 재계산하지 않는다.
+  - Architizer (v1.3, D2): **현행 Neon 문자열과 정확히 같다.** frozen E2 `canonical_url` 전체가
+    `tools/architizer_image_host_migrate.py`의 `PATTERN`에 fullmatch해야 하고, 서빙 URL은 그 regex
+    치환 결과 = `https://images.architizer.com` + path **원문(percent-encoding 안 함)** +
+    `?width=1680&quality=60`이다. 원래 query는 버린다. fullmatch하지 않으면 `unresolved`
+    (`no_browser_renderable_serving_url`). 근거: `canonical_v2_buildings.all_images`와
+    `building_images.url`이 문자열로 조인·비교되어야 하고, 브라우저는 비ASCII path를 스스로 인코딩한다.
+    non-ASCII path 대표 수는 report에 `architizer_serving_url_non_ascii_path`로, Neon 형식 불일치는
+    `architizer_serving_url_neon_divergent`(= 0이어야 함)로 집계한다.
+  - Divisare: frozen E2 occurrence URL 원문(key 재계산 없음). 대표 asset의 occurrence 중 gallery 우선,
+    그다음 cover, page 순서로 **브라우저 raster인 첫 URL**을 쓴다. raster 판정 = path에 명시적 raster
+    format transform(`f_jpg`/`f_png`/`f_webp`/`f_avif`/`f_gif`)이 있거나 확장자가
+    jpg/jpeg/png/gif/webp/avif/bmp. `f_auto`는 원본 포맷을 그대로 내보내므로 `.pdf/.ai/.eps/.psd/
+    .tiff/.jp2/.octet-stream` gallery URL(E2 success 9,985 자산)은 raster가 아니다. raster URL이 없는
+    자산은 `unresolved`(`no_browser_renderable_serving_url`, fail-closed, v1.3 D3 확정). raster 변환
+    URL 재작성(예: `f_auto`→`f_jpg`)은 하지 않는다(다음 주 별도 결정).
+- `sort_order`는 건물별 0부터 연속이며 소스 페이지 원래 순서(E2 occurrence ordinal = curated
+  DB position)를 따른다. 정확한 규칙은 S2 report/manifest에 고정한다.
 
 S2는 대표 이미지뿐 아니라 group member, direct edge, 모든 source occurrence,
 선정 reason code를 보존한다.
