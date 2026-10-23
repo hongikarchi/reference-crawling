@@ -23,7 +23,17 @@ Rules (``vnext-s6-lite-v1``):
   occurrence url (S2 ``source_occurrences``, host-migrated) of a member asset of the row. Every
   comparison is on the percent-DECODED form (``urllib.parse.unquote`` of both sides; builder v2):
   legacy Neon stores Architizer non-ASCII filenames raw while S2 ``serving_url`` is percent-encoded.
-  ``url`` itself stays the S2 ``serving_url`` (encoded). ``sort_order`` = 0..n-1.
+  ``sort_order`` = 0..n-1.
+* URL policy v3 (builder v3): for each row (in final sort order), if a URL of the same legacy
+  building's ``all_images`` (host-migrated exactly like ``tools/architizer_image_host_migrate.py``)
+  equals the row's S2 ``serving_url`` after ``urllib.parse.unquote`` on both sides, ``url`` = that
+  legacy string verbatim (the first such in ``all_images`` order) -> string equality with the live
+  parent ``all_images`` / ``display_cover_url``. Otherwise ``url`` = S2 ``serving_url``. Collision
+  guard (url unique per building): the legacy string is NOT used if an earlier row already emitted
+  it or it equals another row's S2 ``serving_url``; that row keeps its S2 url
+  (``url_basis`` ``s2_serving_url_collision``). Provenance: ``url_basis`` in {``legacy_all_images``,
+  ``s2_serving_url``, ``s2_serving_url_collision``}; ``s2_serving_url`` = the S2 url when it differs
+  from ``url``, else null.
 * Classification columns NULL, ``semantic_type``/``cover_slot`` ``[]``, ``is_cover_default``
   false, ``engine``/``engine_version`` NULL, ``projection_version`` ``vnext-s6-lite-v1``.
 
@@ -46,7 +56,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import unquote, urlsplit
 
 PROJECTION_VERSION = "vnext-s6-lite-v1"
-BUILDER_VERSION = "vnext-s6-lite-projection-builder-v2"
+BUILDER_VERSION = "vnext-s6-lite-projection-builder-v3"
 ROWSET_VERSION = "vnext-s6-lite-ordered-rowset-v1"
 MANIFEST_KIND = "vnext_s6_lite_building_images_v1"
 S2_SOURCES = ("architizer", "divisare")
@@ -242,10 +252,42 @@ def project_building(
     if cover_index is not None and cover_index > 0:
         rows.insert(0, rows.pop(cover_index))
 
+    # URL policy v3: reuse the decoded-equal legacy all_images string verbatim (collision-guarded).
+    legacy_urls = legacy.get("legacy_urls")
+    if legacy_urls is None:
+        legacy_urls = _legacy_image_urls(legacy)
+    legacy_by_key: dict[str, str] = {}
+    for _, legacy_url in legacy_urls:
+        legacy_by_key.setdefault(unquote(legacy_url), legacy_url)
+    s2_url_set = set(urls)
+    used: set[str] = set()
+    url_policy = Counter()
+    final_urls: list[tuple[str, str]] = []
+    for item in rows:
+        s2_url = str(item["rep"]["url"])
+        candidate = legacy_by_key.get(unquote(s2_url))
+        if candidate is None:
+            final, basis = s2_url, "s2_serving_url"
+        elif candidate in used or (candidate != s2_url and candidate in s2_url_set):
+            final, basis = s2_url, "s2_serving_url_collision"
+        else:
+            final, basis = candidate, "legacy_all_images"
+        if final in used:
+            raise S6LiteError(f"{bld}: duplicate url after url policy v3")
+        used.add(final)
+        final_urls.append((final, basis))
+        source = str(item["rep"]["source"])
+        url_policy[source + ":" + ("legacy_string_reused" if basis == "legacy_all_images" else "s2_url_kept")] += 1
+        if basis == "legacy_all_images" and final != s2_url:
+            url_policy[source + ":legacy_string_reused_differs_from_s2"] += 1
+        if basis == "s2_serving_url_collision":
+            url_policy[source + ":s2_url_kept_collision"] += 1
+
     out: list[dict[str, Any]] = []
     for sort_order, item in enumerate(rows):
         rep = item["rep"]
-        row = child_row(bld, str(rep["asset"]), str(rep["url"]), sort_order)
+        final, basis = final_urls[sort_order]
+        row = child_row(bld, str(rep["asset"]), final, sort_order)
         row["provenance"] = {
             "representative_source": rep["source"],
             "representative_source_building_id": rep["source_building_id"],
@@ -253,6 +295,8 @@ def project_building(
             "representative_pixel_sha256": rep["pixel"],
             "group_ids": [group["group_id"] for group in item["groups"]],
             "cover_match": cover_basis if (sort_order == 0 and cover_index is not None) else None,
+            "url_basis": basis,
+            "s2_serving_url": None if final == str(rep["url"]) else str(rep["url"]),
         }
         row["record_sha256"] = sha256_text(canonical_json(row))
         out.append(row)
@@ -260,6 +304,7 @@ def project_building(
         "collapsed": dict(collapsed),
         "cover_basis": cover_basis,
         "has_display_cover": bool(cover_url),
+        "url_policy": dict(url_policy),
     }
     return out, stats
 
@@ -362,7 +407,10 @@ def config() -> dict[str, Any]:
         "ref_order": "identity_source first, then remaining source_refs keys in snapshot order; list order within a source; duplicate S2 buildings kept at first position",
         "collapse": "groups sharing exact representative_pixel_sha256 -> one row; representative = min (not usable_resolution, -pixel_area, -short_edge, -long_edge, low_information, source, source_asset_id)",
         "order": "min constituent (ref position, S2 sort_order), tie (source, asset); then display_cover_url match (host-migrated) to position 0 by row_url > constituent_url > occurrence_url",
-        "cover_match_key": "urllib.parse.unquote(host-migrated url) on both sides (percent-encoding-insensitive); stored url = S2 serving_url unchanged",
+        "cover_match_key": "urllib.parse.unquote(host-migrated url) on both sides (percent-encoding-insensitive)",
+        "url_policy": "v3: url = first legacy all_images string (host-migrated) with unquote(legacy) == unquote(S2 serving_url), verbatim; "
+                      "else S2 serving_url. Collision guard: legacy string already emitted earlier in the building or equal to another row's "
+                      "S2 serving_url -> keep S2 serving_url (s2_serving_url_collision). Applied after ordering/cover promotion.",
         "architizer_pattern": ARCHITIZER_PATTERN,
         "architizer_replacement": ARCHITIZER_REPLACEMENT,
         "classification": "all NULL, semantic_type '{}', cover_slot '{}', is_cover_default false, engine NULL (until S3)",
@@ -525,6 +573,7 @@ def build_projection(
     body: list[bytes] = []
     collapsed_total = Counter()
     cover_basis = Counter()
+    url_policy_total = Counter()
     cover_miss_hosts = Counter()
     per_building_counts: list[int] = []
     pub = Counter()
@@ -539,6 +588,7 @@ def build_projection(
         if len(legacy["mapped"]) > 1:
             multi_building_rows += 1
         collapsed_total.update(stats["collapsed"])
+        url_policy_total.update(stats["url_policy"])
         if stats["has_display_cover"]:
             cover_basis[stats["cover_basis"] or "not_in_gallery"] += 1
             if not stats["cover_basis"]:
@@ -646,6 +696,17 @@ def build_projection(
             "s2_buildings_used_by_multiple_legacy_rows": sum(1 for v in s2_users.values() if v > 1),
         },
         "pixel_collapse": dict(sorted(collapsed_total.items())),
+        "url_policy": {
+            "rule": cfg["url_policy"],
+            "by_representative_source": {
+                src: {k.split(":", 1)[1]: v for k, v in sorted(url_policy_total.items()) if k.split(":", 1)[0] == src}
+                for src in sorted({k.split(":", 1)[0] for k in url_policy_total})
+            },
+            "totals": {
+                name: sum(v for k, v in url_policy_total.items() if k.split(":", 1)[1] == name)
+                for name in ("legacy_string_reused", "legacy_string_reused_differs_from_s2", "s2_url_kept", "s2_url_kept_collision")
+            },
+        },
         "display_cover": {
             "basis_counts": dict(sorted(cover_basis.items())),
             "legacy_rows_with_display_cover_url": has_cover,

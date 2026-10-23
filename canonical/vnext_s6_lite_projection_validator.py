@@ -11,8 +11,15 @@ display-cover promotion) compared row by row including provenance.
 
 Cover matching (builder v2 rule, restated): legacy ``display_cover_url`` and every candidate url (row,
 constituent group, member occurrence) are host-migrated and then percent-DECODED before comparison, so
-a raw non-ASCII legacy Architizer url equals the %-encoded S2 serving url. The stored ``url`` is the S2
-serving url unchanged.
+a raw non-ASCII legacy Architizer url equals the %-encoded S2 serving url.
+
+URL policy v3 (builder v3 rule, restated): after ordering + cover promotion, walk rows in sort order;
+the legacy building's ``all_images`` urls (host-migrated) keyed by ``unquote`` (first occurrence wins);
+if the row's S2 serving url's ``unquote`` hits a legacy string, that string is the stored ``url`` --
+unless it was already emitted by an earlier row or equals another row's S2 serving url, in which case
+the S2 url is kept (``s2_serving_url_collision``). Independent invariant
+``url_equals_decoded_equal_legacy_string``: no row's url may differ from the first decoded-equal legacy
+all_images string unless that string is held by another row of the same building.
 """
 
 from __future__ import annotations
@@ -27,9 +34,9 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import unquote
 
-VALIDATOR_VERSION = "vnext-s6-lite-projection-independent-validator-v2"
+VALIDATOR_VERSION = "vnext-s6-lite-projection-independent-validator-v3"
 PROJECTION_VERSION = "vnext-s6-lite-v1"
-BUILDER_VERSION = "vnext-s6-lite-projection-builder-v2"
+BUILDER_VERSION = "vnext-s6-lite-projection-builder-v3"
 MANIFEST_KIND = "vnext_s6_lite_building_images_v1"
 ROLES = ("legacy_snapshot", "s2_db", "s2_manifest", "s2_validation", "e2_db", "ddl_v1_1")
 PRODUCTION_PINS = {
@@ -71,6 +78,17 @@ def _host_migrate(url: Any) -> Any:
 def _cover_key(url: Any) -> Any:
     m = _host_migrate(url)
     return unquote(m) if isinstance(m, str) and m else m
+
+
+def _legacy_first_by_decoded(rec: Mapping[str, Any]) -> dict[str, str]:
+    """unquote(host-migrated all_images url) -> first legacy string (host-migrated) in all_images order."""
+    out: dict[str, str] = {}
+    for im in rec.get("all_images") or []:
+        if isinstance(im, dict) and im.get("url"):
+            u = _host_migrate(str(im["url"]))
+            if unquote(u) not in out:
+                out[unquote(u)] = u
+    return out
 
 
 @dataclass
@@ -130,7 +148,8 @@ def _expected_rows(root: Path, inputs: Mapping[str, Path]) -> tuple[list[dict[st
                     k = src + "\x1f" + bid
                     if k in in_s2 and k not in blds:
                         blds.append(k)
-            legacy[str(rec["canonical_bld_id"])] = {"blds": blds, "cover": _cover_key(rec.get("display_cover_url"))}
+            legacy[str(rec["canonical_bld_id"])] = {"blds": blds, "cover": _cover_key(rec.get("display_cover_url")),
+                                                    "legacy": _legacy_first_by_decoded(rec)}
     need = set(k for v in legacy.values() for k in v["blds"])
 
     groups: dict[str, list[tuple]] = defaultdict(list)
@@ -192,9 +211,22 @@ def _expected_rows(root: Path, inputs: Mapping[str, Path]) -> tuple[list[dict[st
                     pick, basis = min(cand), "occurrence_url"
         if pick:
             items.insert(0, items.pop(pick))
+        s2_all = set(it[1][6] for it in items)
+        taken: set[str] = set()
+        chosen = []
+        for anchor, best, gs in items:
+            hit = info["legacy"].get(unquote(best[6]))
+            if hit is None:
+                u, why = best[6], "s2_serving_url"
+            elif hit in taken or (hit != best[6] and hit in s2_all):
+                u, why = best[6], "s2_serving_url_collision"
+            else:
+                u, why = hit, "legacy_all_images"
+            taken.add(u)
+            chosen.append((u, why))
         for i, (anchor, best, gs) in enumerate(items):
             row = {c: None for c in COLUMNS}
-            row.update({"canonical_bld_id": cid, "image_asset_id": best[4], "url": best[6], "sort_order": i,
+            row.update({"canonical_bld_id": cid, "image_asset_id": best[4], "url": chosen[i][0], "sort_order": i,
                         "semantic_type": [], "cover_slot": [], "is_cover_default": False,
                         "projection_version": PROJECTION_VERSION})
             row["provenance"] = {
@@ -202,19 +234,22 @@ def _expected_rows(root: Path, inputs: Mapping[str, Path]) -> tuple[list[dict[st
                 "representative_group_id": best[1], "representative_pixel_sha256": best[5],
                 "group_ids": [g[1] for g in gs],
                 "cover_match": basis if (i == 0 and pick is not None) else None,
+                "url_basis": chosen[i][1],
+                "s2_serving_url": None if chosen[i][0] == best[6] else best[6],
             }
             out.append(row)
     return out, set(legacy)
 
 
-def _cover_keys(path: Path) -> dict[str, Any]:
-    out = {}
+def _cover_keys(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
+    out, leg = {}, {}
     with path.open(encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 rec = json.loads(line)
                 out[str(rec["canonical_bld_id"])] = _cover_key(rec.get("display_cover_url"))
-    return out
+                leg[str(rec["canonical_bld_id"])] = _legacy_first_by_decoded(rec)
+    return out, leg
 
 
 def validate_projection(manifest_path: Path, *, repo_root: Path, production_pins: bool = True) -> ValidationReport:
@@ -311,7 +346,7 @@ def validate_projection(manifest_path: Path, *, repo_root: Path, production_pins
             mismatches += 1
             if first is None:
                 first = {"expected": e, "actual": a_cmp}
-    cover_by_bld = _cover_keys(inputs["legacy_snapshot"])
+    cover_by_bld, legacy_by_bld = _cover_keys(inputs["legacy_snapshot"])
     misplaced = 0
     for cid, lst in per.items():
         ck = cover_by_bld.get(cid)
@@ -321,6 +356,15 @@ def validate_projection(manifest_path: Path, *, repo_root: Path, production_pins
         if hit and hit[0] != 0:
             misplaced += 1
     add("cover_row_url_decoded_match_at_sort_order_0", misplaced == 0, 0, misplaced)
+    not_reused = 0
+    for cid, lst in per.items():
+        lmap = legacy_by_bld.get(cid, {})
+        held = {r["url"] for r in lst}
+        for r in lst:
+            want = lmap.get(unquote(r["url"]))
+            if want is not None and want != r["url"] and want not in held:
+                not_reused += 1
+    add("url_equals_decoded_equal_legacy_string", not_reused == 0, 0, not_reused)
     add("full_replay_rows_equal", mismatches == 0 and len(expected) == len(rows), {"rows": len(expected), "mismatches": 0},
         {"rows": len(rows), "mismatches": mismatches, "first": first})
     after = {role: _sha_file(path) for role, path in inputs.items()}

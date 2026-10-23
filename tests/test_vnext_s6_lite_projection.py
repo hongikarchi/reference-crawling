@@ -419,9 +419,15 @@ def test_end_to_end_non_ascii_architizer_cover(tmp_path: Path) -> None:
     rows = [json.loads(line) for line in (tmp_path / "out/rows.jsonl").read_text(encoding="utf-8").splitlines()]
     b1 = [r for r in rows if r["canonical_bld_id"] == "bld_000001"]
     assert [r["image_asset_id"] for r in b1] == ["zB", "zA"] and b1[0]["provenance"]["cover_match"] == "row_url"
+    # url policy v3: the raw (host-migrated) legacy string is stored verbatim, S2 url kept in provenance
+    raw = "https://images.architizer.com/media/złB.jpg?width=1680&quality=60"
+    assert b1[0]["url"] == raw
+    assert b1[0]["provenance"]["url_basis"] == "legacy_all_images" and b1[0]["provenance"]["s2_serving_url"] == enc
+    assert b1[1]["provenance"]["url_basis"] == "s2_serving_url" and b1[1]["provenance"]["s2_serving_url"] is None
     report = json.loads((tmp_path / "out/report.json").read_text(encoding="utf-8"))
-    assert report["diff_vs_legacy_all_images"]["legacy_images_by_source"]["architizer"] == {"dropped_url_form_only_percent_encoding": 1}
-    assert report["diff_vs_legacy_all_images"]["dropped_percent_encoding_only"] == 1
+    assert report["diff_vs_legacy_all_images"]["legacy_images_by_source"]["architizer"] == {"same": 1}
+    assert report["diff_vs_legacy_all_images"]["dropped_percent_encoding_only"] == 0
+    assert report["url_policy"]["by_representative_source"]["architizer"]["legacy_string_reused_differs_from_s2"] == 1
     rep = val.validate_projection(tmp_path / "out/manifest.json", repo_root=tmp_path, production_pins=False)
     assert rep.passed, rep.failed_check_names
     # tamper: demote the decoded-equal cover row -> both the invariant and the replay fail
@@ -439,3 +445,67 @@ def test_end_to_end_non_ascii_architizer_cover(tmp_path: Path) -> None:
     (tmp_path / "out/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     rep = val.validate_projection(tmp_path / "out/manifest.json", repo_root=tmp_path, production_pins=False)
     assert rep.failed_check_names == ["cover_row_url_decoded_match_at_sort_order_0", "full_replay_rows_equal"]
+
+
+# --------------------------------------------------------------------------- url policy v3 (builder v3)
+
+def test_url_policy_v3_reuses_legacy_string_and_guards_collisions() -> None:
+    A = ("architizer", "atz_b")
+    raw = "https://images.architizer.com/media/złB.jpg?width=1680&quality=60"
+    upper = "https://images.architizer.com/media/z%C5%82B.jpg?width=1680&quality=60"
+    lower = "https://images.architizer.com/media/z%c5%82B.jpg?width=1680&quality=60"
+    legacy = {"canonical_bld_id": "bld_1", "display_cover_url": None,
+              "all_images": [{"source": "architizer", "url": "https://architizer-prod.imgix.net/media/złB.jpg?w=1"},
+                             {"source": "architizer", "url": upper}]}  # first in all_images order wins
+    # (a) two encoded S2 forms of the same decoded url: the first row takes the legacy string, the later keeps S2
+    groups = {A: [_g("a0", "architizer", "atz_b", 0, "x0", "q0", upper), _g("a1", "architizer", "atz_b", 1, "x1", "q1", lower)]}
+    rows, stats = s6.project_building(legacy, [A], groups, {})
+    assert [r["url"] for r in rows] == [raw, lower]
+    assert [r["provenance"]["url_basis"] for r in rows] == ["legacy_all_images", "s2_serving_url_collision"]
+    assert stats["url_policy"] == {"architizer:legacy_string_reused": 1, "architizer:legacy_string_reused_differs_from_s2": 1,
+                                   "architizer:s2_url_kept": 1, "architizer:s2_url_kept_collision": 1}
+    # (b) the legacy string is literally another row's S2 url: the earlier row must not steal it
+    groups = {A: [_g("a0", "architizer", "atz_b", 0, "x0", "q0", lower), _g("a1", "architizer", "atz_b", 1, "x1", "q1", raw)]}
+    rows, _ = s6.project_building(legacy, [A], groups, {})
+    assert [r["url"] for r in rows] == [lower, raw]
+    assert [r["provenance"]["url_basis"] for r in rows] == ["s2_serving_url_collision", "legacy_all_images"]
+    assert len({r["url"] for r in rows}) == 2
+    # (c) no decoded-equal legacy string -> S2 url
+    rows, _ = s6.project_building({**legacy, "all_images": []}, [A], groups, {})
+    assert [r["provenance"]["url_basis"] for r in rows] == ["s2_serving_url", "s2_serving_url"]
+
+
+def test_validator_catches_url_not_reused(tmp_path: Path) -> None:
+    f = _fixture(tmp_path)
+    enc = "https://images.architizer.com/media/z%C5%82A.jpg?width=1680&quality=60"
+    c = sqlite3.connect(f["s2"])
+    c.execute("UPDATE gallery_groups SET serving_url=? WHERE group_id='g77a'", (enc,))
+    c.commit(); c.close()
+    f["s2m"].write_text(json.dumps({"output": {"sha256": _sha(f["s2"])}, "logical_sha256": "L0"}), encoding="utf-8")
+    recs = [json.loads(line) for line in f["legacy"].read_text(encoding="utf-8").splitlines()]
+    for r in recs:
+        if r["canonical_bld_id"] == "bld_000001":
+            r["all_images"] = [{"source": "architizer", "url": "https://architizer-prod.imgix.net/media/złA.jpg?w=1"}]
+    f["legacy"].write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs), encoding="utf-8")
+    _build(tmp_path, f)
+    rows = [json.loads(line) for line in (tmp_path / "out/rows.jsonl").read_text(encoding="utf-8").splitlines()]
+    target = next(r for r in rows if r["canonical_bld_id"] == "bld_000001" and r["image_asset_id"] == "zA")
+    assert target["url"] == "https://images.architizer.com/media/złA.jpg?width=1680&quality=60"
+    other = next(r for r in rows if r["canonical_bld_id"] == "bld_000002" and r["image_asset_id"] == "zA")
+    assert other["url"] == enc  # bld_000002 has no decoded-equal legacy string
+    rep = val.validate_projection(tmp_path / "out/manifest.json", repo_root=tmp_path, production_pins=False)
+    assert rep.passed, rep.failed_check_names
+    # tamper: revert the reused legacy string to the encoded S2 url (provenance consistent, SHAs recomputed)
+    target["url"], target["provenance"]["url_basis"], target["provenance"]["s2_serving_url"] = enc, "s2_serving_url", None
+    for r in rows:
+        body = {k: v for k, v in r.items() if k != "record_sha256"}
+        r["record_sha256"] = hashlib.sha256(s6.canonical_json(body).encode("utf-8")).hexdigest()
+    data = "".join(s6.canonical_json(r) + "\n" for r in rows).encode("utf-8")
+    (tmp_path / "out/rows.jsonl").write_bytes(data)
+    manifest = json.loads((tmp_path / "out/manifest.json").read_text(encoding="utf-8"))
+    manifest["output"]["sha256"] = hashlib.sha256(data).hexdigest()
+    manifest["output"]["size_bytes"] = len(data)
+    manifest["ordered_rowset_sha256"] = s6.ordered_rowset_sha256(s6.serving_line(r) for r in rows)
+    (tmp_path / "out/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    rep = val.validate_projection(tmp_path / "out/manifest.json", repo_root=tmp_path, production_pins=False)
+    assert rep.failed_check_names == ["url_equals_decoded_equal_legacy_string", "full_replay_rows_equal"]
