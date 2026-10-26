@@ -226,7 +226,7 @@ make_web 영향: `building_images.url = display_cover_url` / `all_images` url �
 | dev-ksangjo (`ep-weathered-base-a1xc6frq`) | dry-run | PASS, rollback (table_existed false, inserted 699,038, 9/9 checks) |
 | prod (`archi_data`, neondb_owner) | dry-run | PASS, rollback (동일) |
 | prod | **apply** | **PASS, committed** — 699,038행 / 39,248동, missing_parents 0, content md5 local == db `7cae88f65de70215ea0a72adadd57451`, make_web SELECT grant 확인 |
-| dev-ksangjo | apply | 대기 (ksangjo 개발용 동기화) |
+| dev-ksangjo | **apply** (2026-10-27) | **PASS, committed** — prod와 동일 수치·md5. dev `--compare` prod 스냅샷: schema identical, data identical |
 
 - run_id `vnx_s6lite_00eb99fe935f13472d9119b8`, manifest `49795e76…`.
 - prod 스키마 `--compare`: drift = `building_images` 신규뿐, 기존 5테이블 데이터 identical. 스냅샷 `docs/schema/archi_data.schema.json` 갱신, CHANGELOG 2026-10-26 항목, HANDOFF §5.4 / C11–C13 추가.

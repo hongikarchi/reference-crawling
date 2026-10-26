@@ -37,7 +37,7 @@ Not applied. Spec: `docs/VNEXT_REBUILD_PLAN.md`, `docs/vnext/PROJECTION_SPEC.md`
   Artifact `data/canonical/vnext_s6_lite_building_images_v1.jsonl` (SHA `4b7c7eee…`), manifest
   `49795e76…`. Job card `.claude/ops/jobs/20261023_vnext_s6_lite_building_images.md`.
 - Existing 5 tables: schema and row counts unchanged (`--compare` drift = only the new table).
-- `dev-ksangjo`: dry-run PASS; apply pending at time of writing.
+- `dev-ksangjo`: applied 2026-10-27, same result (PASS, md5 equal). `--compare` dev vs prod snapshot: schema identical, data identical.
 
 ## 2026-10-16 — data fix: Architizer image host migration (no schema change)
 
