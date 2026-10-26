@@ -26,6 +26,212 @@
   ],
   "server_version_major": 17,
   "tables": {
+    "public.building_images": {
+      "columns": {
+        "camera_angle": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "canonical_bld_id": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "cover_slot": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "created_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "drawing_kind": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "engine": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "engine_version": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "framing_scale": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "image_asset_id": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "is_cover_default": {
+          "default": "false",
+          "nullable": false,
+          "type": "boolean"
+        },
+        "medium": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "project_legibility": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "project_state": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "projection_version": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        },
+        "semantic_type": {
+          "default": "'{}'::text[]",
+          "nullable": false,
+          "type": "text[]"
+        },
+        "sort_order": {
+          "default": null,
+          "nullable": false,
+          "type": "integer"
+        },
+        "spatial_context": {
+          "default": null,
+          "nullable": true,
+          "type": "text"
+        },
+        "updated_at": {
+          "default": "now()",
+          "nullable": false,
+          "type": "timestamp with time zone"
+        },
+        "url": {
+          "default": null,
+          "nullable": false,
+          "type": "text"
+        }
+      },
+      "constraints": {
+        "building_images_camera_angle_check": {
+          "definition": "CHECK (camera_angle = ANY (ARRAY['eye_level'::text, 'elevated'::text, 'aerial_oblique'::text, 'aerial_top_down'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_canonical_bld_id_fkey": {
+          "definition": "FOREIGN KEY (canonical_bld_id) REFERENCES canonical_v2_buildings(canonical_bld_id) ON DELETE CASCADE",
+          "type": "f"
+        },
+        "building_images_canonical_bld_id_sort_order_key": {
+          "definition": "UNIQUE (canonical_bld_id, sort_order)",
+          "type": "u"
+        },
+        "building_images_check": {
+          "definition": "CHECK (medium IS NULL AND spatial_context IS NULL AND framing_scale IS NULL AND camera_angle IS NULL AND drawing_kind IS NULL AND project_state IS NULL AND project_legibility IS NULL AND semantic_type = '{}'::text[] AND NOT is_cover_default AND cover_slot = '{}'::text[] AND engine IS NULL AND engine_version IS NULL OR medium IS NOT NULL AND project_legibility IS NOT NULL AND cardinality(semantic_type) >= 1 AND engine IS NOT NULL AND engine_version IS NOT NULL AND (medium = 'photograph'::text AND spatial_context IS NOT NULL AND framing_scale IS NOT NULL AND camera_angle IS NOT NULL AND drawing_kind IS NULL AND project_state IS NOT NULL OR medium = 'drawing'::text AND spatial_context IS NULL AND framing_scale IS NULL AND camera_angle IS NULL AND drawing_kind IS NOT NULL AND project_state IS NULL OR medium = 'rendering'::text AND spatial_context IS NOT NULL AND framing_scale IS NOT NULL AND camera_angle IS NOT NULL AND drawing_kind IS NOT NULL AND project_state IS NULL OR (medium = ANY (ARRAY['physical_model'::text, 'mixed'::text, 'other'::text, 'unknown'::text])) AND spatial_context IS NULL AND framing_scale IS NULL AND camera_angle IS NULL AND drawing_kind IS NULL AND project_state IS NULL))",
+          "type": "c"
+        },
+        "building_images_check1": {
+          "definition": "CHECK ((camera_angle <> ALL (ARRAY['aerial_oblique'::text, 'aerial_top_down'::text])) OR (spatial_context = ANY (ARRAY['exterior'::text, 'unknown'::text])))",
+          "type": "c"
+        },
+        "building_images_check2": {
+          "definition": "CHECK (NOT is_cover_default OR medium = 'photograph'::text)",
+          "type": "c"
+        },
+        "building_images_check3": {
+          "definition": "CHECK (NOT cover_slot && ARRAY['exterior'::text, 'interior'::text, 'aerial'::text, 'detail'::text] OR medium = 'photograph'::text)",
+          "type": "c"
+        },
+        "building_images_check4": {
+          "definition": "CHECK (NOT cover_slot @> ARRAY['drawing'::text] OR medium = 'drawing'::text)",
+          "type": "c"
+        },
+        "building_images_cover_slot_check": {
+          "definition": "CHECK (cover_slot <@ ARRAY['exterior'::text, 'interior'::text, 'drawing'::text, 'aerial'::text, 'detail'::text])",
+          "type": "c"
+        },
+        "building_images_drawing_kind_check": {
+          "definition": "CHECK (drawing_kind = ANY (ARRAY['plan'::text, 'site_plan'::text, 'section'::text, 'elevation'::text, 'axonometric'::text, 'perspective'::text, 'detail'::text, 'diagram'::text, 'sketch'::text, 'composite'::text, 'other'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_engine_check": {
+          "definition": "CHECK (length(TRIM(BOTH FROM engine)) > 0)",
+          "type": "c"
+        },
+        "building_images_engine_version_check": {
+          "definition": "CHECK (length(TRIM(BOTH FROM engine_version)) > 0)",
+          "type": "c"
+        },
+        "building_images_framing_scale_check": {
+          "definition": "CHECK (framing_scale = ANY (ARRAY['site_context'::text, 'overall'::text, 'element_detail'::text, 'material_detail'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_image_asset_id_check": {
+          "definition": "CHECK (length(TRIM(BOTH FROM image_asset_id)) > 0)",
+          "type": "c"
+        },
+        "building_images_medium_check": {
+          "definition": "CHECK (medium = ANY (ARRAY['photograph'::text, 'drawing'::text, 'rendering'::text, 'physical_model'::text, 'mixed'::text, 'other'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_pkey": {
+          "definition": "PRIMARY KEY (canonical_bld_id, image_asset_id)",
+          "type": "p"
+        },
+        "building_images_project_legibility_check": {
+          "definition": "CHECK (project_legibility = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_project_state_check": {
+          "definition": "CHECK (project_state = ANY (ARRAY['visibly_finished'::text, 'construction_visible'::text, 'ruin_or_abandoned_visible'::text, 'demolition_visible'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_projection_version_check": {
+          "definition": "CHECK (length(TRIM(BOTH FROM projection_version)) > 0)",
+          "type": "c"
+        },
+        "building_images_semantic_type_check": {
+          "definition": "CHECK (semantic_type <@ ARRAY['exterior_overall'::text, 'exterior_context'::text, 'interior'::text, 'threshold'::text, 'drawing'::text, 'rendering'::text, 'physical_model'::text, 'aerial'::text, 'detail'::text, 'construction_archive'::text])",
+          "type": "c"
+        },
+        "building_images_sort_order_check": {
+          "definition": "CHECK (sort_order >= 0)",
+          "type": "c"
+        },
+        "building_images_spatial_context_check": {
+          "definition": "CHECK (spatial_context = ANY (ARRAY['exterior'::text, 'interior'::text, 'threshold'::text, 'unknown'::text]))",
+          "type": "c"
+        },
+        "building_images_url_check": {
+          "definition": "CHECK (length(TRIM(BOTH FROM url)) > 0)",
+          "type": "c"
+        }
+      },
+      "indexes": {
+        "building_images_canonical_bld_id_sort_order_key": "CREATE UNIQUE INDEX building_images_canonical_bld_id_sort_order_key ON public.building_images USING btree (canonical_bld_id, sort_order)",
+        "building_images_pkey": "CREATE UNIQUE INDEX building_images_pkey ON public.building_images USING btree (canonical_bld_id, image_asset_id)",
+        "idx_building_images_cover_slot": "CREATE INDEX idx_building_images_cover_slot ON public.building_images USING gin (cover_slot)",
+        "idx_building_images_semantic_type": "CREATE INDEX idx_building_images_semantic_type ON public.building_images USING gin (semantic_type)",
+        "uq_building_images_aerial_cover": "CREATE UNIQUE INDEX uq_building_images_aerial_cover ON public.building_images USING btree (canonical_bld_id) WHERE (cover_slot @> ARRAY['aerial'::text])",
+        "uq_building_images_default_cover": "CREATE UNIQUE INDEX uq_building_images_default_cover ON public.building_images USING btree (canonical_bld_id) WHERE is_cover_default",
+        "uq_building_images_detail_cover": "CREATE UNIQUE INDEX uq_building_images_detail_cover ON public.building_images USING btree (canonical_bld_id) WHERE (cover_slot @> ARRAY['detail'::text])",
+        "uq_building_images_drawing_cover": "CREATE UNIQUE INDEX uq_building_images_drawing_cover ON public.building_images USING btree (canonical_bld_id) WHERE (cover_slot @> ARRAY['drawing'::text])",
+        "uq_building_images_exterior_cover": "CREATE UNIQUE INDEX uq_building_images_exterior_cover ON public.building_images USING btree (canonical_bld_id) WHERE (cover_slot @> ARRAY['exterior'::text])",
+        "uq_building_images_interior_cover": "CREATE UNIQUE INDEX uq_building_images_interior_cover ON public.building_images USING btree (canonical_bld_id) WHERE (cover_slot @> ARRAY['interior'::text])"
+      },
+      "kind": "table"
+    },
     "public.canonical_v2_architects": {
       "columns": {
         "building_ids": {

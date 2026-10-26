@@ -4,7 +4,7 @@
 |---|---|
 | 기준일 | 2026-10-16 (라이브 Neon read-only 확인) |
 | 대상 | ksangjo (archi-tinder 백엔드·추천 알고리즘), owner (make_db·vNext) |
-| 데이터 릴리스 | `completeness_c27_cover2026q3` (c26_rem2026q2 + 커버 재선정 145건, 2026-07-06) |
+| 데이터 릴리스 | `completeness_c27_cover2026q3` (c26_rem2026q2 + 커버 재선정 145건, 2026-07-06) + **`building_images` vnext-s6-lite-v1 (2026-10-26, §5.4)** |
 | 스키마 스냅샷 | `docs/schema/archi_data.schema.json` (생성: `tools/neon_schema_snapshot.py`) · 변경 이력 `docs/schema/CHANGELOG.md` |
 
 목표는 하나다: **dev와 prod DB가 조용히 어긋나지 않게 한다.** 아래 §8 규칙이 이 문서의 핵심이다.
@@ -45,7 +45,7 @@
 
 | 대상 | 스키마 소유 | 데이터 쓰기 | 비고 |
 |---|---|---|---|
-| `archi_data.public.*` (5개 테이블) | **make_db (owner)** — 로더 DDL | **owner의 로더만** | 서비스는 SELECT 전용(`make_web`). 서비스 쪽 Django router가 마이그레이션 차단 |
+| `archi_data.public.*` (6개 테이블, `building_images` 2026-10-26 추가) | **make_db (owner)** — 로더 DDL | **owner의 로더만** | 서비스는 SELECT 전용(`make_web`). 서비스 쪽 Django router가 마이그레이션 차단 |
 | `archi_data.vnext_preview.*` | make_db (owner) | owner의 seed 스크립트 (dev 브랜치에만 존재) | 실험/사전공개용. prod에는 없음 |
 | `user_data.*` | **archi-tinder Django migrations** | 서비스 런타임(`make_web_app`) | 스키마 변경은 PR의 마이그레이션 파일로만 |
 
@@ -179,6 +179,25 @@
 - R4 축은 `sum(doc_freq)` = non-NULL 행 수 (≠ total_n). roof_type 23,160 / 36,673.
 - 계약 상세: `docs/MAKEDB_ALGO_SUPPORT_RESPONSE.md`.
 
+### 5.4 `building_images` (PK `(canonical_bld_id, image_asset_id)`, 2026-10-26 prod 반영)
+
+건물별 갤러리 이미지 1행 = 1장. DDL `docs/vnext/BUILDING_IMAGES_DDL_v1_1.sql`, `projection_version = 'vnext-s6-lite-v1'`.
+**699,038행 / 39,248동** (publishable 36,673동 중 36,636동에 이미지 있음, 37동 없음). 건물당 중앙값 16장, 최대 182장.
+
+| 컬럼 | 의미 | 현재 값 |
+|---|---|---|
+| `canonical_bld_id` | → `canonical_v2_buildings` (FK, **ON DELETE CASCADE**) | |
+| `image_asset_id` | 안정 이미지 ID (소스 자산 키) | |
+| `url` | 서빙 URL (소스 CDN 직링크). `all_images[].url`·`display_cover_url`과 **같은 문자열**이라 join 가능 | |
+| `sort_order` | 건물별 0부터 연속. **0 = 현재 `display_cover_url`과 같은 이미지**(있을 때), 이후 소스 페이지 순서 | |
+| `semantic_type[]`, `medium`, `spatial_context`, `framing_scale`, `camera_angle`, `drawing_kind`, `project_state`, `project_legibility` | 이미지 분류 | **전부 비어 있음** (`'{}'` / NULL). S3 분류 후 채움 |
+| `is_cover_default`, `cover_slot[]` | 커버 지정 | **전부 false / `'{}'`**. 커버는 계속 `display_cover_url` 사용 |
+| `engine`, `engine_version` | 분류 엔진 | NULL |
+
+- **출처는 Divisare + Architizer만.** 같은 픽셀(정규화 SHA 동일) 이미지는 1행으로 합쳤다. Archello·Metalocus 이미지는 아직 없다 → 그 소스만 가진 건물은 행이 0개일 수 있다. 이런 건물은 기존 `all_images`로 fallback.
+- 기존 `all_images` 대비: 동일 670,121 / 신규 28,917 / 빠짐 179,274 (대부분 Archello 153,563 + Metalocus 4,366, Divisare 브라우저 비호환 원본 pdf/tiff 등 포함).
+- 분류값이 채워지는 시점(S3)에 같은 테이블에 값이 들어간다. 컬럼 모양은 바뀌지 않는다.
+
 ## 6. 샘플 SQL
 
 ```sql
@@ -225,6 +244,10 @@ LIMIT 10;
 
 -- (7) 신선도 확인
 SELECT DISTINCT corpus_version, max(computed_at) OVER () FROM canonical_v2_tag_stats LIMIT 1;
+
+-- (8) 건물 갤러리 (building_images, 없으면 all_images fallback — C12)
+SELECT url, sort_order FROM building_images
+WHERE canonical_bld_id = %(bld)s ORDER BY sort_order;
 ```
 
 ## 7. 주의사항 (Caveats)
@@ -241,10 +264,13 @@ SELECT DISTINCT corpus_version, max(computed_at) OVER () FROM canonical_v2_tag_s
 | C8 | `display_cover_url` NULL 203행 | 서빙 쿼리에 `display_cover_url IS NOT NULL` |
 | C9 | 서빙 커버는 `display_cover_url` (`cover_image_url_default`와 대부분 다름) | 커버엔 항상 display_cover_url |
 | C10 | `canonical_v2_architects.email` 항상 NULL | UI에 노출하지 말 것 |
+| C11 | `building_images` 분류·커버 컬럼이 비어 있음 (S3 전) | 필터에 쓰지 말 것. 갤러리 순서는 `ORDER BY sort_order`, 커버는 `display_cover_url` |
+| C12 | `building_images`는 Divisare·Architizer 이미지만 | 행이 없는 건물은 `all_images` fallback (`LEFT JOIN`) |
+| C13 | FK가 ON DELETE CASCADE — 부모 행 삭제 시 이미지 행도 삭제됨 | owner: 건물 로더 재-upsert(삭제 포함) 후 `tools/vnext_building_images_apply.py` 재실행 |
 
 ## 8. DEV/PROD 일관성 규칙 (필수)
 
-1. **prod `archi_data`는 owner의 로더만 쓴다.** (`canonical_v2_neon_loader.py`, `canonical_v2_architects_neon_loader.py`, `canonical_v2_tag_stats_build.py`). 서비스·수동 SQL·다른 스크립트로 prod archi_data에 DDL/DML 금지.
+1. **prod `archi_data`는 owner의 로더만 쓴다.** (`canonical_v2_neon_loader.py`, `canonical_v2_architects_neon_loader.py`, `canonical_v2_tag_stats_build.py`, `vnext_building_images_apply.py`). 서비스·수동 SQL·다른 스크립트로 prod archi_data에 DDL/DML 금지.
 2. **dev 브랜치(`dev-ksangjo`)는 prod에서 reset (owner가 Neon 콘솔에서: Branches → dev-ksangjo → Reset from parent)** — make_db 릴리스 직후 + 최소 주 1회. ⚠ reset하면 role 비밀번호가 prod 값으로 돌아갈 수 있으므로, reset 직후 owner가 dev 비밀번호를 다시 교체하고 새 블록을 전달한다. reset은 브랜치 변경을 전부 버리므로, 실험 DDL은 반드시 마이그레이션/스크립트 파일로 리포에 두고 reset 후 재실행한다. `vnext_preview`도 reset 후 owner가 `tools/vnext_preview_seed.py --dsn-env <DEV_OWNER_URL_VAR> --apply`를 다시 돌린다 (prod 호스트는 도구가 거부, `make_web`에 SELECT 권한 자동 부여).
 3. **`user_data` 스키마는 Django 마이그레이션(PR)으로만.** PR merge → Railway 자동 배포 직후 owner가 즉시 `make migrate-prod` (neondb_owner). dev는 `make migrate-local`. 콘솔에서 손으로 ALTER 금지.
 4. **DB를 건드리는 PR merge 전, 그리고 매 릴리스 후 `tools/neon_schema_snapshot.py --dsn-env <DEV_URL_VAR> --compare docs/schema/archi_data.schema.json` 실행** (make_db 리포는 public이라 clone해서 실행 가능, `make_web` RO 계정으로 충분; exit 2 = drift). drift가 나오면 **멈춘다** — 원인 규명 전 merge/배포 금지.
@@ -254,12 +280,12 @@ SELECT DISTINCT corpus_version, max(computed_at) OVER () FROM canonical_v2_tag_s
 ## 9. vNext 변경 예고 (P7 배포 시점, 일정 미정)
 
 - **`canonical_v2_buildings` 컬럼 모양은 그대로.** 값만 vNext 파이프라인으로 재생성 (`docs/vnext/PROJECTION_SPEC.md`).
-- **신규 테이블 `building_images`** (DDL `docs/vnext/BUILDING_IMAGES_DDL.sql`): `canonical_bld_id` FK(ON DELETE CASCADE), `image_asset_id`, `url`, `sort_order`(건물별 0부터 연속), `semantic_type[]`, `medium`, 시점·프레이밍 필드, `is_cover_default`, `cover_slot[]`, `engine/engine_version/projection_version`.
+- **`building_images`는 2026-10-26 public에 반영됨 (분류 비어 있음, §5.4).** P7에서는 분류·커버 값이 채워지고 vNext ID 기준으로 재투영된다.
 - **ID 규칙:** legacy와 1:1이 명확하면 기존 `canonical_bld_id` 유지, 아니면 신규 ID (`docs/vnext/CONTRACT_IDENTITY.md` §6). → **스와이프 ID가 orphan될 수 있음. 현재 remap 계획 없음** — swipe 조인은 LEFT JOIN + 누락 허용으로 작성.
 - **R4 4축(scale/structural/roof/facade)은 신규·비1:1 행에서 NULL** (era는 project_year로 재계산).
 - **`covers_by_type`은 항상 5개 키** (exterior/interior/drawing/aerial/detail), 없는 슬롯은 `null`. default 커버가 없으면 `is_publishable=false`.
 - URL은 계속 소스 CDN (R2 재호스팅 범위 밖).
-- **dev 브랜치의 `vnext_preview.building_images`는 MOCK** (`engine='mock_preview'`, 현재 `all_images`/`covers_by_type`에서 파생; 2026-10-16 시드: publishable 36,673동 → **830,388행**, checker PASS). 실제 분류값(semantic_type 등)은 P7에서 들어온다. 테이블은 `vnext_preview` 스키마에 있으므로 쿼리에서 `vnext_preview.building_images`로 부르거나 search_path로 지정한다.
+- **dev 브랜치의 `vnext_preview.building_images`는 MOCK** (`engine='mock_preview'`, 현재 `all_images`/`covers_by_type`에서 파생; 2026-10-16 시드: publishable 36,673동 → **830,388행**, checker PASS). 실제 데이터는 이제 `public.building_images`를 쓴다 (mock은 비교용으로만 남음). 테이블은 `vnext_preview` 스키마에 있으므로 쿼리에서 `vnext_preview.building_images`로 부르거나 search_path로 지정한다.
 - **`vnext_preview` 대상 코드는 feature flag 뒤에서만.** prod 코드 경로가 플래그 없이 `vnext_preview`를 참조하면 안 된다 (prod에는 그 스키마가 없다).
 
 ## 10. ksangjo 시작 체크리스트

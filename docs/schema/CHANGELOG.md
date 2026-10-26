@@ -22,6 +22,23 @@ Not applied. Spec: `docs/VNEXT_REBUILD_PLAN.md`, `docs/vnext/PROJECTION_SPEC.md`
 - Pre-release: available only as MOCK in `vnext_preview.building_images` on the
   `dev-ksangjo` branch (`engine = 'mock_preview'`).
 
+## 2026-10-26 — added `public.building_images` (vnext-s6-lite-v1, unclassified)
+
+- **Added:** `public.building_images` per `docs/vnext/BUILDING_IMAGES_DDL_v1_1.sql` (v1 shape;
+  classification/engine columns nullable, `semantic_type` default `'{}'`, CHECK = fully
+  unclassified row OR v1 classified row). FK → `canonical_v2_buildings` ON DELETE CASCADE.
+  `GRANT SELECT … TO make_web`.
+- **Rows:** 699,038 / 39,248 buildings (230 legacy rows have none; publishable without images 37).
+  Divisare + Architizer galleries from S2 full v1 (exact normalized-pixel groups), keyed by the
+  legacy `canonical_bld_id` via `source_refs` (no S1 merges yet). `sort_order` 0 = image matching
+  `display_cover_url`. All classification/cover columns empty until S3/S4.
+- Applied with `tools/vnext_building_images_apply.py --apply --confirm-db-write` to **prod**
+  (single txn, 9/9 checks, content md5 `7cae88f65de70215ea0a72adadd57451` local == db).
+  Artifact `data/canonical/vnext_s6_lite_building_images_v1.jsonl` (SHA `4b7c7eee…`), manifest
+  `49795e76…`. Job card `.claude/ops/jobs/20261023_vnext_s6_lite_building_images.md`.
+- Existing 5 tables: schema and row counts unchanged (`--compare` drift = only the new table).
+- `dev-ksangjo`: dry-run PASS; apply pending at time of writing.
+
 ## 2026-10-16 — data fix: Architizer image host migration (no schema change)
 
 Architizer moved its image CDN: `architizer-prod.imgix.net` returns HTTP 410; the same path on
