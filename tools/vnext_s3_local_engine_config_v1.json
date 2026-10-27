@@ -1,0 +1,104 @@
+{
+  "config_version": "vnext-s3-local-engine-config-v1",
+  "contract_version": "vnext-gallery-semantics-contract-v1.3",
+  "engine": "vnext_s3_local_siglip_zeroshot",
+  "engine_version": "0.1.0",
+  "model_preference": ["google/siglip2-so400m-patch14-384", "google/siglip-so400m-patch14-384"],
+  "text_preprocess": {"lowercase": true, "padding": "max_length", "max_length": 64},
+  "image_preprocess": {"resize": [384, 384], "resample": "bilinear", "rescale": 0.00392156862745098, "mean": [0.5, 0.5, 0.5], "std": [0.5, 0.5, 0.5]},
+  "dtype": "float16",
+  "batch_size": 32,
+  "scoring": {
+    "phrasing_aggregation": "mean of L2-normalised phrasing text embeddings, re-normalised (one embedding per sub-concept)",
+    "value_logit": "max over the value's sub-concepts of logit_scale*cos(image, subconcept)+logit_bias",
+    "field_probability": "softmax over the field's ACTIVE candidate values' logits",
+    "top_score": "softmax probability of the chosen value",
+    "margin": "top softmax probability minus runner-up softmax probability (confidence proxy, advisory)",
+    "sigmoid": "sigmoid(value_logit) of the chosen value is also reported (absolute SigLIP match probability)"
+  },
+  "decision": {
+    "scope": "in_scope=true iff logit(in_scope) >= max(reject logits) - scope_reject_logit_margin; else in_scope=false and reject_reason=argmax reject value",
+    "scope_reject_logit_margin": 0.0,
+    "unknown_min_top_prob": {"medium": 0.35, "spatial_context": 0.35, "framing_scale": 0.35, "camera_angle": 0.35, "drawing_kind": 0.35, "project_state": 0.35, "project_legibility": 0.35},
+    "applicability": "contract §5: out_of_scope -> view axes/drawing_kind/project_state not_applicable, legibility none; photograph -> view axes + project_state, drawing_kind not_applicable; drawing -> drawing_kind only; rendering -> view axes + drawing_kind; physical_model/mixed/other/unknown -> only legibility",
+    "camera_conditional_candidates": "aerial_oblique/aerial_top_down are candidates only when spatial_context in {exterior, unknown} (contract §5); otherwise candidate set = {eye_level, elevated}. Unmasked argmax kept as advisory raw_argmax",
+    "drawing_kind_unknown_advisory_flag": "drawing_kind_unclear"
+  },
+  "cover": {
+    "tier_1": "in_scope & medium=photograph & spatial_context=exterior & framing_scale=overall & camera_angle in {eye_level, elevated} & project_state=visibly_finished",
+    "tier_2": "in_scope & medium=photograph & spatial_context=exterior & ((framing_scale=overall & camera_angle in {aerial_oblique, aerial_top_down}) | framing_scale=site_context) & project_state=visibly_finished",
+    "tier_3_ineligible": "anything else (never default)",
+    "cover_score": "mean of p(scope=in_scope vs rejects), p(medium=photograph), p(spatial=exterior), p(framing=overall), p(camera in {eye_level, elevated}), p(legibility=high), p(state=visibly_finished), each from the unmasked softmax of its field",
+    "rank": "per building: tier ascending, then cover_score descending, then idx ascending"
+  },
+  "fields": {
+    "scope": {
+      "in_scope": {
+        "building_exterior": ["a photo of a building exterior", "an architectural photograph of a building facade", "a house or building seen from outside"],
+        "interior_space": ["an architectural photograph of an interior space", "a photo of a room inside a building", "the interior of a building with furniture and windows"],
+        "architectural_drawing": ["an architectural floor plan drawing", "an architectural section or elevation drawing", "an architectural diagram of a building"],
+        "architectural_rendering": ["a 3d architectural rendering of a building", "a computer generated visualization of an architectural project"],
+        "architectural_model": ["a physical scale model of a building", "an architectural maquette made of cardboard or wood"],
+        "architectural_detail": ["a close-up photo of an architectural detail", "a close-up of building materials such as brick, concrete, wood or metal"],
+        "landscape_architecture": ["a photo of a designed garden, park or plaza", "a landscape architecture project with paths and planting"]
+      },
+      "unreadable_or_blank": {"blank": ["a blank white image", "a completely black image", "an empty grey placeholder image"], "unreadable": ["a corrupted, extremely blurry, unreadable image"]},
+      "non_architectural_subject": {"subject": ["a photo of food on a plate", "a photo of an animal", "a portrait photo of a person's face", "a photo of a car or a vehicle"]},
+      "people_or_event": {"subject": ["a crowd of people at an event or party", "people posing for a group photo", "a ceremony or presentation with an audience"]},
+      "isolated_product_artwork_or_sample": {"subject": ["a product photo of a single object on a plain background", "a photo of a material sample or swatch", "a painting or an artwork hanging in a gallery", "a piece of furniture photographed alone on a white background"]},
+      "text_or_logo_only": {"subject": ["a logo on a plain background", "a page of text", "a poster or document consisting mostly of text", "a brand logo or icon"]},
+      "no_project_visible": {"subject": ["a natural landscape with no building", "a photo of the sky, trees or the sea with no architecture", "an empty field with no structure visible"]},
+      "multi_panel_without_dominant_image": {"subject": ["a grid collage of many small photos", "a contact sheet with many thumbnails", "a mood board made of many unrelated small pictures"]}
+    },
+    "medium": {
+      "photograph": {"photo": ["a photograph", "a real photo taken with a camera", "an architectural photograph of a real place"]},
+      "drawing": {"drawing": ["a technical architectural drawing with black lines on white", "a floor plan or section drawing", "a line drawing, diagram or sketch", "a cad drawing"]},
+      "rendering": {"render": ["a 3d computer rendering", "a photorealistic cgi visualization", "a digital architectural render"]},
+      "physical_model": {"model": ["a photo of a physical architectural scale model", "a cardboard, foam or wooden model of a building on a table"]},
+      "mixed": {"mixed": ["a collage combining photographs and drawings", "a presentation board mixing images, drawings and text", "a photo with drawn lines and annotations overlaid"]},
+      "other": {"other": ["a painting or watercolor artwork", "an abstract graphic illustration"]}
+    },
+    "spatial_context": {
+      "exterior": {"ext": ["the exterior of a building seen from outside", "an outdoor view of a building facade", "a building outside under the sky"]},
+      "interior": {"int": ["an interior view inside a building", "inside a room with walls and ceiling", "an indoor space"]},
+      "threshold": {"thr": ["a semi-outdoor covered porch, loggia or veranda", "an entrance doorway between inside and outside", "a view through a large opening from inside to the outdoors", "a covered courtyard or terrace under a roof"]}
+    },
+    "framing_scale": {
+      "site_context": {"ctx": ["a building shown small within its surrounding landscape or city", "a wide view of a building in its urban or natural context", "a distant view of a building among its surroundings"]},
+      "overall": {"ovr": ["a view of the whole building", "the entire facade of a building", "a full view of a whole room or space"]},
+      "element_detail": {"el": ["a close-up of an architectural element such as a staircase, window, door or column", "a partial view focusing on one building element"]},
+      "material_detail": {"mat": ["an extreme close-up of a material texture", "a close-up of the surface of brick, concrete, wood or metal"]}
+    },
+    "camera_angle": {
+      "eye_level": {"eye": ["a photo taken at eye level from the ground", "a street-level view", "a photo taken by a standing person at human height"]},
+      "elevated": {"elev": ["a view from a slightly elevated vantage point such as an upper floor or a neighbouring building", "a high angle view looking down slightly onto a building"]},
+      "aerial_oblique": {"aob": ["an aerial drone photo taken at an oblique angle", "a bird's eye view of a building from high in the sky"]},
+      "aerial_top_down": {"atd": ["a top-down aerial view looking straight down", "a satellite-like overhead view of a roof"]}
+    },
+    "drawing_kind": {
+      "plan": {"p": ["an architectural floor plan", "a floor plan drawing showing rooms and walls from above"]},
+      "site_plan": {"p": ["an architectural site plan showing the building footprint, streets and surroundings", "a site plan or masterplan drawing"]},
+      "section": {"p": ["an architectural cross section drawing", "a building section cut showing floors and interior heights"]},
+      "elevation": {"p": ["an architectural elevation drawing of a facade", "a flat orthographic facade drawing"]},
+      "axonometric": {"p": ["an axonometric architectural drawing", "an isometric or exploded axonometric view of a building"]},
+      "perspective": {"p": ["a perspective view of a building", "a perspective architectural visualization from a viewpoint"]},
+      "detail": {"p": ["a construction detail drawing", "a technical detail drawing of a wall or joint"]},
+      "diagram": {"p": ["an architectural concept diagram with arrows and colors", "a diagram explaining a design concept"]},
+      "sketch": {"p": ["a freehand architectural sketch", "a hand drawn pencil sketch of a building"]},
+      "composite": {"p": ["a sheet combining several plans, sections and elevations", "multiple architectural drawings on one sheet"]},
+      "other": {"p": ["a chart or graph", "a map"]}
+    },
+    "project_state": {
+      "visibly_finished": {"f": ["a completed finished building", "a finished building in use"]},
+      "construction_visible": {"c": ["a building under construction with scaffolding or cranes", "a construction site with exposed structure"]},
+      "ruin_or_abandoned_visible": {"r": ["an abandoned ruined building", "a derelict decaying building"]},
+      "demolition_visible": {"d": ["a building being demolished", "demolition rubble of a building"]}
+    },
+    "project_legibility": {
+      "high": {"h": ["a clear, sharp, well lit and unobstructed view of the architecture", "the architecture is clearly visible and easy to read"]},
+      "medium": {"m": ["the architecture is partly visible or partly obstructed", "a view where only part of the architecture can be read"]},
+      "low": {"l": ["the architecture is barely visible, dark, blurry or obscured", "the building is hard to make out in this image"]},
+      "none": {"n": ["no architecture is visible at all", "an image without any building or space"]}
+    }
+  }
+}
