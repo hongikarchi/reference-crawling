@@ -153,3 +153,104 @@ v1 동결 입출력 SHA 불변. 보고서 `data/smoke_vnext/wp3_n10_v1/exp_v2/re
   - `tools/vnext_s3_local_engine_config_v2.json`
   - `tools/vnext_wp3_exp_v2{,_embed,_baseline,_report}.py`
   - `exp_v2/` 파일들: baseline_v1_225_eval_report.*, emb*, text_emb*, config_v2_tuned_fold{A,B}.json, pred_*.jsonl, results.json, report.md
+
+## 계약 v1.4 재채점 (2026-10-28)
+
+- 사용자 결정 2026-10-28: legibility 3→2단계(`medium` 미출력, `medium`→`high`), camera eye_level/elevated 경계 `unknown` 허용.
+- 계약 `docs/vnext/CONTRACT_GALLERY_SEMANTICS.md` §4.1 v1.4, sha `40b5470a62f4978ac60826b6717f3f3bc53f1367a84d7ffb24d3d656b209b35e`
+  (v1.3 sha `81687d1b…c201`). DDL 변경 없음. wp0c contract validator PASS.
+  주의: S2 full v1 run은 v1.3 sha를 기록 → `canonical/vnext_gallery_full_validator.py` 재실행 시 `contract_sha` 체크 불일치(앵커 체크는 통과 예상).
+- 도구 `tools/vnext_wp3_eval_v14.py` (v1 scorer 미변경 import), `tests/test_vnext_wp3_eval_v14.py` (2 tests).
+  출력 `exp_v2/rescore_v14.{json,md}`. v1.3 재채점 parity 8/8 일치. 비용 $0.
+- 결과(225장): best combo zsScope+probe(zs-logit) pooled **92.6%** (v1.3 91.5%), zs v2 cross-fold 91.8%, probe 89.2-89.5%, v1 77.8%.
+  scope/medium 명백 오류는 불변(9/13, 9/18, 17/12-13, 22/49) → **lane A 전 엔진 FAIL 유지**. lane B 불변.
+- camera는 기존 예측이 `unknown`을 내지 않아 변화 0. in-sample abstain what-if: 하위 margin 10-30% → +0.5~2pp.
+
+## codex teacher + probe (2026-10-28)
+
+상태: **probe v1 (hybrid emb+zs2, codex 라벨 학습) eval-225 pooled 96.9% (codex 96.6%, exp_v2 combo 92.6%), scope 오류 4 / medium 오류 2,
+cover 8/10 crit 2 → lane A FAIL, lane B FAIL (probe 단독).** codex cover 호출 병행 시 lane B 10/10.
+Neon/R2 0, git commit 0, Claude 이미지 열람 0, 동결 입력 변경 0 (gold `252c798a`, local_labels `95bccccb`, codex_v1 labels `a84344fd`).
+
+### 1. 계약 / teacher
+
+- 계약 v1.4 (§4.1): legibility `high|low` (2단계), camera eye_level/elevated 경계 `unknown` 허용. 채점 = 기존 `tools/vnext_wp3_eval_v14.py` → v1 scorer 그대로.
+- teacher = `tools/vnext_s3_codex_engine.py` 0.2.0, gpt-6.1-sol / effort low / default tier, label prompt `d30e629e…43da`(동결, eval과 동일), b8, 768px, 3 workers.
+- codex eval-225 (이전 단계, `wp3_n10_v1/codex_v1/eval.md`): pooled 96.6%, scope 7 (전부 bld_031919) / medium 1 (idx 129), cover 비교 호출 10/10 crit 0.
+
+### 2. pool 라벨링 (`data/smoke_vnext/wp3_pool_v1/`)
+
+- pool: 278동 / 1,513장 (Divisare 139 / Architizer 139동), eval 10동·holdout 100동과 건물·pixel 중복 0 (학습 스크립트에서 재확인).
+- 입력 어댑터 `tools/vnext_wp3_pool_codex_prep.py` → `codex_input/` (engine 형식 manifest + fetch log, pixel sha 재검증).
+- slice 먼저: engine batch 13개 = 104장 (sha 순서 선택, 전체 run과 같은 batch라 resume 대상) → **1,229.5 tok/img, retry 0**, 예상 총량 ≈1.87M ≤ 8.0M → 전체 진행.
+- 전체: **1,512/1,512 ok, retry 0, invalid 0**, 1,855,387 tok (**1,227 tok/img**), 189 calls, 남은 176 calls wall 524.6 s (≈9.7k img/h).
+  fetch 실패 1장(idx 1179, 404)은 `codex_labels.jsonl`에 `not_run` 행으로 명시. 결과 `codex_labels.jsonl` sha `b5a617e3…829a`.
+- teacher 분포: in_scope 1,454 / out 58 (product 31, text 10, multi_panel 8, people 4, non_arch 3, no_project 2);
+  medium photo 1,118 / drawing 175 / rendering 135 / model 71 / mixed 9 / other 4; legib high 1,414 / low 40; camera unknown 4.
+- enrichment 확인: rendering 픽 65/65 → codex rendering (우려했던 photo 오인 없음), model 64/65, drawing 65/65, out-of-scope 픽 65 중 44 out / 20 photo / 1 rendering.
+  prefilter(zs v2) vs codex 불일치: scope 114/1,512, medium 81.
+
+### 3. token 사용 (실측)
+
+| stage | token | 비고 |
+|---|---:|---|
+| eval-225 stage (이전) | 481,636 / 1.5M cap | harness 49,608 · smoke 37,784 · labels 281,931 · covers 103,172 · quota 9,141 |
+| pool stage | **1,864,527 / 8.0M cap** | slice 127,863 · 나머지 1,727,524 · quota probe 2회 9,140 |
+| 합계 | 2,346,163 | 유료 API $0 (ChatGPT pro codex quota) |
+
+- quota: 4회 측정 모두 주간 사용률 **5.0%**, credits 63,125.37 불변 (reset 2026-11-02 08:21 UTC).
+  첫 측정 이후 ≈2.29M token 사용에도 표시 변화 없음 → 주간 한도 ≳ 약 230M token (1% 해상도 최악 가정, 대략적인 하한).
+- 이미지당 token >6,000 / retry >5% 정지 조건 미발동.
+
+### 4. 임베딩 / probe
+
+- `tools/vnext_wp3_pool_embed.py` (vision venv): SigLIP-2 so400m, exp_v2와 동일 transform → `emb.npy` 1,512×1152, 45 s.
+  parity: eval 이미지 32장 재임베딩 vs `exp_v2/emb.npy` max|diff| 0.0.
+- `tools/vnext_wp3_probe_v1.py`: head 9개 (+ 선택 `oos9` 결합 scope head), StandardScaler + LR(class_weight=balanced),
+  C는 pool 건물 5-fold GroupKFold로 codex 일치도 기준 선택, §5 applicability는 예측 후 적용.
+  camera `unknown` 임계 t는 pool OOF에서만 선택 (t=0.6 = grid 상한; eval에서 unknown 7/225장뿐, t=0이면 pooled 96.8%).
+- 동결 모델: `probe_v1/{emb,zs2,hybrid_emb_zs2}[+oos9].pkl` + `probe_v1/manifest.json` (파일별 sha).
+
+| engine (eval-225, v1.4) | pooled | scope err | medium err | cover top1/top3/crit | 비고 |
+|---|---:|---:|---:|---|---|
+| **probe hybrid_emb_zs2** (사전 지정 primary) | **96.9%** | 4 | 2 | 8/10 / 10/10 / 2 | 최저 필드 framing 92.4%, legib 94.7% |
+| probe hybrid_emb_zs2+oos9 | 96.7% | 3 | 2 | 8/10 / 10/10 / 2 | |
+| probe emb | 96.4% | 3 | 4 | 8/10 / 9/10 / 2 | |
+| probe zs2 | 95.3% | 5 | 9 | 7/10 / 8/10 / 2 | |
+| exp_v2 combo (gold LOBO 학습) | 92.6% | 9 | 13 | 9/10 / 9/10 / 1 | |
+| codex_v1 (teacher) | 96.6% | 7 | 1 | 10/10 / 10/10 / 0 | cover = 비교 호출 |
+
+- primary 오류: scope 4 = 인테리어/패널을 reject (idx 17, 129, 130, 197), medium 2 = idx 130 mixed→rendering, idx 192 photo→drawing.
+  cover miss 2 = bld_006875 / bld_033333에서 element_detail 사진을 default로 선택 (critical).
+- probe pool OOF 일치도(vs codex) 94.3%. 정답 기준 eval에서는 probe가 teacher와 같거나 약간 높게 나옴(10동이라 차이는 노이즈 수준).
+  codex의 bld_031919 오류는 probe가 따라 하지 않음.
+
+### 5. 라우팅 (하위 margin X% → codex 라벨로 교체, eval-225)
+
+- scope/medium margin 기준: X=10% (22장)에서 probe 쪽(미라우팅) scope/medium 오류 **0/0**, pooled 96.8%.
+  in-sample 최소 = 5.8% (13장). pooled ≥95%는 X=0에서 이미 충족.
+- **정직한 임계 (pool OOF에서 고정, eval 미사용)**: probe-vs-codex scope/medium 불일치 90% 포착 임계 0.9347
+  → pool 13.7% / eval 20.9% 라우팅, pooled 96.0%, 미라우팅 오류 0/0.
+- 하지만 라우팅해도 **eval 총 scope/medium 오류는 0이 안 됨** (4/1 ~ 7/1): 남는 건 전부 라우팅된 이미지에 대한 codex 자신의 오류
+  (bld_031919 product/가구 인테리어 경계 + idx 129). 즉 lane A 0-오류 바의 남은 병목은 teacher/gold 정의 불일치 → 판정자 재확인 필요 (미실시, 사용자 결정 사항).
+- 권고 라우팅: **scope/medium margin < 0.9347 (pool 기준 ≈14%, eval 분포에선 ≈21%)**. all-fields margin 라우팅은 58–60%가 필요해 비효율.
+
+### 6. 전수 실행 예상 (S6-lite 699,038장 / 39,248동)
+
+| 단계 | 규모 | token | 시간 |
+|---|---:|---:|---:|
+| local 전수 (임베딩 + probe) | 699,038장 | 0 | GPU 2.65 h; fetch가 병목 48.5 h @4 rps (§7) |
+| codex 라우팅 (margin < 0.9347) | 95.8k–146.1k장 (13.7–20.9%) | 117.5M–179.3M (1,227 tok/img) | 9.9–15.1 h (3 workers, 9.7k img/h) |
+| codex cover 비교 호출 | 39,248동 | 222.7M (512px, 5,673 tok/동) | ≈19 h (3 workers) |
+| 합계 codex | | **≈340–402M** | ≈29–34 h |
+
+- 주간 한도 하한 ≈230M(대략) 기준 최소 2주 이상으로 분할 필요. 라우팅 이미지는 local pass에서 바로 codex 큐로 보내거나(디스크 임시 보관) 재fetch 필요.
+- cover: probe 단독은 8/10 crit 2라 비교 호출을 대체 못 함. probe tier-1 후보가 뚜렷한 동은 비교 호출을 생략하는 방안은 미측정.
+
+### 7. 산출물
+
+- 도구: `tools/vnext_wp3_pool_codex_prep.py`, `tools/vnext_wp3_pool_codex_finalize.py`, `tools/vnext_wp3_pool_embed.py`, `tools/vnext_wp3_probe_v1.py`;
+  테스트 `tests/test_vnext_wp3_probe_v1.py` (3 tests)
+- 데이터 (`data/smoke_vnext/wp3_pool_v1/`): `codex_input/`, `codex_label_run/` (labels/calls/batches/run.json, slice 스냅샷 `*_slice104*`),
+  `codex_labels.jsonl`, `codex_labels_finalize.json`, `ledger_pool.json`, `codex_quota_probes.jsonl`, `emb.npy`, `emb_index.json`,
+  `probe_v1/`, `pred_probe_v1_*.jsonl`, `eval_probe_v1.{md,json}`, `probe_v1_run.log`, `embed_run.log`

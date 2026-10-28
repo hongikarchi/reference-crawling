@@ -1,6 +1,7 @@
 # vNext gallery + shallow semantics contract v1
 
-상태: WP0c 확정 계약, §2 v1.2 개정(2026-10-20, §2.1), v1.3 개정(2026-10-23, §2.1 D1/D2/D3). S2는 사용자 gallery와 계보를 만들고, S3는 그 gallery의
+상태: WP0c 확정 계약, §2 v1.2 개정(2026-10-20, §2.1), v1.3 개정(2026-10-23, §2.1 D1/D2/D3),
+v1.4 개정(2026-10-28, §4.1 legibility 2단계·camera 경계 `unknown`). S2는 사용자 gallery와 계보를 만들고, S3는 그 gallery의
 대표 이미지별 얕은 분류만 저장한다. 건물에 대한 심층 시각 분석은 P6이며 보류다.
 
 ## 1. gallery 포함 단위
@@ -118,10 +119,32 @@ v2.7에서 아래 9개 core field와 applicability만 가져온다. 긴 설명�
 | `camera_angle` | `eye_level`, `elevated`, `aerial_oblique`, `aerial_top_down`, `not_applicable`, `unknown` |
 | `drawing_kind` | `plan`, `site_plan`, `section`, `elevation`, `axonometric`, `perspective`, `detail`, `diagram`, `sketch`, `composite`, `other`, `not_applicable`, `unknown` |
 | `project_state` | `visibly_finished`, `construction_visible`, `ruin_or_abandoned_visible`, `demolition_visible`, `not_applicable`, `unknown` |
-| `project_legibility` | `high`, `medium`, `low`, `none`, `unknown` |
+| `project_legibility` | `high`, `medium`, `low`, `none`, `unknown` (v1.4: `medium` 미출력, §4.1) |
 
 `perspective`는 외관 사진 분류나 cover slot이 아니다. drawing 또는 rendering의
 표현 방식인 `drawing_kind` 하위값이다.
+
+### 4.1 v1.4 개정 (2026-10-28): legibility 2단계 + camera 경계 `unknown`
+
+근거: WP3 N10 후속 실험 v2(`20261027_vnext_wp3_s3_engine_n10.md` §후속 실험,
+`data/smoke_vnext/wp3_n10_v1/exp_v2/report.md` §6) — gold 모호율 legibility 24%, camera
+eye_level↔elevated 경계 오류가 지배적. 사용자 결정 2026-10-28. 위 §4 표의 값 목록과 DDL v1.1 CHECK는
+그대로 두고(DDL 변경 없음) **출력 규칙과 채점 규칙만** 바꾼다. v1.3 이하로 만든 행·gold는 보존한다.
+
+- **`project_legibility` 출력값** = `high`(판독 가능: 프로젝트가 읽힘) | `low` | `none` | `unknown`.
+  `medium`은 더 이상 출력하지 않는다(DDL CHECK는 계속 허용, 과거 행 호환용). §5 표의
+  "high/medium/low/unknown"은 v1.4 출력에서 "high/low/unknown"으로 읽는다. `none`은 out of scope 전용(§5).
+- **`camera_angle`**: 시점이 eye level과 약간 높은 시점(elevated) 사이라 어느 쪽인지 분명하지 않으면
+  `unknown`을 출력한다. `aerial_oblique`/`aerial_top_down`은 명시적일 때만 출력한다(경계 `unknown`을
+  aerial로 해석하지 않는다). 따라서 §6 `aerial` tag는 명시적 aerial 값에서만 파생된다.
+  `unknown` 허용은 camera가 적용되는 행(§5: photograph/rendering in scope)에만 해당한다.
+- **채점 규칙 (v1.4, gold·예측 양쪽에 같은 매핑 적용)**:
+  - legibility: gold primary·acceptable의 `medium` → `high`, 예측의 `medium` → `high`로 매핑 후 비교.
+  - camera: gold primary가 `eye_level` 또는 `elevated`이면 예측 `unknown`도 수용한다.
+    gold가 aerial·`not_applicable`인 행에서 `unknown`은 수용하지 않는다(acceptable에 명시된 경우 제외).
+  - 그 밖의 필드·§8 게이트 기준(scope/medium 명백 오류 0, 9축 수용률)은 v1.3과 같다.
+  - 도구: `tools/vnext_wp3_eval_v14.py` (v1 도구 `tools/vnext_wp3_eval.py`는 변경하지 않음).
+- 엔진 출력의 `contract_version`은 v1.4 행부터 `vnext-gallery-semantics-contract-v1.4`다.
 
 ## 5. medium별 applicability
 
